@@ -1,10 +1,16 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import type { Id } from "../convex/_generated/dataModel";
+import { entryFor } from "../convex/entries";
 
 const modules = import.meta.glob("../convex/**/*.ts");
+const KEYCHAIN = { x: 27, y: 51, z: 40 };
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const ada = { subject: "user_ada", email: "ada@example.com", emailVerified: true };
 const grace = { subject: "user_grace", email: "grace@example.com", emailVerified: true };
@@ -40,7 +46,13 @@ async function storeBlob(t: T, bytes = 128) {
 async function upload(
   t: T,
   user: User,
-  opts: { name?: string; title?: string; colour?: string; bytes?: number } = {}
+  opts: {
+    name?: string;
+    title?: string;
+    colour?: string;
+    bytes?: number;
+    dimensionsMm?: { x: number; y: number; z: number };
+  } = {}
 ) {
   const storageId = await storeBlob(t, opts.bytes);
   const result = await user.mutation(api.submissions.create, {
@@ -48,6 +60,7 @@ async function upload(
     title: opts.title ?? "Rocket",
     colour: opts.colour,
     originalFileName: opts.name ?? "rocket.stl",
+    dimensionsMm: opts.dimensionsMm ?? KEYCHAIN,
   });
   return { storageId, result };
 }
@@ -61,7 +74,13 @@ async function uploadOk(t: T, user: User, opts: Parameters<typeof upload>[2] = {
 async function setStatus(
   t: T,
   id: Id<"submissions">,
-  patch: Partial<{ status: "queued" | "rejected" | "printing" | "done"; queueOrder: number; rejectionReason: string }>
+  patch: Partial<{
+    status: "queued" | "rejected" | "printing" | "done";
+    queueOrder: number;
+    rejectionReason: string;
+    rejectionKind: "review" | "print_failed";
+    printRequested: boolean;
+  }>
 ) {
   await t.run((ctx) => ctx.db.patch(id, patch));
 }
@@ -164,7 +183,12 @@ describe("create", () => {
     const stranger = t.withIdentity({ subject: "x", email: "x@example.com", emailVerified: true });
     const storageId = await storeBlob(t);
     await expect(
-      stranger.mutation(api.submissions.create, { storageId, title: "A", originalFileName: "a.stl" })
+      stranger.mutation(api.submissions.create, {
+        storageId,
+        title: "A",
+        originalFileName: "a.stl",
+        dimensionsMm: KEYCHAIN,
+      })
     ).rejects.toThrow(/Not registered/);
     await expect(t.mutation(api.submissions.generateUploadUrl, {})).rejects.toThrow(/Not registered/);
     expect(await stranger.query(api.submissions.mine, {})).toBeNull();
@@ -177,6 +201,7 @@ describe("create", () => {
       storageId,
       title: "Copy",
       originalFileName: "copy.stl",
+      dimensionsMm: KEYCHAIN,
     });
     expect(again.ok).toBe(false);
     expect(await storageExists(t, storageId)).toBe(true);
@@ -259,5 +284,172 @@ describe("access control", () => {
     expect(await asGrace.query(api.submissions.mine, {})).toEqual([]);
     const [s] = (await asAda.query(api.submissions.mine, {}))!;
     expect(s.title).toBe("Rocket");
+  });
+});
+
+async function insertSettings(t: T, patch: Record<string, unknown> = {}) {
+  await t.run((ctx) =>
+    ctx.db.insert("settings", {
+      submissionsOpen: true,
+      votingOpen: true,
+      showResultsOnTv: false,
+      maxFileBytes: 1024 * 1024,
+      colours: ["Black"],
+      nextPrintNumber: 1,
+      ...patch,
+    })
+  );
+}
+
+describe("dimensions", () => {
+  test("stores the measured size and accepts both reference keychains", async () => {
+    const { t, asAda } = await setup();
+    await uploadOk(t, asAda, { dimensionsMm: KEYCHAIN });
+    await uploadOk(t, asAda, { dimensionsMm: { x: 38.5, y: 50, z: 4.5 } });
+    const mine = (await asAda.query(api.submissions.mine, {}))!;
+    expect(mine.map((s) => s.dimensionsMm)).toEqual([KEYCHAIN, { x: 38.5, y: 50, z: 4.5 }]);
+  });
+
+  test("is required by the validator", async () => {
+    const { t, asAda } = await setup();
+    const storageId = await storeBlob(t);
+    await expect(
+      asAda.mutation(api.submissions.create, {
+        storageId,
+        title: "A",
+        originalFileName: "a.stl",
+      } as unknown as Parameters<typeof asAda.mutation<typeof api.submissions.create>>[1])
+    ).rejects.toThrow(/dimensionsMm/);
+  });
+
+  test("rejects invalid measurements and deletes the upload", async () => {
+    const { t, asAda } = await setup();
+    for (const dimensionsMm of [
+      { x: 0, y: 10, z: 10 },
+      { x: -1, y: 10, z: 10 },
+      { x: Number.NaN, y: 10, z: 10 },
+      { x: Number.POSITIVE_INFINITY, y: 10, z: 10 },
+    ]) {
+      const { storageId, result } = await upload(t, asAda, { dimensionsMm });
+      expect(result).toEqual({ ok: false, error: expect.stringMatching(/couldn't measure/) });
+      expect(await storageExists(t, storageId)).toBe(false);
+    }
+    expect(await asAda.query(api.submissions.mine, {})).toEqual([]);
+  });
+
+  test("blocks models larger than settings.maxDimensionsMm in any orientation", async () => {
+    const { t, asAda } = await setup();
+    const { storageId, result } = await upload(t, asAda, { dimensionsMm: { x: 72, y: 51, z: 40 } });
+    expect(result).toEqual({
+      ok: false,
+      error: "Your model is 72 × 51 × 40 mm; the limit is 60 × 60 × 45 mm",
+    });
+    expect(await storageExists(t, storageId)).toBe(false);
+    // Rotated to fit: 45 tall, 60 wide.
+    await uploadOk(t, asAda, { dimensionsMm: { x: 45, y: 60, z: 30 } });
+  });
+
+  test("uses the configured limit", async () => {
+    const { t, asAda } = await setup();
+    await insertSettings(t, { maxDimensionsMm: { x: 30, y: 30, z: 30 } });
+    const { result } = await upload(t, asAda, { dimensionsMm: KEYCHAIN });
+    expect(result).toEqual({ ok: false, error: expect.stringMatching(/limit is 30 × 30 × 30 mm/) });
+  });
+});
+
+describe("deadline", () => {
+  test("blocks uploads, edits and swaps after the deadline", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-01T18:00:00Z"));
+    const { t, asAda } = await setup();
+    const deadline = new Date("2026-10-01T19:00:00Z").getTime();
+    await insertSettings(t, { submissionsDeadline: deadline });
+    const a = await uploadOk(t, asAda);
+    const b = await uploadOk(t, asAda);
+
+    vi.setSystemTime(deadline);
+    await expect(asAda.mutation(api.submissions.generateUploadUrl, {})).rejects.toThrow(/closed/);
+    await t.run((ctx) => ctx.db.delete(b));
+    const { storageId, result } = await upload(t, asAda);
+    expect(result).toEqual({ ok: false, error: "Submissions are closed" });
+    expect(await storageExists(t, storageId)).toBe(false);
+    await expect(asAda.mutation(api.submissions.update, { id: a, title: "Late" })).rejects.toThrow(/closed/);
+  });
+
+  test("swapping an existing entry needs submissions open, filling a vacant one doesn't", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda);
+    const b = await uploadOk(t, asAda);
+    await t.run(async (ctx) => {
+      const row = await ctx.db.query("settings").first();
+      await ctx.db.patch(row!._id, { submissionsOpen: false });
+    });
+    await expect(asAda.mutation(api.submissions.setPrintRequested, { id: b })).rejects.toThrow(/closed/);
+    await setStatus(t, a, { status: "rejected", rejectionReason: "Too thin", printRequested: false });
+    await asAda.mutation(api.submissions.setPrintRequested, { id: b });
+    const mine = (await asAda.query(api.submissions.mine, {}))!;
+    expect(mine.filter((s) => s.printRequested).map((s) => s._id)).toEqual([b]);
+  });
+});
+
+describe("rejections and the entry", () => {
+  test("a failed print frees the slot and the entry, and shows the kind", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda);
+    await setStatus(t, a, { status: "queued", queueOrder: 1 });
+    await setStatus(t, a, {
+      status: "rejected",
+      rejectionKind: "print_failed",
+      rejectionReason: "Spaghetti",
+      printRequested: false,
+    });
+    await t.run(async (ctx) => {
+      const participant = await ctx.db.query("participants").first();
+      expect(await entryFor(ctx, participant!._id)).toBeNull();
+    });
+    const second = await uploadOk(t, asAda);
+    const third = await uploadOk(t, asAda);
+    expect((await upload(t, asAda)).result).toEqual({ ok: false, error: expect.stringMatching(/at most 2/) });
+    const mine = (await asAda.query(api.submissions.mine, {}))!;
+    expect(mine.find((s) => s._id === a)).toMatchObject({
+      status: "rejected",
+      rejectionKind: "print_failed",
+      rejectionReason: "Spaghetti",
+    });
+    expect(mine.filter((s) => s.printRequested).map((s) => s._id)).toEqual([second]);
+    expect(mine.find((s) => s._id === third)).toMatchObject({ printRequested: false, canChoose: true });
+  });
+
+  test("the other upload isn't promoted when the entry is rejected", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda);
+    const b = await uploadOk(t, asAda);
+    await setStatus(t, a, { status: "rejected", rejectionKind: "review", rejectionReason: "No ring", printRequested: false });
+    let mine = (await asAda.query(api.submissions.mine, {}))!;
+    expect(mine.filter((s) => s.printRequested)).toEqual([]);
+    expect(mine.find((s) => s._id === b)).toMatchObject({ canChoose: true });
+    await asAda.mutation(api.submissions.setPrintRequested, { id: b });
+    mine = (await asAda.query(api.submissions.mine, {}))!;
+    expect(mine.filter((s) => s.printRequested).map((s) => s._id)).toEqual([b]);
+  });
+
+  test("never more than one active entry per participant", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda);
+    const b = await uploadOk(t, asAda);
+    const check = async () => {
+      const rows = await t.run((ctx) => ctx.db.query("submissions").collect());
+      expect(rows.filter((s) => s.printRequested && s.status !== "rejected").length).toBeLessThanOrEqual(1);
+    };
+    await check();
+    await asAda.mutation(api.submissions.setPrintRequested, { id: b });
+    await check();
+    await setStatus(t, b, { status: "rejected", printRequested: false });
+    await check();
+    await asAda.mutation(api.submissions.setPrintRequested, { id: a });
+    await uploadOk(t, asAda);
+    await check();
+    const rows = await t.run((ctx) => ctx.db.query("submissions").collect());
+    expect(rows.filter((s) => s.printRequested && s.status !== "rejected").map((s) => s._id)).toEqual([a]);
   });
 });

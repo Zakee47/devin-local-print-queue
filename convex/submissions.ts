@@ -4,7 +4,8 @@ import { v } from "convex/values";
 import { requireParticipant, viewerParticipant } from "./participants";
 import { readSettings, takePrintNumber } from "./settings";
 import { fileKindFromName, formatPrintCode } from "../lib/files";
-import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen } from "../lib/event";
+import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen, type Dimensions } from "../lib/event";
+import { fitsWithin, formatDimensions } from "../lib/dimensions";
 
 export const MAX_TITLE_LENGTH = 60;
 export const MAX_NOTES_LENGTH = 500;
@@ -32,12 +33,12 @@ async function requireOwnSubmission(ctx: MutationCtx, id: Id<"submissions">) {
 
 function requireEditable(submission: Submission) {
   if (submission.status !== "submitted") {
-    throw new Error("This entry has been reviewed and can't be changed");
+    throw new Error("This upload has been reviewed and can't be changed");
   }
 }
 
-// A print choice can only move while none of the participant's active entries
-// has been accepted into the queue.
+// The entry can only move while none of the participant's active uploads has
+// been accepted into the queue.
 function choiceLocked(submissions: Submission[]) {
   return submissions.some((s) => isActive(s) && s.status !== "submitted");
 }
@@ -69,12 +70,28 @@ function cleanColour(colour: string | undefined, allowed: string[]) {
   return match;
 }
 
-async function assertCanUpload(ctx: MutationCtx, participantId: Id<"participants">) {
+function cleanDimensions(d: Dimensions, max: Dimensions): Dimensions {
+  const values = [d.x, d.y, d.z];
+  if (values.some((value) => !Number.isFinite(value) || value <= 0)) {
+    throw new Error("We couldn't measure that model, try exporting it again");
+  }
+  if (!fitsWithin(d, max)) {
+    throw new Error(`Your model is ${formatDimensions(d)}; the limit is ${formatDimensions(max)}`);
+  }
+  return { x: d.x, y: d.y, z: d.z };
+}
+
+async function requireSubmissionsOpen(ctx: MutationCtx) {
   const settings = await readSettings(ctx);
   if (!submissionsAreOpen(settings, Date.now())) throw new Error("Submissions are closed");
+  return settings;
+}
+
+async function assertCanUpload(ctx: MutationCtx, participantId: Id<"participants">) {
+  const settings = await requireSubmissionsOpen(ctx);
   const active = (await ownSubmissions(ctx, participantId)).filter(isActive);
   if (active.length >= MAX_SUBMISSIONS_PER_PARTICIPANT) {
-    throw new Error(`You can have at most ${MAX_SUBMISSIONS_PER_PARTICIPANT} active entries`);
+    throw new Error(`You can have at most ${MAX_SUBMISSIONS_PER_PARTICIPANT} active uploads`);
   }
   return { settings, active };
 }
@@ -99,6 +116,7 @@ export const create = mutation({
     notes: v.optional(v.string()),
     colour: v.optional(v.string()),
     originalFileName: v.string(),
+    dimensionsMm: v.object({ x: v.number(), y: v.number(), z: v.number() }),
   },
   handler: async (ctx, args): Promise<CreateResult> => {
     const participant = await requireParticipant(ctx);
@@ -118,6 +136,7 @@ export const create = mutation({
         const mb = Math.round(settings.maxFileBytes / (1024 * 1024));
         throw new Error(`Files must be ${mb} MB or smaller`);
       }
+      const dimensionsMm = cleanDimensions(args.dimensionsMm, settings.maxDimensionsMm);
       const title = cleanTitle(args.title);
       const notes = cleanNotes(args.notes);
       const colour = cleanColour(args.colour, settings.colours);
@@ -131,6 +150,9 @@ export const create = mutation({
         title,
         notes,
         colour,
+        dimensionsMm,
+        // A fresh upload fills a vacant entry; an existing upload is never
+        // promoted without the participant choosing it.
         printRequested: !active.some((s) => s.printRequested),
         status: "submitted",
         printCode,
@@ -178,6 +200,8 @@ export const mine = query({
           printRequested: s.printRequested,
           status: s.status,
           rejectionReason: s.rejectionReason,
+          rejectionKind: s.rejectionKind,
+          dimensionsMm: s.dimensionsMm,
           queuePosition,
           editable: s.status === "submitted",
           canChoose: s.status === "submitted" && !locked,
@@ -194,7 +218,10 @@ export const setPrintRequested = mutation({
     const { participant, submission } = await requireOwnSubmission(ctx, id);
     requireEditable(submission);
     const all = await ownSubmissions(ctx, participant._id);
-    if (choiceLocked(all)) throw new Error("Your print choice is locked in");
+    if (choiceLocked(all)) throw new Error("Your entry is locked in");
+    // Picking a vacant entry (after a rejection) is always allowed; swapping
+    // an existing one only while submissions are open.
+    if (all.some((s) => isActive(s) && s.printRequested)) await requireSubmissionsOpen(ctx);
     for (const s of all) {
       const want = s._id === id;
       if (s.printRequested !== want) await ctx.db.patch(s._id, { printRequested: want });
@@ -212,7 +239,7 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const { submission } = await requireOwnSubmission(ctx, args.id);
     requireEditable(submission);
-    const settings = await readSettings(ctx);
+    const settings = await requireSubmissionsOpen(ctx);
     await ctx.db.patch(submission._id, {
       title: cleanTitle(args.title),
       notes: cleanNotes(args.notes),
