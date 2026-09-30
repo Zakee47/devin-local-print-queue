@@ -3,9 +3,16 @@ import { v } from "convex/values";
 import { submissionStatus, fileKind } from "./validators";
 
 export default defineSchema({
-  // Organizers. Seed the first row from the Convex dashboard.
+  // Staff organizers; the owner is configured with OWNER_EMAIL.
   admins: defineTable({
     email: v.string(),
+    role: v.optional(v.literal("staff")),
+  }).index("by_email", ["email"]),
+
+  blockedEmails: defineTable({
+    email: v.string(),
+    reason: v.optional(v.string()),
+    blockedBy: v.string(),
   }).index("by_email", ["email"]),
 
   // Eligibility allowlist, replaced wholesale by each Luma CSV upload.
@@ -29,11 +36,13 @@ export default defineSchema({
     clerkUserId: v.string(),
     email: v.string(),
     name: v.string(),
-    // Public label for the TV and gallery, e.g. "Ada L."
+    // Public, participant-chosen username for the TV and gallery.
     displayName: v.string(),
+    usernameKey: v.optional(v.string()),
   })
     .index("by_email", ["email"])
-    .index("by_clerkUserId", ["clerkUserId"]),
+    .index("by_clerkUserId", ["clerkUserId"])
+    .index("by_usernameKey", ["usernameKey"]),
 
   submissions: defineTable({
     participantId: v.id("participants"),
@@ -51,6 +60,8 @@ export default defineSchema({
     // Human-friendly sequential code, e.g. "KC-007", assigned on creation.
     printCode: v.string(),
     rejectionReason: v.optional(v.string()),
+    rejectionKind: v.optional(v.union(v.literal("review"), v.literal("print_failed"))),
+    dimensionsMm: v.optional(v.object({ x: v.number(), y: v.number(), z: v.number() })),
     reviewedBy: v.optional(v.string()),
     // Sort key within the print queue; set when status becomes "queued".
     queueOrder: v.optional(v.number()),
@@ -92,6 +103,10 @@ export default defineSchema({
     maxFileBytes: v.number(),
     colours: v.array(v.string()),
     nextPrintNumber: v.number(),
+    submissionsDeadline: v.optional(v.number()),
+    announcement: v.optional(v.string()),
+    maxDimensionsMm: v.optional(v.object({ x: v.number(), y: v.number(), z: v.number() })),
+    printers: v.optional(v.array(v.object({ name: v.string(), colours: v.array(v.string()) }))),
   }),
 
   auditLog: defineTable({

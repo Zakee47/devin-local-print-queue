@@ -113,7 +113,7 @@ export default function SubmitPage() {
               />
             ))}
             {slotsLeft > 0 ? (
-              settings.submissionsOpen ? (
+              settings.submissionsAcceptingNow ? (
                 <UploadCard colours={settings.colours} maxFileBytes={settings.maxFileBytes} slotsLeft={slotsLeft} />
               ) : (
                 <Alert>

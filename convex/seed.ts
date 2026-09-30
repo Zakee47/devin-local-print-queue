@@ -18,7 +18,7 @@ export const dev = internalMutation({
         .query("admins")
         .withIndex("by_email", (q) => q.eq("email", email))
         .unique();
-      if (!existing) await ctx.db.insert("admins", { email });
+      if (!existing) await ctx.db.insert("admins", { email, role: "staff" });
     }
     const importId = await ctx.db.insert("guestImports", {
       fileName: "seed",

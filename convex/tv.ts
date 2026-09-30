@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { DEFAULT_SETTINGS, readSettings } from "./settings";
 import { reactionCounts } from "./likes";
 import { displayNameFrom, formatPrintCode } from "../lib/files";
+import { usernameKey } from "../lib/usernames";
 import { rankRows } from "../lib/ranking";
 
 export const UP_NEXT_LIMIT = 8;
@@ -239,11 +240,13 @@ export const insertDemo = internalMutation({
     const participantIds: Id<"participants">[] = [];
     const submissionIds: Id<"submissions">[] = [];
     for (const [i, e] of DEMO_ENTRIES.entries()) {
+      const displayName = displayNameFrom(e.name);
       const participantId = await ctx.db.insert("participants", {
         clerkUserId: `demo-${i}-${now}`,
         email: `demo${i}@example.com`,
         name: e.name,
-        displayName: displayNameFrom(e.name),
+        displayName,
+        usernameKey: usernameKey(displayName),
       });
       participantIds.push(participantId);
       const minutes = (DEMO_ENTRIES.length - i) * 60_000;

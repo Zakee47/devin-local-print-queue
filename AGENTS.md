@@ -19,21 +19,32 @@ components in `components/ui` and the existing page chrome (`SiteHeader`,
   column only checked-in rows are eligible. Each upload replaces the list;
   existing participants keep their accounts. There is no Luma API integration.
 - A participant registers once (`participants.register`) with their verified
-  Clerk email. Everything participant-facing requires `requireParticipant`.
+  Clerk email and a unique username. `displayName` is the chosen username;
+  `name` retains the CSV/Luma name for owner-only use. Everything
+  participant-facing requires `requireParticipant`.
 - Max 2 active (non-rejected) submissions per participant, STL or 3MF only,
   size capped by `settings.maxFileBytes`. Exactly one active submission may have
-  `printRequested: true`. A rejected submission frees its slot.
+  `printRequested: true`; this design entry is used for both printing and
+  voting. A rejected submission frees its slot.
 - Status lifecycle: `submitted` → `rejected` (with `rejectionReason`) or
   `queued` → `printing` → `done`. Participants see `STATUS_LABELS`.
   Participants may edit / swap the print choice only while `submitted`.
-- Colours are requests from `settings.colours`; always say "not guaranteed".
+- Submission intake requires `settings.submissionsOpen` and, when set, must be
+  before `settings.submissionsDeadline`.
+- Dimensions are in millimetres and must fit `settings.maxDimensionsMm`
+  irrespective of orientation.
+- Printers and their available colours come from `settings.printers`; colour
+  requests come from `settings.colours` and are never guaranteed.
 - Download names come from `downloadFileName` in `lib/files.ts`
   (`KC-007_ada-lovelace_red_rocket-keychain.3mf`). Print codes are allocated
   with `takePrintNumber` + `formatPrintCode`.
-- Voting: each participant gets 2 votes, only for `done` submissions, never
-  their own, only while `settings.votingOpen`.
+- Voting: each participant gets 2 votes, only for `done` design entries, never
+  their own, only while `settings.votingOpen`. Votes can change while voting is
+  open; closing voting locks them.
 - Public surfaces (TV, gallery) show `participant.displayName` only, never emails.
-- Every admin mutation calls `requireAdmin` and writes an `auditLog` row.
+- The verified email configured as Convex `OWNER_EMAIL` is the owner; rows in
+  `admins` are staff. Owner-only operations manage staff and voting/results
+  settings. Every admin mutation calls `requireAdmin` and writes an `auditLog` row.
 - Render STL/3MF previews with `components/ModelViewer.tsx`.
 
 ## File ownership (parallel workstreams)
@@ -54,6 +65,7 @@ should only get small additive changes; call them out in the PR.
 npm install
 CONVEX_AGENT_MODE=anonymous npx convex dev      # local backend on :3210, writes .env.local
 npx convex env set CLERK_JWT_ISSUER_DOMAIN <issuer>  # placeholder ok for codegen
+npx convex env set OWNER_EMAIL you@example.com
 npm run dev                                     # Clerk runs in keyless dev mode
 npx convex run seed:dev '{"adminEmail":"you@example.com"}'
 ```

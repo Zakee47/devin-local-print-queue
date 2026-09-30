@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { ArrowRight, LogIn, Printer, ShieldAlert } from "lucide-react";
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
@@ -11,17 +12,22 @@ import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CHALLENGE, EVENT_NAME, EVENT_URL, MAX_SUBMISSIONS_PER_PARTICIPANT } from "@/lib/event";
+import { validateUsername } from "@/lib/usernames";
 import { cn } from "@/lib/utils";
 
 const HERO_BUTTON =
   "h-12 min-w-44 gap-2 px-7 text-base has-data-[icon=inline-start]:pl-6 sm:h-11 sm:min-w-0 sm:px-4.5 sm:text-[15px]";
 
 export default function Home() {
+  const [username, setUsername] = useState("");
   const { authReady, signedIn, canQuery } = useViewerAuth();
   const status = useQuery(api.participants.viewerStatus, canQuery ? {} : "skip");
   const register = useMutation(api.participants.register);
+  const usernameError = username ? validateUsername(username) : null;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -61,20 +67,45 @@ export default function Home() {
               <ArrowRight data-icon="inline-end" />
             </Link>
           ) : status?.state === "eligible" ? (
-            <Button
-              variant="brand"
-              size="lg"
-              className={cn(HERO_BUTTON, "w-fit")}
-              onClick={async () => {
-                try {
-                  await register({});
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Couldn't create your account");
-                }
-              }}
-            >
-              Create my entrant account
-            </Button>
+            <FieldGroup className="max-w-sm gap-3">
+              <Field data-invalid={Boolean(usernameError)}>
+                <FieldLabel htmlFor="entrant-username">Choose your username</FieldLabel>
+                <Input
+                  id="entrant-username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="Ada Lovelace"
+                  aria-invalid={Boolean(usernameError)}
+                  aria-describedby={usernameError ? "entrant-username-error" : undefined}
+                />
+                {usernameError ? (
+                  <FieldDescription id="entrant-username-error">{usernameError}</FieldDescription>
+                ) : null}
+              </Field>
+              <Button
+                variant="brand"
+                size="lg"
+                className={cn(HERO_BUTTON, "w-fit")}
+                disabled={!username.trim() || Boolean(usernameError)}
+                onClick={async () => {
+                  try {
+                    await register({ username });
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Couldn't create your account");
+                  }
+                }}
+              >
+                Create my entrant account
+              </Button>
+            </FieldGroup>
+          ) : status?.state === "blocked" ? (
+            <Alert variant="destructive" className="max-w-xl">
+              <ShieldAlert />
+              <AlertTitle>This account has been removed</AlertTitle>
+              <AlertDescription>
+                The organisers have removed {status.email} from the entrant list.
+              </AlertDescription>
+            </Alert>
           ) : (
             <Alert variant="destructive" className="max-w-xl">
               <ShieldAlert />

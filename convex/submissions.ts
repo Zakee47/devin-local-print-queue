@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { requireParticipant, viewerParticipant } from "./participants";
 import { readSettings, takePrintNumber } from "./settings";
 import { fileKindFromName, formatPrintCode } from "../lib/files";
-import { MAX_SUBMISSIONS_PER_PARTICIPANT } from "../lib/event";
+import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen } from "../lib/event";
 
 export const MAX_TITLE_LENGTH = 60;
 export const MAX_NOTES_LENGTH = 500;
@@ -71,7 +71,7 @@ function cleanColour(colour: string | undefined, allowed: string[]) {
 
 async function assertCanUpload(ctx: MutationCtx, participantId: Id<"participants">) {
   const settings = await readSettings(ctx);
-  if (!settings.submissionsOpen) throw new Error("Submissions are closed");
+  if (!submissionsAreOpen(settings, Date.now())) throw new Error("Submissions are closed");
   const active = (await ownSubmissions(ctx, participantId)).filter(isActive);
   if (active.length >= MAX_SUBMISSIONS_PER_PARTICIPANT) {
     throw new Error(`You can have at most ${MAX_SUBMISSIONS_PER_PARTICIPANT} active entries`);

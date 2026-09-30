@@ -108,21 +108,17 @@ describe("votes", () => {
     expect((await grace.query(api.votes.mine))?.votesLeft).toBe(1);
   });
 
-  it("makes confirmed votes final", async () => {
-    expect(VOTES_ARE_FINAL).toBe(true);
+  it("allows participants to change votes while voting is open", async () => {
+    expect(VOTES_ARE_FINAL).toBe(false);
     const { t, ada, grace, alan } = await setup();
     const linus = t.withIdentity(identityFor("linus"));
     await linus.mutation(api.votes.cast, { submissionId: ada });
     await linus.mutation(api.votes.cast, { submissionId: grace });
-    await expect(linus.mutation(api.votes.retract, { submissionId: ada })).rejects.toThrow(
-      /final/
-    );
-    await expect(linus.mutation(api.votes.cast, { submissionId: alan })).rejects.toThrow(
-      /all 2 votes/
-    );
+    await linus.mutation(api.votes.retract, { submissionId: ada });
+    await linus.mutation(api.votes.cast, { submissionId: alan });
     const mine = await linus.query(api.votes.mine);
-    expect(mine?.votedSubmissionIds).toEqual([ada, grace]);
-    expect(mine?.votesAreFinal).toBe(true);
+    expect(mine?.votedSubmissionIds).toEqual([grace, alan]);
+    expect(mine?.votesAreFinal).toBe(false);
   });
 
   it("requires a registered participant to vote", async () => {

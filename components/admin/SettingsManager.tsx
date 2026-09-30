@@ -36,7 +36,8 @@ function Section({ title, description, children }: { title: string; description:
 
 export default function SettingsManager() {
   const settings = useQuery(api.settings.get);
-  const admins = useQuery(api.admins.list);
+  const role = useQuery(api.admins.role);
+  const admins = useQuery(api.admins.list, role === "owner" ? {} : "skip");
   const update = useMutation(api.settings.update);
   const addAdmin = useMutation(api.admins.add);
   const removeAdmin = useMutation(api.admins.remove);
@@ -185,66 +186,74 @@ export default function SettingsManager() {
       </Section>
       <Separator />
 
-      <Section title="Admins" description="Organizers who can review, print and manage the event. Sign-in email must be verified.">
-        <form
-          className="mb-4"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            try {
-              await addAdmin({ email: adminEmail });
-              toast.success(`${adminEmail.trim().toLowerCase()} is now an admin`);
-              setAdminEmail("");
-            } catch (err) {
-              toast.error(errorMessage(err));
-            }
-          }}
-        >
-          <Field className="max-w-sm">
-            <FieldLabel htmlFor="admin-email">Add an admin</FieldLabel>
-            <InputGroup>
-              <InputGroupInput
-                id="admin-email"
-                type="email"
-                required
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-                placeholder="organizer@example.com"
-              />
-              <InputGroupAddon align="inline-end">
-                <InputGroupButton type="submit" variant="default" size="xs">
-                  <UserPlus data-icon="inline-start" />
-                  Add
-                </InputGroupButton>
-              </InputGroupAddon>
-            </InputGroup>
-          </Field>
-        </form>
-        {admins === undefined ? (
+      <Section title="Staff" description="Staff can review, print and manage intake. Sign-in email must be verified.">
+        {role === undefined ? (
           <Skeleton className="h-12 rounded-md" />
+        ) : role === "owner" ? (
+          <>
+            <form
+              className="mb-4"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  await addAdmin({ email: adminEmail });
+                  toast.success(`${adminEmail.trim().toLowerCase()} is now staff`);
+                  setAdminEmail("");
+                } catch (err) {
+                  toast.error(errorMessage(err));
+                }
+              }}
+            >
+              <Field className="max-w-sm">
+                <FieldLabel htmlFor="admin-email">Add staff</FieldLabel>
+                <InputGroup>
+                  <InputGroupInput
+                    id="admin-email"
+                    type="email"
+                    required
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="organizer@example.com"
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton type="submit" variant="default" size="xs">
+                      <UserPlus data-icon="inline-start" />
+                      Add
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
+              </Field>
+            </form>
+            {admins === undefined ? (
+              <Skeleton className="h-12 rounded-md" />
+            ) : (
+              <ul className="divide-y divide-border border-y border-border">
+                {admins.map((a) => (
+                  <li key={a._id} className="flex min-h-11 items-center justify-between gap-3 px-1 py-1.5">
+                    <span className="truncate text-sm">{a.email}</span>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={`Remove ${a.email}`}
+                      className="text-muted-foreground"
+                      onClick={async () => {
+                        try {
+                          await removeAdmin({ id: a._id });
+                          toast.success("Staff member removed");
+                        } catch (err) {
+                          toast.error(errorMessage(err));
+                        }
+                      }}
+                    >
+                      <X />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         ) : (
-          <ul className="divide-y divide-border border-y border-border">
-            {admins.map((a) => (
-              <li key={a._id} className="flex min-h-11 items-center justify-between gap-3 px-1 py-1.5">
-                <span className="truncate text-sm">{a.email}</span>
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={`Remove ${a.email}`}
-                  className="text-muted-foreground"
-                  onClick={async () => {
-                    try {
-                      await removeAdmin({ id: a._id });
-                      toast.success("Admin removed");
-                    } catch (err) {
-                      toast.error(errorMessage(err));
-                    }
-                  }}
-                >
-                  <X />
-                </Button>
-              </li>
-            ))}
-          </ul>
+          <p className="text-sm text-muted-foreground">Only the event owner can manage staff accounts.</p>
         )}
       </Section>
     </div>

@@ -25,8 +25,8 @@ async function setup() {
   });
   const asAda = t.withIdentity(ada);
   const asGrace = t.withIdentity(grace);
-  await asAda.mutation(api.participants.register, {});
-  await asGrace.mutation(api.participants.register, {});
+  await asAda.mutation(api.participants.register, { username: "Ada Lovelace" });
+  await asGrace.mutation(api.participants.register, { username: "Grace Hopper" });
   return { t, asAda, asGrace };
 }
 
@@ -73,11 +73,11 @@ async function storageExists(t: T, storageId: Id<"_storage">) {
 describe("create", () => {
   test("allocates print codes and requests the first entry", async () => {
     const { t, asAda } = await setup();
-    await uploadOk(t, asAda, { title: "  One  ", colour: "red" });
+    await uploadOk(t, asAda, { title: "  One  ", colour: "black" });
     await uploadOk(t, asAda, { title: "Two", name: "two.3MF" });
     const mine = (await asAda.query(api.submissions.mine, {}))!;
     expect(mine.map((s) => [s.printCode, s.title, s.kind, s.colour, s.printRequested])).toEqual([
-      ["KC-001", "One", "stl", "Red", true],
+      ["KC-001", "One", "stl", "Black", true],
       ["KC-002", "Two", "3mf", undefined, false],
     ]);
     expect(mine[0].fileUrl).toBeTruthy();
@@ -225,7 +225,7 @@ describe("print choice", () => {
 
   test("edits title, notes and colour while awaiting review", async () => {
     const { t, asAda } = await setup();
-    const a = await uploadOk(t, asAda, { colour: "Red" });
+    const a = await uploadOk(t, asAda, { colour: "Black" });
     await asAda.mutation(api.submissions.update, { id: a, title: "Star", notes: " hi ", colour: "" });
     const [s] = (await asAda.query(api.submissions.mine, {}))!;
     expect(s).toMatchObject({ title: "Star", notes: "hi" });
