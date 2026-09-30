@@ -119,6 +119,14 @@ export const deleteParticipant = mutation({
       .query("submissions")
       .withIndex("by_participant", (q) => q.eq("participantId", participantId))
       .collect();
+    const doomedSubmissionIds = new Set<string>(submissions.map((s) => s._id));
+    // Only delete a blob when no submission outside the ones being removed
+    // still references it (blobs can be shared).
+    const referencedElsewhere = new Set<string>();
+    for (const other of await ctx.db.query("submissions").collect()) {
+      if (!doomedSubmissionIds.has(other._id)) referencedElsewhere.add(other.storageId);
+    }
+    const removedStorage = new Set<string>();
     const removedVotes = new Set<string>();
     const removedLikes = new Set<string>();
     for (const submission of submissions) {
@@ -136,8 +144,13 @@ export const deleteParticipant = mutation({
         await remove(like._id);
         removedLikes.add(like._id);
       }
-      if (await ctx.db.system.get("_storage", submission.storageId)) {
+      if (
+        !referencedElsewhere.has(submission.storageId) &&
+        !removedStorage.has(submission.storageId) &&
+        (await ctx.db.system.get("_storage", submission.storageId))
+      ) {
         await ctx.storage.delete(submission.storageId);
+        removedStorage.add(submission.storageId);
       }
       await remove(submission._id);
     }

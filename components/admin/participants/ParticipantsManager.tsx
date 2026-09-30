@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Pencil, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -90,14 +90,12 @@ export default function ParticipantsManager() {
               <table className="w-full text-sm">
                 <thead className="bg-surface text-left text-xs text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-2 font-medium">Username</th>
-                    <th className="px-4 py-2 font-medium">Name</th>
-                    <th className="px-4 py-2 font-medium">Email</th>
+                    <th className="px-4 py-2 font-medium">Participant</th>
                     <th className="px-4 py-2 font-medium">Registered</th>
                     <th className="px-4 py-2 font-medium">Entry</th>
                     <th className="px-4 py-2 text-right font-medium">Uploads</th>
                     <th className="px-4 py-2 text-right font-medium">Votes cast</th>
-                    <th className="px-4 py-2 text-right font-medium">Votes</th>
+                    <th className="px-4 py-2 text-right font-medium">Votes in</th>
                     <th className="px-4 py-2 text-right font-medium">Likes</th>
                     <th className="px-4 py-2 font-medium">
                       <span className="sr-only">Actions</span>
@@ -107,11 +105,20 @@ export default function ParticipantsManager() {
                 <tbody className="divide-y divide-border">
                   {filtered.map((p) => (
                     <tr key={p._id} className="transition-colors hover:bg-surface">
-                      <td className="px-4 py-2 font-medium">{p.username}</td>
-                      <td className="px-4 py-2">{p.name}</td>
-                      <td className="px-4 py-2 font-mono text-xs">{p.email}</td>
-                      <td className="px-4 py-2 text-xs text-muted-foreground">
-                        {new Date(p.registeredAt).toLocaleString("en-GB")}
+                      <td className="px-4 py-2">
+                        <div className="font-medium">{p.username}</div>
+                        <div className="text-xs text-muted-foreground">{p.name}</div>
+                        <div className="font-mono text-xs text-muted-foreground">
+                          {p.email}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2 text-xs whitespace-nowrap text-muted-foreground">
+                        {new Date(p.registeredAt).toLocaleString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </td>
                       <td className="px-4 py-2">
                         <EntryCell entry={p.entry} />
@@ -122,16 +129,24 @@ export default function ParticipantsManager() {
                       <td className="px-4 py-2 text-right tabular-nums">{p.likesReceived}</td>
                       <td className="px-4 py-2">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="xs" onClick={() => setRenaming(p)}>
-                            Rename
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Rename ${p.username}`}
+                            title={`Rename ${p.username}`}
+                            onClick={() => setRenaming(p)}
+                          >
+                            <Pencil />
                           </Button>
                           <Button
                             variant="ghost"
-                            size="xs"
+                            size="icon-xs"
                             className="text-destructive"
+                            aria-label={`Delete ${p.username}`}
+                            title={`Delete ${p.username}`}
                             onClick={() => setDeleting(p)}
                           >
-                            Delete
+                            <Trash2 />
                           </Button>
                         </div>
                       </td>
@@ -139,7 +154,7 @@ export default function ParticipantsManager() {
                   ))}
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                         {participants.length === 0
                           ? "No one has registered yet."
                           : "No participants match."}

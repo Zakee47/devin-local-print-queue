@@ -102,10 +102,12 @@ describe("deleteParticipant cascade", () => {
       });
       const storageIds: Id<"_storage">[] = [];
       const aSubs: Id<"submissions">[] = [];
-      // Both of A's submissions share one storage blob.
-      const sharedStorage = await ctx.storage.store(new Blob(["solid a"]));
+      // A's first submission shares a blob with B's submission below; the
+      // second uses its own blob.
+      const sharedStorage = await ctx.storage.store(new Blob(["solid shared"]));
+      const aOnlyStorage = await ctx.storage.store(new Blob(["solid a"]));
       for (let i = 0; i < 2; i++) {
-        const storageId = sharedStorage;
+        const storageId = i === 0 ? sharedStorage : aOnlyStorage;
         storageIds.push(storageId);
         aSubs.push(
           await ctx.db.insert("submissions", {
@@ -121,7 +123,7 @@ describe("deleteParticipant cascade", () => {
           })
         );
       }
-      const bStorage = await ctx.storage.store(new Blob(["solid b"]));
+      const bStorage = sharedStorage;
       const bSub = await ctx.db.insert("submissions", {
         participantId: b,
         storageId: bStorage,
@@ -171,7 +173,9 @@ describe("deleteParticipant cascade", () => {
       expect(await ctx.db.get(bSub)).not.toBeNull();
       expect(await ctx.db.query("votes").collect()).toEqual([]);
       expect(await ctx.db.query("likes").collect()).toEqual([]);
-      for (const id of storageIds) expect(await ctx.storage.get(id)).toBeNull();
+      // A's own blob is gone; the blob shared with B's submission survives.
+      expect(await ctx.storage.get(storageIds[1])).toBeNull();
+      expect(await ctx.storage.get(storageIds[0])).not.toBeNull();
       expect(await ctx.storage.get(bStorage)).not.toBeNull();
     });
 
