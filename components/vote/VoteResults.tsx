@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Crown, Download, Lock, LockOpen, Monitor, MonitorOff, ShieldX } from "lucide-react";
+import { Crown, Download, Lock, LockOpen, Monitor, MonitorOff } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -20,29 +20,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export default function VoteResults() {
-  const role = useQuery(api.admins.role);
-  if (role === undefined) return <ResultsSkeleton />;
-  if (role !== "owner") {
-    return (
-      <Empty className="border border-dashed border-border-strong py-20">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <ShieldX />
-          </EmptyMedia>
-          <EmptyTitle>Owner only</EmptyTitle>
-          <EmptyDescription>
-            Voting controls and results are only available to the event owner.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
   return <OwnerResults />;
 }
 
