@@ -1,0 +1,249 @@
+import { convexTest } from "convex-test";
+import { describe, expect, test } from "vitest";
+import { api } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
+import schema from "../convex/schema";
+
+const modules = import.meta.glob("../convex/**/*.ts");
+const admin = { subject: "admin-user", email: "admin@example.com", emailVerified: true };
+const guest = { subject: "guest-user", email: "ada@example.com", emailVerified: true };
+
+type Status = "submitted" | "rejected" | "queued" | "printing" | "done";
+
+async function setup() {
+  const t = convexTest(schema, modules);
+  const ids = await t.run(async (ctx) => {
+    await ctx.db.insert("admins", { email: admin.email });
+    const participantId = await ctx.db.insert("participants", {
+      clerkUserId: guest.subject,
+      email: guest.email,
+      name: "Ada Lovelace",
+      displayName: "Ada L.",
+    });
+    const otherId = await ctx.db.insert("participants", {
+      clerkUserId: "grace-user",
+      email: "grace@example.com",
+      name: "Grace Hopper",
+      displayName: "Grace H.",
+    });
+    return { participantId, otherId };
+  });
+  let n = 0;
+  const addSubmission = (
+    participantId: Id<"participants">,
+    opts: { printRequested?: boolean; status?: Status; title?: string } = {}
+  ) =>
+    t.run(async (ctx) => {
+      n += 1;
+      const storageId = await ctx.storage.store(new Blob([`solid model-${n}`]));
+      return await ctx.db.insert("submissions", {
+        participantId,
+        storageId,
+        originalFileName: `model-${n}.stl`,
+        kind: "stl",
+        sizeBytes: 12,
+        title: opts.title ?? `Rocket ${n}`,
+        colour: "Red",
+        printRequested: opts.printRequested ?? true,
+        status: opts.status ?? "submitted",
+        printCode: `KC-${String(n).padStart(3, "0")}`,
+      });
+    });
+  const get = (id: Id<"submissions">) => t.run((ctx) => ctx.db.get(id));
+  return { t, as: t.withIdentity(admin), ...ids, addSubmission, get };
+}
+
+describe("state machine", () => {
+  test("approve → printing → done, with audit rows and queue order", async () => {
+    const { t, as, participantId, otherId, addSubmission, get } = await setup();
+    const a = await addSubmission(participantId);
+    const b = await addSubmission(otherId);
+    await as.mutation(api.queue.approve, { id: a });
+    await as.mutation(api.queue.approve, { id: b });
+    expect((await get(a))?.queueOrder).toBe(1);
+    expect((await get(b))?.queueOrder).toBe(2);
+    expect((await get(a))?.status).toBe("queued");
+
+    await as.mutation(api.queue.startPrinting, { id: a });
+    expect((await get(a))?.status).toBe("printing");
+    await as.mutation(api.queue.markDone, { id: a });
+    expect((await get(a))?.status).toBe("done");
+    expect(await as.query(api.queue.counts)).toEqual({ review: 0, queued: 1, printing: 0, done: 1 });
+
+    const log = await t.run((ctx) => ctx.db.query("auditLog").collect());
+    expect(log.map((l) => l.action)).toEqual([
+      "queue.approve",
+      "queue.approve",
+      "queue.startPrinting",
+      "queue.markDone",
+    ]);
+  });
+
+  test("invalid transitions are rejected", async () => {
+    const { as, participantId, addSubmission } = await setup();
+    const a = await addSubmission(participantId);
+    await expect(as.mutation(api.queue.startPrinting, { id: a })).rejects.toThrow();
+    await expect(as.mutation(api.queue.markDone, { id: a })).rejects.toThrow();
+    await as.mutation(api.queue.approve, { id: a });
+    await expect(as.mutation(api.queue.approve, { id: a })).rejects.toThrow();
+    await expect(as.mutation(api.queue.markDone, { id: a })).rejects.toThrow();
+  });
+
+  test("moveBack undoes one step at a time", async () => {
+    const { as, participantId, addSubmission, get } = await setup();
+    const a = await addSubmission(participantId);
+    await as.mutation(api.queue.approve, { id: a });
+    await as.mutation(api.queue.startPrinting, { id: a });
+    await as.mutation(api.queue.markDone, { id: a });
+    for (const expected of ["printing", "queued", "submitted"]) {
+      await as.mutation(api.queue.moveBack, { id: a });
+      expect((await get(a))?.status).toBe(expected);
+    }
+    expect((await get(a))?.queueOrder).toBeUndefined();
+    await expect(as.mutation(api.queue.moveBack, { id: a })).rejects.toThrow();
+  });
+
+  test("move up/down swaps queue order", async () => {
+    const { as, participantId, otherId, addSubmission, get } = await setup();
+    const a = await addSubmission(participantId);
+    const b = await addSubmission(otherId);
+    await as.mutation(api.queue.approve, { id: a });
+    await as.mutation(api.queue.approve, { id: b });
+    await as.mutation(api.queue.move, { id: b, direction: "up" });
+    expect((await get(b))?.queueOrder).toBe(1);
+    expect((await get(a))?.queueOrder).toBe(2);
+    await as.mutation(api.queue.move, { id: b, direction: "up" });
+    expect((await get(b))?.queueOrder).toBe(1);
+  });
+});
+
+describe("reject", () => {
+  test("requires a comment", async () => {
+    const { as, participantId, addSubmission, get } = await setup();
+    const a = await addSubmission(participantId);
+    await expect(as.mutation(api.queue.reject, { id: a, reason: "   " })).rejects.toThrow(
+      /comment is required/
+    );
+    expect((await get(a))?.status).toBe("submitted");
+    await as.mutation(api.queue.reject, { id: a, reason: " Walls too thin " });
+    const rejected = await get(a);
+    expect(rejected?.status).toBe("rejected");
+    expect(rejected?.rejectionReason).toBe("Walls too thin");
+  });
+
+  test("undoing a rejection restores it to review", async () => {
+    const { as, participantId, addSubmission, get } = await setup();
+    const a = await addSubmission(participantId);
+    await as.mutation(api.queue.reject, { id: a, reason: "Mesh errors" });
+    await as.mutation(api.queue.moveBack, { id: a });
+    const restored = await get(a);
+    expect(restored?.status).toBe("submitted");
+    expect(restored?.rejectionReason).toBeUndefined();
+    expect(restored?.printRequested).toBe(true);
+  });
+});
+
+describe("one in pipeline per participant", () => {
+  test("approving a second file while the first is in the pipeline errors", async () => {
+    const { as, participantId, addSubmission } = await setup();
+    const first = await addSubmission(participantId);
+    const second = await addSubmission(participantId, { printRequested: false });
+    await as.mutation(api.queue.approve, { id: first });
+    await expect(as.mutation(api.queue.approve, { id: second })).rejects.toThrow(/already has/);
+    await as.mutation(api.queue.startPrinting, { id: first });
+    await expect(as.mutation(api.queue.approve, { id: second })).rejects.toThrow(/already has/);
+    await as.mutation(api.queue.markDone, { id: first });
+    await expect(as.mutation(api.queue.approve, { id: second })).rejects.toThrow(/already has/);
+  });
+
+  test("approving the backup file makes it the print", async () => {
+    const { as, participantId, addSubmission, get } = await setup();
+    const requested = await addSubmission(participantId);
+    const backup = await addSubmission(participantId, { printRequested: false });
+    await as.mutation(api.queue.approve, { id: backup });
+    expect((await get(backup))?.printRequested).toBe(true);
+    expect((await get(requested))?.printRequested).toBe(false);
+  });
+
+  test("a rejected first file frees the pipeline", async () => {
+    const { as, participantId, addSubmission, get } = await setup();
+    const first = await addSubmission(participantId);
+    const second = await addSubmission(participantId, { printRequested: false });
+    await as.mutation(api.queue.approve, { id: first });
+    await as.mutation(api.queue.reject, { id: first, reason: "Too large" });
+    await as.mutation(api.queue.approve, { id: second });
+    expect((await get(second))?.status).toBe("queued");
+  });
+});
+
+describe("access", () => {
+  test("non-admins can't read or change the queue", async () => {
+    const { t, participantId, addSubmission } = await setup();
+    const a = await addSubmission(participantId);
+    const unverified = t.withIdentity({ ...admin, emailVerified: false });
+    for (const user of [t, t.withIdentity(guest), unverified]) {
+      await expect(user.query(api.queue.board)).rejects.toThrow();
+      await expect(user.query(api.queue.counts)).rejects.toThrow();
+      await expect(user.mutation(api.queue.approve, { id: a })).rejects.toThrow();
+      await expect(user.mutation(api.queue.reject, { id: a, reason: "x" })).rejects.toThrow();
+      await expect(user.mutation(api.queue.moveBack, { id: a })).rejects.toThrow();
+      await expect(user.mutation(api.queue.move, { id: a, direction: "up" })).rejects.toThrow();
+      await expect(user.query(api.guests.list)).rejects.toThrow();
+    }
+  });
+
+  test("board includes participant details and download name", async () => {
+    const { as, participantId, addSubmission } = await setup();
+    await addSubmission(participantId, { title: "Rocket Keychain" });
+    const [row] = await as.query(api.queue.board);
+    expect(row.participantEmail).toBe(guest.email);
+    expect(row.downloadName).toBe("KC-001_ada-lovelace_red_rocket-keychain.stl");
+    expect(row.fileUrl).toBeTruthy();
+  });
+
+  test("guests.list flags registered guests", async () => {
+    const { t, as } = await setup();
+    await t.run(async (ctx) => {
+      const importId = await ctx.db.insert("guestImports", {
+        fileName: "x.csv",
+        uploadedBy: admin.email,
+        rowCount: 2,
+        eligibleCount: 2,
+        hasCheckInColumn: true,
+      });
+      await ctx.db.insert("guests", { email: guest.email, checkedIn: true, importId });
+      await ctx.db.insert("guests", { email: "zed@example.com", checkedIn: false, importId });
+    });
+    const list = await as.query(api.guests.list);
+    expect(list.map((g) => [g.email, g.registered])).toEqual([
+      [guest.email, true],
+      ["zed@example.com", false],
+    ]);
+  });
+});
+
+describe("download", () => {
+  test("admins get the file as a named attachment", async () => {
+    const { as, participantId, addSubmission } = await setup();
+    const a = await addSubmission(participantId, { title: "Rocket Keychain" });
+    const res = await as.fetch(`/download?id=${a}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Disposition")).toBe(
+      'attachment; filename="KC-001_ada-lovelace_red_rocket-keychain.stl"'
+    );
+    expect(await res.text()).toBe("solid model-1");
+  });
+
+  test("anonymous and non-admin callers are forbidden", async () => {
+    const { t, participantId, addSubmission } = await setup();
+    const a = await addSubmission(participantId);
+    expect((await t.fetch(`/download?id=${a}`)).status).toBe(403);
+    expect((await t.withIdentity(guest).fetch(`/download?id=${a}`)).status).toBe(403);
+  });
+
+  test("missing or unknown ids", async () => {
+    const { as } = await setup();
+    expect((await as.fetch("/download")).status).toBe(400);
+    expect((await as.fetch("/download?id=nope")).status).toBe(404);
+  });
+});
