@@ -46,11 +46,13 @@ export default function TvStage({ children }: { children: React.ReactNode }) {
         idle && "cursor-none [&_*]:cursor-none"
       )}
     >
-      <div
-        className="relative shrink-0 overflow-hidden bg-background"
-        style={{ width: STAGE_W, height: STAGE_H, transform: `scale(${scale})` }}
-      >
-        {children}
+      <div className="shrink-0" style={{ width: STAGE_W * scale, height: STAGE_H * scale }}>
+        <div
+          className="relative origin-top-left overflow-hidden bg-background"
+          style={{ width: STAGE_W, height: STAGE_H, transform: `scale(${scale})` }}
+        >
+          {children}
+        </div>
       </div>
       <style>{FLASH_CSS}</style>
     </div>

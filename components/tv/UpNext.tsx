@@ -10,7 +10,7 @@ const keyOf = (i: TvItem) => i.printCode;
 export default function UpNext({ items, more }: { items: TvItem[]; more: number }) {
   const rows = usePresence(items, keyOf);
   return (
-    <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-card px-8 py-6">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card px-8 py-6">
       <h2 className="font-mono text-lg font-medium tracking-[0.18em] text-muted-foreground uppercase">Up next</h2>
       {items.length === 0 && rows.length === 0 ? (
         <p className="mt-6 text-2xl text-muted-foreground">Queue is empty. Submit yours!</p>

@@ -92,7 +92,7 @@ const SwipeCard = forwardRef<
       }}
     >
       <div className="pointer-events-none relative">
-        <LazyModelViewer url={entry.fileUrl} kind={entry.kind} colour={colour} />
+        <LazyModelViewer url={entry.fileUrl} kind={entry.kind} colour={colour} className="aspect-[4/3] sm:aspect-square" />
         <span
           ref={likeRef}
           aria-hidden

@@ -181,16 +181,19 @@ export default function VoteGallery() {
   return (
     <>
       <p className="eyebrow text-muted-foreground">People&apos;s choice</p>
-      <h1 className="mt-3 font-heading text-3xl font-semibold tracking-[-0.03em] sm:text-5xl">
+      <h1 className="mt-2 font-heading text-2xl font-semibold sm:mt-3 tracking-[-0.03em] sm:text-5xl">
         Swipe the keychains
       </h1>
-      <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 text-sm text-muted-foreground sm:hidden">
+        Swipe right to like, left to skip.{VOTES_ARE_FINAL ? " Votes are final." : ""}
+      </p>
+      <p className="mt-3 hidden max-w-xl text-[15px] leading-relaxed text-muted-foreground sm:block">
         Swipe right to like, left to skip. Likes are just for you (and break ties). When you find a
         favourite, confirm one of your {MAX_VOTES_PER_PARTICIPANT} votes
         {VOTES_ARE_FINAL ? ". Votes are final." : "."}
       </p>
 
-      <div className="mt-6">
+      <div className="mt-4 sm:mt-6">
         {loading ? (
           <Skeleton className="h-16 max-w-xl rounded-xl" />
         ) : !signedIn ? (
@@ -226,7 +229,7 @@ export default function VoteGallery() {
         )}
       </div>
 
-      <Tabs value={view} onValueChange={(v) => setView(v as View)} className="mt-6">
+      <Tabs value={view} onValueChange={(v) => setView(v as View)} className="mt-4 sm:mt-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <TabsList>
             <TabsTrigger value="swipe" className="px-3">
@@ -368,7 +371,7 @@ function BallotSummary({
   onOpen: (id: SubmissionId) => void;
 }) {
   return (
-    <div className="flex max-w-xl flex-col gap-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10" aria-live="polite">
+    <div className="flex max-w-xl flex-col gap-2 rounded-xl bg-card p-3 ring-1 sm:p-4 ring-foreground/10" aria-live="polite">
       <div className="flex items-center justify-between gap-3">
         <p className="font-heading text-lg font-medium tracking-tight">
           {used} of {max} votes used

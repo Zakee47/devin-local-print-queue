@@ -18,12 +18,17 @@ export default function MostLiked({ items }: { items: TvLiked[] }) {
           {items.map((item, i) => (
             <li
               key={item.printCode}
-              className="flex min-w-0 items-center gap-2.5 rounded-lg border border-border bg-background px-3 py-2 animate-in fade-in duration-500"
+              className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-background px-3 py-2 animate-in fade-in duration-500"
             >
-              <span className="font-mono text-base text-muted-dim tabular-nums">{i + 1}</span>
-              <Swatch colour={item.colour} />
-              <span className="min-w-0 flex-1 truncate text-lg text-muted-foreground">{item.displayName}</span>
-              <span className="font-mono text-lg font-semibold tabular-nums">{item.likes}</span>
+              <span className="flex items-center gap-2">
+                <span className="font-mono text-base text-muted-dim tabular-nums">{i + 1}</span>
+                <Swatch colour={item.colour} />
+                <span className="ml-auto flex items-center gap-1 font-mono text-lg font-semibold tabular-nums">
+                  <Heart className="size-4 text-brand" aria-hidden />
+                  {item.likes}
+                </span>
+              </span>
+              <span className="truncate text-lg text-muted-foreground">{item.displayName}</span>
             </li>
           ))}
         </ol>
