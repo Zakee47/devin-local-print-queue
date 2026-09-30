@@ -1,0 +1,250 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Light mode (default) — "Paper": a white page field with warm off-neutrals
+   in the tints and borders rather than the pure grey axis, and ink (#22211E)
+   instead of near-black so text stays short of a harsh 19:1. Surface is a
+   neutral grey one step off white — hovers and the receipt stub read as a
+   quiet press of the field rather than a cream block. The blue accent is
+   reserved for the claim flow only. */
+:root {
+  --font-general-sans: "General Sans", Arial, sans-serif;
+  --surface: #f1f1f1;
+  --surface-hover: #e8e8e8;
+  --border: #dcdcdc;
+  --border-strong: #b8b8b8;
+  --muted: #eeeeee;
+  --muted-dim: #666666;
+  --background: #fafafa;
+  --foreground: #202020;
+  --card: #ffffff;
+  --card-foreground: #202020;
+  --popover: #ffffff;
+  --popover-foreground: #202020;
+  --primary: #202020;
+  --primary-foreground: #f2f2f2;
+  --secondary: #eeeeee;
+  --secondary-foreground: #202020;
+  --muted-foreground: #5e5e5e;
+  --accent: #eeeeee;
+  --accent-foreground: #202020;
+  --destructive: oklch(0.577 0.245 27.325);
+  --input: #c9c9c9;
+  --brand: #467bf7;
+  --brand-hover: #628ff9;
+  --brand-foreground: #121212;
+  --link: #2d60cf;
+  --ring: #2d60cf;
+  --selection: #dddddd;
+  --selection-foreground: #202020;
+  /* Soft two-layer card shadow: invisible as "shadow", read as depth. Dark
+     mode zeroes it out and relies on surface contrast instead. */
+  --shadow-card:
+    0 1px 2px rgb(34 33 30 / 0.04), 0 4px 12px -2px rgb(34 33 30 / 0.04);
+  --chart-1: oklch(0.269 0 0);
+  --chart-2: oklch(0.439 0 0);
+  --chart-3: oklch(0.556 0 0);
+  --chart-4: oklch(0.708 0 0);
+  --chart-5: oklch(0.87 0 0);
+  --radius: 0.625rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #202020;
+  --sidebar-primary: #202020;
+  --sidebar-primary-foreground: #f2f2f2;
+  --sidebar-accent: #eeeeee;
+  --sidebar-accent-foreground: #202020;
+  --sidebar-border: #dcdcdc;
+  --sidebar-ring: #2d60cf;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-dim: var(--muted-dim);
+  --font-sans: var(--font-general-sans);
+  --font-mono: var(--font-ibm-plex-mono);
+  /* Headings share the body face — hierarchy comes from weight, size, and
+     tracking rather than a second display family. */
+  --font-heading: var(--font-general-sans);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-link: var(--link);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Neutral, not brand: selection is incidental, so it shouldn't compete with
+   the one blue thing on screen. */
+::selection {
+  background: var(--selection);
+  color: var(--selection-foreground);
+}
+
+/* Chrome paints autofilled fields yellow, which clashes with the paper
+   palette. The background is set via an internal style that can't be
+   overridden directly, but it *can* be transitioned — delaying it
+   indefinitely keeps the field transparent while the ink stays themed. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--foreground);
+  caret-color: var(--foreground);
+  transition: background-color 9999999s ease-in-out 0s;
+}
+
+/* Micro-label: the recurring uppercase mono eyebrow used across the app. */
+@utility eyebrow {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* Faint dot grid backdrop for hero surfaces. */
+@utility bg-dotgrid {
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Receipt edge: scalloped bottom, like a stub torn off a perforated roll. */
+@utility receipt-edge {
+  mask-image: radial-gradient(circle at 8px 100%, transparent 5px, black 5.5px);
+  mask-size: 16px 100%;
+  mask-repeat: repeat-x;
+}
+
+/* Receipt print: the receipt rolls out of the slot — revealed top-down via
+   clip-path so the scalloped tear-off edge lands last. */
+@utility receipt-print {
+  animation: receipt-print 0.7s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes receipt-print {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* Brand pulse: a slow breath reserved for the one brand-blue element in view. */
+@utility animate-brand-pulse {
+  animation: brand-pulse 3.2s ease-in-out infinite;
+}
+
+@keyframes brand-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* Dark mode — "Paper" after dark: the near-black picks up a faint cool cast
+   while the text stays warm off-white, and contrast drops from 18:1 to ~16:1
+   to stop white type haloing on OLED. */
+.dark {
+  --surface: #1a1a1a;
+  --surface-hover: #303030;
+  --border: #333333;
+  --border-strong: #4a4a4a;
+  --muted: #202020;
+  --muted-dim: #9b9b9b;
+  --background: #121212;
+  --foreground: #f2f2f2;
+  --card: #161616;
+  --card-foreground: #f2f2f2;
+  --popover: #202020;
+  --popover-foreground: #f2f2f2;
+  --primary: #f2f2f2;
+  --primary-foreground: #121212;
+  --secondary: #262626;
+  --secondary-foreground: #f2f2f2;
+  --muted-foreground: #9b9b9b;
+  --accent: #262626;
+  --accent-foreground: #f2f2f2;
+  --destructive: oklch(0.704 0.191 22.216);
+  --input: #414141;
+  --brand: #467bf7;
+  --brand-hover: #628ff9;
+  --brand-foreground: #121212;
+  --link: #467bf7;
+  --ring: #467bf7;
+  --selection: #383838;
+  --selection-foreground: #f2f2f2;
+  --shadow-card: 0 0 rgb(0 0 0 / 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: #161616;
+  --sidebar-foreground: #f2f2f2;
+  --sidebar-primary: #f2f2f2;
+  --sidebar-primary-foreground: #121212;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #f2f2f2;
+  --sidebar-border: #333333;
+  --sidebar-ring: #467bf7;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

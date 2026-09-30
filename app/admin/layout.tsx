@@ -1,0 +1,64 @@
+import Link from "next/link";
+import ProfileMenu from "@/components/ProfileMenu";
+import AdminGate from "@/components/AdminGate";
+import AdminNav from "@/components/AdminNav";
+import { BrandWordmark } from "@/components/BrandMark";
+import DevinCredit from "@/components/DevinCredit";
+import HeaderBar from "@/components/HeaderBar";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { getAppName } from "@/lib/app-name";
+
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <HeaderBar>
+        <div className="mx-auto flex min-h-14 max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:h-14 sm:flex-nowrap sm:px-6 sm:py-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link
+              href="/"
+              aria-label={`${getAppName()} home`}
+              className="group flex min-w-0 items-center gap-2.5 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+            >
+              <BrandWordmark />
+            </Link>
+            <Badge
+              variant="outline"
+              className="shrink-0"
+            >
+              Admin
+            </Badge>
+          </div>
+          <div className="order-last w-full overflow-x-auto sm:order-none sm:ml-auto sm:w-auto">
+            <AdminNav />
+          </div>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+            <Separator
+              orientation="vertical"
+              className="hidden !h-5 sm:block"
+            />
+            <ProfileMenu />
+          </div>
+        </div>
+      </HeaderBar>
+      <main
+        id="main-content"
+        className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-12"
+      >
+        <AdminGate>{children}</AdminGate>
+      </main>
+      <footer className="border-t border-border">
+        <div className="mx-auto flex h-12 max-w-5xl items-center justify-between gap-4 px-4 sm:px-6">
+          <span className="text-xs font-medium text-muted-dim">
+            Control room
+          </span>
+          <DevinCredit />
+        </div>
+      </footer>
+    </div>
+  );
+}
