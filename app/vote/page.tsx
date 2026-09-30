@@ -6,7 +6,7 @@ export default function VotePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <SiteHeader width="wide" />
-      <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6">
+      <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-12">
         <VoteGallery />
       </main>
       <SiteFooter width="wide" />

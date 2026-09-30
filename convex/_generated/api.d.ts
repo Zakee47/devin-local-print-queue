@@ -11,6 +11,7 @@
 import type * as admins from "../admins.js";
 import type * as guests from "../guests.js";
 import type * as http from "../http.js";
+import type * as likes from "../likes.js";
 import type * as participants from "../participants.js";
 import type * as queue from "../queue.js";
 import type * as seed from "../seed.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   admins: typeof admins;
   guests: typeof guests;
   http: typeof http;
+  likes: typeof likes;
   participants: typeof participants;
   queue: typeof queue;
   seed: typeof seed;

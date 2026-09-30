@@ -170,3 +170,70 @@ test("results mode returns a public-safe leaderboard of done designs", async () 
   expect(board.leaderboard[0]).toMatchObject({ title: "Design 2", displayName: "Maker S.", colour: "Red" });
   for (const l of board.leaderboard) expect(Object.keys(l)).not.toContain("file");
 });
+
+test("queue mode shows a public-safe top 5 of most liked done designs", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    const fans = await Promise.all(["F1", "F2", "F3", "F4"].map((n) => addParticipant(ctx, n)));
+    const maker = await addParticipant(ctx, "Maker");
+    const done = [];
+    for (let n = 1; n <= 7; n++) done.push(await addSubmission(ctx, maker, n, "done", { doneAt: n }));
+    const queued = await addSubmission(ctx, maker, 8, "queued", { queueOrder: 1 });
+    const like = (fan: number, submissionId: Id<"submissions">, reaction: "like" | "skip" = "like") =>
+      ctx.db.insert("likes", { participantId: fans[fan], submissionId, reaction, updatedAt: 1 });
+    // KC-003: 4 likes, KC-001: 3, KC-005 & KC-002: 2 (code order), KC-006: 1, KC-004: 1 like (6th).
+    for (const f of [0, 1, 2, 3]) await like(f, done[2]);
+    for (const f of [0, 1, 2]) await like(f, done[0]);
+    for (const f of [0, 1]) await like(f, done[4]);
+    for (const f of [2, 3]) await like(f, done[1]);
+    await like(0, done[5]);
+    await like(3, done[3]);
+    await like(1, done[3], "skip");
+    await like(3, done[6], "skip");
+    for (const f of [0, 1, 2, 3]) await like(f, queued); // not done: ignored
+  });
+  const board = await t.query(api.tv.board);
+  expectNoPrivateFields(board);
+  if (board.mode !== "queue") throw new Error("expected queue mode");
+  expect(board.mostLiked.map((l) => [l.printCode, l.likes])).toEqual([
+    ["KC-003", 4],
+    ["KC-001", 3],
+    ["KC-002", 2],
+    ["KC-005", 2],
+    ["KC-004", 1],
+  ]);
+  expect(Object.keys(board.mostLiked[0]).sort()).toEqual(["colour", "displayName", "likes", "printCode", "title"]);
+  expect(board.mostLiked[0].displayName).toBe("Maker S.");
+});
+
+test("results mode breaks vote ties by likes", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await ctx.db.insert("settings", {
+      submissionsOpen: false,
+      votingOpen: false,
+      showResultsOnTv: true,
+      maxFileBytes: 1,
+      colours: [],
+      nextPrintNumber: 10,
+    });
+    const fans = await Promise.all(["V1", "V2", "V3"].map((n) => addParticipant(ctx, n)));
+    const maker = await addParticipant(ctx, "Maker");
+    const a = await addSubmission(ctx, maker, 1, "done", { doneAt: 1 });
+    const b = await addSubmission(ctx, maker, 2, "done", { doneAt: 2 });
+    const c = await addSubmission(ctx, maker, 3, "done", { doneAt: 3 });
+    for (const s of [a, b, c]) await ctx.db.insert("votes", { voterId: fans[0], submissionId: s });
+    await ctx.db.insert("likes", { participantId: fans[1], submissionId: c, reaction: "like", updatedAt: 1 });
+    await ctx.db.insert("likes", { participantId: fans[2], submissionId: c, reaction: "like", updatedAt: 1 });
+    await ctx.db.insert("likes", { participantId: fans[1], submissionId: b, reaction: "like", updatedAt: 1 });
+    await ctx.db.insert("likes", { participantId: fans[2], submissionId: a, reaction: "skip", updatedAt: 1 });
+  });
+  const board = await t.query(api.tv.board);
+  expectNoPrivateFields(board);
+  if (board.mode !== "results") throw new Error("expected results mode");
+  expect(board.leaderboard.map((l) => [l.rank, l.printCode, l.votes, l.likes])).toEqual([
+    [1, "KC-003", 1, 2],
+    [2, "KC-002", 1, 1],
+    [3, "KC-001", 1, 0],
+  ]);
+});

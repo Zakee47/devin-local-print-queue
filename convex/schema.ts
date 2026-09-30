@@ -72,6 +72,18 @@ export default defineSchema({
     .index("by_submission", ["submissionId"])
     .index("by_voter_submission", ["voterId", "submissionId"]),
 
+  // Swipe-deck reactions. One row per participant per submission; ranking
+  // tie-breaker after votes.
+  likes: defineTable({
+    participantId: v.id("participants"),
+    submissionId: v.id("submissions"),
+    reaction: v.union(v.literal("like"), v.literal("skip")),
+    updatedAt: v.number(),
+  })
+    .index("by_participant", ["participantId"])
+    .index("by_submission", ["submissionId"])
+    .index("by_participant_submission", ["participantId", "submissionId"]),
+
   // Singleton row; read through settings.get which falls back to defaults.
   settings: defineTable({
     submissionsOpen: v.boolean(),

@@ -6,6 +6,7 @@ import type { TvBoard as Board } from "@/convex/tv";
 import Counters from "./Counters";
 import FreshOff from "./FreshOff";
 import Leaderboard from "./Leaderboard";
+import MostLiked from "./MostLiked";
 import NowPrinting from "./NowPrinting";
 import TvFooter from "./TvFooter";
 import TvStage from "./TvStage";
@@ -19,6 +20,7 @@ const EMPTY: Extract<Board, { mode: "queue" }> = {
   upNext: [],
   moreQueued: 0,
   recentDone: [],
+  mostLiked: [],
 };
 
 export default function TvBoard() {
@@ -66,6 +68,7 @@ function QueueView({ board }: { board: Extract<Board, { mode: "queue" }> }) {
         <Counters counts={board.counts} />
         <UpNext items={board.upNext} more={board.moreQueued} />
         <FreshOff items={board.recentDone} now={now} fresh={freshDone} />
+        <MostLiked items={board.mostLiked} />
       </div>
     </div>
   );

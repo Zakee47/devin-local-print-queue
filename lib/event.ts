@@ -27,3 +27,11 @@ export const STATUS_LABELS: Record<SubmissionStatus, string> = {
   printing: "Printing",
   done: "Done",
 };
+
+// Confirmed votes can't be retracted. Flip to false to let people change votes
+// while voting is open.
+export const VOTES_ARE_FINAL = true;
+// Likes/skips are allowed on any done entry. Set true to only allow them while
+// settings.votingOpen.
+export const LIKES_REQUIRE_VOTING_OPEN = false;
+export type Reaction = "like" | "skip";

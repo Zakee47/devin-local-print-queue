@@ -3,11 +3,14 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { DEFAULT_SETTINGS, readSettings } from "./settings";
+import { reactionCounts } from "./likes";
 import { displayNameFrom, formatPrintCode } from "../lib/files";
+import { rankRows } from "../lib/ranking";
 
 export const UP_NEXT_LIMIT = 8;
 export const RECENT_DONE_LIMIT = 3;
 export const LEADERBOARD_LIMIT = 10;
+export const MOST_LIKED_LIMIT = 5;
 
 // Everything the public TV may show about a submission. Never add emails,
 // notes, file names, rejection reasons or reviewer details here.
@@ -24,7 +27,8 @@ export type TvItem = {
 };
 
 export type TvPrintingItem = TvItem & { file: { url: string; kind: "stl" | "3mf" } | null };
-export type TvLeader = TvItem & { rank: number; votes: number };
+export type TvLeader = TvItem & { rank: number; votes: number; likes: number };
+export type TvLiked = { printCode: string; title: string; displayName: string; colour: string | null; likes: number };
 
 export type TvCounts = { submitted: number; queued: number; printing: number; done: number };
 
@@ -36,6 +40,7 @@ export type TvBoard =
       upNext: TvItem[];
       moreQueued: number;
       recentDone: TvItem[];
+      mostLiked: TvLiked[];
     }
   | { mode: "results"; counts: TvCounts; totalVotes: number; leaderboard: TvLeader[] };
 
@@ -97,21 +102,21 @@ export const board = query({
       done: done.length,
     };
 
+    const reactions = await reactionCounts(ctx);
+    const likesOf = (s: Doc<"submissions">) => reactions.get(s._id)?.likes ?? 0;
+
     if (settings.showResultsOnTv) {
       const votes = await ctx.db.query("votes").collect();
       const tally = new Map<Id<"submissions">, number>();
       for (const vote of votes) tally.set(vote.submissionId, (tally.get(vote.submissionId) ?? 0) + 1);
-      const ranked = done
-        .map((s) => ({ s, votes: tally.get(s._id) ?? 0 }))
-        .filter((r) => r.votes > 0)
-        .sort((a, b) => b.votes - a.votes || a.s.printCode.localeCompare(b.s.printCode))
-        .slice(0, LEADERBOARD_LIMIT);
-      const leaderboard: TvLeader[] = [];
-      for (const [i, r] of ranked.entries()) {
-        // Competition ranking: ties share a rank (1, 2, 2, 4).
-        const rank = i > 0 && ranked[i - 1].votes === r.votes ? leaderboard[i - 1].rank : i + 1;
-        leaderboard.push({ ...(await toItem(r.s, nameOf)), rank, votes: r.votes });
-      }
+      const ranked = rankRows(
+        done
+          .map((s) => ({ s, printCode: s.printCode, votes: tally.get(s._id) ?? 0, likes: likesOf(s) }))
+          .filter((r) => r.votes > 0)
+      ).slice(0, LEADERBOARD_LIMIT);
+      const leaderboard: TvLeader[] = await Promise.all(
+        ranked.map(async (r) => ({ ...(await toItem(r.s, nameOf)), rank: r.rank, votes: r.votes, likes: r.likes }))
+      );
       const totalVotes = votes.filter((vote) => done.some((s) => s._id === vote.submissionId)).length;
       return { mode: "results", counts, totalVotes, leaderboard };
     }
@@ -132,6 +137,22 @@ export const board = query({
         .slice(0, RECENT_DONE_LIMIT)
         .map((s) => toItem(s, nameOf))
     );
+    const mostLiked = await Promise.all(
+      done
+        .map((s) => ({ s, likes: likesOf(s) }))
+        .filter((r) => r.likes > 0)
+        .sort((a, b) => b.likes - a.likes || a.s.printCode.localeCompare(b.s.printCode))
+        .slice(0, MOST_LIKED_LIMIT)
+        .map(
+          async ({ s, likes }): Promise<TvLiked> => ({
+            printCode: s.printCode,
+            title: s.title,
+            displayName: await nameOf(s.participantId),
+            colour: s.colour ?? null,
+            likes,
+          })
+        )
+    );
     return {
       mode: "queue",
       counts,
@@ -139,6 +160,7 @@ export const board = query({
       upNext,
       moreQueued: Math.max(0, sortedQueue.length - UP_NEXT_LIMIT),
       recentDone,
+      mostLiked,
     };
   },
 });
@@ -251,6 +273,25 @@ export const insertDemo = internalMutation({
     for (const [voter, picks] of [[0, [0, 1]], [1, [0, 2]], [2, [0, 1]], [3, [1, 3]], [4, [2]]] as const) {
       for (const pick of picks) {
         await ctx.db.insert("votes", { voterId: participantIds[voter], submissionId: doneIds[pick] });
+      }
+    }
+    // Likes and skips for the "Most liked" strip and the tie-breaker.
+    for (const [voter, likes, skips] of [
+      [5, [0, 1, 2], [3]],
+      [6, [1, 3], [0]],
+      [7, [1, 2], []],
+      [8, [0, 1], [2]],
+      [9, [3], [1]],
+    ] as const) {
+      for (const [picks, reaction] of [[likes, "like"], [skips, "skip"]] as const) {
+        for (const pick of picks) {
+          await ctx.db.insert("likes", {
+            participantId: participantIds[voter],
+            submissionId: doneIds[pick],
+            reaction,
+            updatedAt: now,
+          });
+        }
       }
     }
   },

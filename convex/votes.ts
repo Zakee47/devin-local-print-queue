@@ -4,7 +4,9 @@ import { v } from "convex/values";
 import { requireAdmin } from "./admins";
 import { requireParticipant, viewerParticipant } from "./participants";
 import { readSettings } from "./settings";
-import { MAX_VOTES_PER_PARTICIPANT } from "../lib/event";
+import { reactionCounts } from "./likes";
+import { MAX_VOTES_PER_PARTICIPANT, VOTES_ARE_FINAL } from "../lib/event";
+import { rankRows } from "../lib/ranking";
 
 async function doneSubmissions(ctx: QueryCtx | MutationCtx) {
   const rows = await ctx.db
@@ -75,6 +77,7 @@ export const mine = query({
       ownSubmissionIds: own.map((s) => s._id),
       votesLeft: Math.max(0, MAX_VOTES_PER_PARTICIPANT - votes.length),
       maxVotes: MAX_VOTES_PER_PARTICIPANT,
+      votesAreFinal: VOTES_ARE_FINAL,
     };
   },
 });
@@ -100,7 +103,11 @@ export const cast = mutation({
     if (existing) throw new Error("You've already voted for this entry");
     const votes = await countedVotes(ctx, participant._id);
     if (votes.length >= MAX_VOTES_PER_PARTICIPANT) {
-      throw new Error(`You've used all ${MAX_VOTES_PER_PARTICIPANT} votes. Remove one to vote again.`);
+      throw new Error(
+        VOTES_ARE_FINAL
+          ? `You've used all ${MAX_VOTES_PER_PARTICIPANT} votes.`
+          : `You've used all ${MAX_VOTES_PER_PARTICIPANT} votes. Remove one to vote again.`
+      );
     }
     return await ctx.db.insert("votes", { voterId: participant._id, submissionId });
   },
@@ -110,6 +117,7 @@ export const retract = mutation({
   args: { submissionId: v.id("submissions") },
   handler: async (ctx, { submissionId }) => {
     const participant = await requireParticipant(ctx);
+    if (VOTES_ARE_FINAL) throw new Error("Votes are final once confirmed");
     if (!(await readSettings(ctx)).votingOpen) throw new Error("Voting is closed");
     const existing = await ctx.db
       .query("votes")
@@ -130,9 +138,11 @@ export type ResultRow = {
   participantEmail: string;
   displayName: string;
   votes: number;
+  likes: number;
+  skips: number;
 };
 
-// Admin: done entries ranked by votes (ties share a rank), plus turnout.
+// Admin: done entries ranked by votes then likes (full ties share a rank), plus turnout.
 export const results = query({
   args: {},
   handler: async (ctx) => {
@@ -140,6 +150,7 @@ export const results = query({
     const submissions = await doneSubmissions(ctx);
     const rows: ResultRow[] = [];
     const voters = new Set<Id<"participants">>();
+    const reactions = await reactionCounts(ctx);
     for (const s of submissions) {
       const participant = await ctx.db.get(s.participantId);
       const votes = await ctx.db
@@ -156,13 +167,11 @@ export const results = query({
         participantEmail: participant?.email ?? "",
         displayName: participant?.displayName ?? "Anonymous",
         votes: votes.length,
+        likes: reactions.get(s._id)?.likes ?? 0,
+        skips: reactions.get(s._id)?.skips ?? 0,
       });
     }
-    rows.sort((a, b) => b.votes - a.votes || a.printCode.localeCompare(b.printCode));
-    const ranked = rows.map((row) => ({
-      ...row,
-      rank: rows.findIndex((r) => r.votes === row.votes) + 1,
-    }));
+    const ranked = rankRows(rows);
     const participants = (await ctx.db.query("participants").collect()).length;
     return { rows: ranked, voters: voters.size, participants };
   },

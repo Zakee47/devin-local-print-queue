@@ -1,34 +1,28 @@
 "use client";
 
-import { Check, Heart } from "lucide-react";
+import type { ReactNode } from "react";
+import { Heart, Layers, X } from "lucide-react";
 import type { GalleryEntry } from "@/convex/votes";
+import type { Reaction } from "@/lib/event";
 import LazyModelViewer from "@/components/vote/LazyModelViewer";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { swatchFor } from "@/lib/colours";
 import { cn } from "@/lib/utils";
 
-export type VoteState =
-  | { kind: "browse" }
-  | { kind: "own" }
-  | { kind: "voted"; canChange: boolean }
-  | { kind: "available"; canVote: boolean };
-
 export default function VoteCard({
   entry,
-  state,
-  pending,
-  onVote,
-  onRetract,
+  reaction,
+  voted,
+  voteControl,
+  onOpen,
 }: {
   entry: GalleryEntry;
-  state: VoteState;
-  pending: boolean;
-  onVote: () => void;
-  onRetract: () => void;
+  reaction?: Reaction;
+  voted: boolean;
+  voteControl: ReactNode;
+  onOpen: () => void;
 }) {
   const colour = swatchFor(entry.colour);
-  const voted = state.kind === "voted";
   return (
     <li
       className={cn(
@@ -54,33 +48,26 @@ export default function VoteCard({
             />
             {entry.colour ?? "Any colour"}
           </span>
-          {state.kind === "own" ? (
-            <Badge variant="outline">Your entry</Badge>
-          ) : state.kind === "voted" ? (
-            <Button
-              variant="brand"
-              size="sm"
-              disabled={pending || !state.canChange}
-              onClick={onRetract}
-              aria-pressed
-              aria-label={`Remove your vote for ${entry.title}`}
-            >
-              <Check data-icon="inline-start" />
-              Voted
-            </Button>
-          ) : state.kind === "available" ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pending || !state.canVote}
-              onClick={onVote}
-              aria-pressed={false}
-              aria-label={`Vote for ${entry.title}`}
-            >
-              <Heart data-icon="inline-start" />
-              Vote
-            </Button>
-          ) : null}
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            {reaction === "like" ? (
+              <>
+                <Heart className="size-3.5 text-brand" aria-hidden />
+                Liked
+              </>
+            ) : reaction === "skip" ? (
+              <>
+                <X className="size-3.5" aria-hidden />
+                Skipped
+              </>
+            ) : null}
+          </span>
+        </div>
+        <div className="mt-auto flex flex-col gap-2">
+          {voteControl}
+          <Button variant="ghost" size="sm" onClick={onOpen} aria-label={`Open ${entry.title} in the swipe deck`}>
+            <Layers data-icon="inline-start" />
+            Open in deck
+          </Button>
         </div>
       </div>
     </li>

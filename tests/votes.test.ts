@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
-import { MAX_VOTES_PER_PARTICIPANT } from "../lib/event";
+import { MAX_VOTES_PER_PARTICIPANT, VOTES_ARE_FINAL } from "../lib/event";
 import { DEFAULT_SETTINGS } from "../convex/settings";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -90,13 +90,10 @@ describe("votes", () => {
     expect(JSON.stringify(gallery)).not.toContain("@example.com");
   });
 
-  it("rejects casting and retracting while voting is closed", async () => {
+  it("rejects casting while voting is closed", async () => {
     const { t, ada } = await setup({ votingOpen: false });
     const grace = t.withIdentity(identityFor("grace"));
     await expect(grace.mutation(api.votes.cast, { submissionId: ada })).rejects.toThrow(
-      /closed/
-    );
-    await expect(grace.mutation(api.votes.retract, { submissionId: ada })).rejects.toThrow(
       /closed/
     );
   });
@@ -111,14 +108,21 @@ describe("votes", () => {
     expect((await grace.query(api.votes.mine))?.votesLeft).toBe(1);
   });
 
-  it("retracts a vote so it can be spent elsewhere", async () => {
+  it("makes confirmed votes final", async () => {
+    expect(VOTES_ARE_FINAL).toBe(true);
     const { t, ada, grace, alan } = await setup();
     const linus = t.withIdentity(identityFor("linus"));
     await linus.mutation(api.votes.cast, { submissionId: ada });
     await linus.mutation(api.votes.cast, { submissionId: grace });
-    await linus.mutation(api.votes.retract, { submissionId: ada });
-    await linus.mutation(api.votes.cast, { submissionId: alan });
-    expect((await linus.query(api.votes.mine))?.votedSubmissionIds).toEqual([grace, alan]);
+    await expect(linus.mutation(api.votes.retract, { submissionId: ada })).rejects.toThrow(
+      /final/
+    );
+    await expect(linus.mutation(api.votes.cast, { submissionId: alan })).rejects.toThrow(
+      /all 2 votes/
+    );
+    const mine = await linus.query(api.votes.mine);
+    expect(mine?.votedSubmissionIds).toEqual([ada, grace]);
+    expect(mine?.votesAreFinal).toBe(true);
   });
 
   it("requires a registered participant to vote", async () => {
@@ -152,5 +156,25 @@ describe("votes", () => {
     expect(results.rows[0].participantEmail).toBe("grace@example.com");
     expect(results.voters).toBe(2);
     expect(results.participants).toBe(4);
+  });
+
+  it("breaks vote ties by likes in admin results", async () => {
+    const { t, ada, grace, alan } = await setup();
+    // ada and alan tie on 1 vote each; alan has more likes, so ranks higher.
+    await t.withIdentity(identityFor("linus")).mutation(api.votes.cast, { submissionId: ada });
+    await t.withIdentity(identityFor("grace")).mutation(api.votes.cast, { submissionId: alan });
+    for (const who of ["linus", "grace", "ada"]) {
+      await t.withIdentity(identityFor(who)).mutation(api.likes.react, { submissionId: alan, reaction: "like" });
+    }
+    await t.withIdentity(identityFor("linus")).mutation(api.likes.react, { submissionId: ada, reaction: "like" });
+    await t.withIdentity(identityFor("alan")).mutation(api.likes.react, { submissionId: ada, reaction: "skip" });
+    await t.withIdentity(identityFor("ada")).mutation(api.likes.react, { submissionId: grace, reaction: "skip" });
+
+    const results = await t.withIdentity(identityFor("admin")).query(api.votes.results);
+    expect(results.rows.map((r) => [r.rank, r.printCode, r.votes, r.likes, r.skips])).toEqual([
+      [1, "KC-003", 1, 3, 0],
+      [2, "KC-001", 1, 1, 1],
+      [3, "KC-002", 0, 0, 1],
+    ]);
   });
 });

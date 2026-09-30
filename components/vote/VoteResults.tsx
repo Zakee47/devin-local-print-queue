@@ -37,10 +37,12 @@ export default function VoteResults() {
   const exportCsv = () => {
     if (!results) return;
     downloadCsv(`keychain-votes-${new Date().toISOString().slice(0, 10)}.csv`, [
-      ["rank", "votes", "print_code", "title", "colour", "participant_name", "participant_email"],
+      ["rank", "votes", "likes", "skips", "print_code", "title", "colour", "participant_name", "participant_email"],
       ...results.rows.map((r) => [
         String(r.rank),
         String(r.votes),
+        String(r.likes),
+        String(r.skips),
         r.printCode,
         r.title,
         r.colour ?? "",
@@ -122,7 +124,10 @@ export default function VoteResults() {
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-4">
-          <h2 className="font-heading text-lg font-medium">Results</h2>
+          <div>
+            <h2 className="font-heading text-lg font-medium">Results</h2>
+            <p className="text-xs text-muted-foreground">Ranked by votes; ties broken by likes.</p>
+          </div>
           <Button variant="outline" size="sm" onClick={exportCsv} disabled={results.rows.length === 0}>
             <Download data-icon="inline-start" />
             Export CSV
@@ -142,6 +147,8 @@ export default function VoteResults() {
                 <tr>
                   <th scope="col" className="px-4 py-2.5 font-medium">#</th>
                   <th scope="col" className="px-4 py-2.5 font-medium">Votes</th>
+                  <th scope="col" className="px-4 py-2.5 font-medium">Likes</th>
+                  <th scope="col" className="px-4 py-2.5 font-medium">Skips</th>
                   <th scope="col" className="px-4 py-2.5 font-medium">Code</th>
                   <th scope="col" className="px-4 py-2.5 font-medium">Title</th>
                   <th scope="col" className="px-4 py-2.5 font-medium">Participant</th>
@@ -152,6 +159,8 @@ export default function VoteResults() {
                   <tr key={r.submissionId} className="border-t border-border">
                     <td className="px-4 py-3 font-mono tabular-nums text-muted-foreground">{r.rank}</td>
                     <td className="px-4 py-3 font-heading text-base font-medium tabular-nums">{r.votes}</td>
+                    <td className="px-4 py-3 tabular-nums">{r.likes}</td>
+                    <td className="px-4 py-3 tabular-nums text-muted-foreground">{r.skips}</td>
                     <td className="px-4 py-3 font-mono text-xs">{r.printCode}</td>
                     <td className="px-4 py-3">{r.title}</td>
                     <td className="px-4 py-3">
