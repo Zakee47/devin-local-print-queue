@@ -10,19 +10,19 @@ const keyOf = (i: TvItem) => i.printCode;
 export default function UpNext({ items, more }: { items: TvItem[]; more: number }) {
   const rows = usePresence(items, keyOf);
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card px-8 py-6">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card px-8 py-5">
       <h2 className="font-mono text-lg font-medium tracking-[0.18em] text-muted-foreground uppercase">Up next</h2>
       {items.length === 0 && rows.length === 0 ? (
         <p className="mt-6 text-2xl text-muted-foreground">Queue is empty. Submit yours!</p>
       ) : (
-        <ol className="mt-3 flex flex-col">
+        <ol className="mt-2 flex flex-col">
           {rows.map(({ item, key, leaving }) => {
             const position = items.findIndex((i) => i.printCode === key);
             return (
               <li
                 key={key}
                 className={cn(
-                  "flex h-[46px] shrink-0 items-center gap-5 border-b border-border/70 text-[24px] last:border-0",
+                  "flex h-[40px] shrink-0 items-center gap-5 border-b border-border/70 text-[22px] last:border-0",
                   leaving
                     ? "animate-out fade-out slide-out-to-left-8 fill-mode-forwards duration-450"
                     : "animate-in fade-in slide-in-from-bottom-3 duration-500"
@@ -41,7 +41,7 @@ export default function UpNext({ items, more }: { items: TvItem[]; more: number 
         </ol>
       )}
       {more > 0 ? (
-        <p className="mt-auto pt-3 font-mono text-xl text-muted-foreground">+{more} more in the queue</p>
+        <p className="mt-auto pt-2 font-mono text-xl text-muted-foreground">+{more} more in the queue</p>
       ) : null}
     </section>
   );

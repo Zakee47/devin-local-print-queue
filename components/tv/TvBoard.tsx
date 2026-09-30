@@ -3,19 +3,22 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { TvBoard as Board } from "@/convex/tv";
-import Counters from "./Counters";
 import FreshOff from "./FreshOff";
 import Leaderboard from "./Leaderboard";
 import MostLiked from "./MostLiked";
+import Notices from "./Notices";
 import NowPrinting from "./NowPrinting";
-import TvFooter from "./TvFooter";
+import QrRail from "./QrRail";
+import TvHeader from "./TvHeader";
 import TvStage from "./TvStage";
 import UpNext from "./UpNext";
+import Winner from "./Winner";
 import { useArrivals, useNow } from "./hooks";
 
 const EMPTY: Extract<Board, { mode: "queue" }> = {
   mode: "queue",
   counts: { submitted: 0, queued: 0, printing: 0, done: 0 },
+  notices: { announcement: null, submissionsOpen: true, submissionsDeadline: null },
   printing: [],
   upNext: [],
   moreQueued: 0,
@@ -24,36 +27,27 @@ const EMPTY: Extract<Board, { mode: "queue" }> = {
 };
 
 export default function TvBoard() {
-  const board = useQuery(api.tv.board);
+  const board = useQuery(api.tv.board) ?? EMPTY;
   return (
     <TvStage>
-      <div className="grid h-full grid-rows-[1fr_150px]">
-        {board?.mode === "results" ? (
-          <div className="grid min-h-0 grid-cols-[1fr_400px] gap-6 p-8 pb-6">
-            <Leaderboard leaders={board.leaderboard} totalVotes={board.totalVotes} />
-            <div className="flex flex-col gap-6">
-              {(
-                [
-                  ["Entries", board.counts.submitted],
-                  ["Printed", board.counts.done],
-                  ["Votes", board.totalVotes],
-                ] as const
-              ).map(([label, value]) => (
-                <div key={label} className="flex flex-1 flex-col justify-center rounded-2xl border border-border bg-card px-9">
-                  <p className="font-mono text-lg tracking-[0.18em] text-muted-foreground uppercase">{label}</p>
-                  <p className="font-heading text-8xl font-semibold tabular-nums">{value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <QueueView board={board ?? EMPTY} />
-        )}
-        <TvFooter
-          message={board?.mode === "results" ? "See every design at" : "Scan to submit your keychain"}
-        />
+      <div className="grid h-full grid-cols-[1fr_340px]">
+        <div className="grid min-h-0 min-w-0 grid-rows-[112px_auto_1fr]">
+          <TvHeader counts={board.counts} />
+          <Notices notices={board.notices} />
+          {board.mode === "results" ? <ResultsView board={board} /> : <QueueView board={board} />}
+        </div>
+        <QrRail />
       </div>
     </TvStage>
+  );
+}
+
+function ResultsView({ board }: { board: Extract<Board, { mode: "results" }> }) {
+  return (
+    <div className="grid min-h-0 grid-cols-[1fr_620px] gap-6 p-8 pt-6">
+      <Winner winner={board.winner} totalVotes={board.totalVotes} />
+      <Leaderboard leaders={board.runnersUp} top={board.winner?.votes ?? 1} />
+    </div>
   );
 }
 
@@ -62,10 +56,9 @@ function QueueView({ board }: { board: Extract<Board, { mode: "queue" }> }) {
   const freshPrinting = useArrivals(board.printing.map((i) => i.printCode));
   const freshDone = useArrivals(board.recentDone.map((i) => i.printCode));
   return (
-    <div className="grid min-h-0 grid-cols-[1fr_860px] gap-6 p-8 pb-6">
+    <div className="grid min-h-0 grid-cols-[1fr_720px] gap-6 p-8 pt-6">
       <NowPrinting items={board.printing} now={now} fresh={freshPrinting} />
-      <div className="flex min-h-0 flex-col gap-6">
-        <Counters counts={board.counts} />
+      <div className="flex min-h-0 flex-col gap-5">
         <UpNext items={board.upNext} more={board.moreQueued} />
         <FreshOff items={board.recentDone} now={now} fresh={freshDone} />
         <MostLiked items={board.mostLiked} />

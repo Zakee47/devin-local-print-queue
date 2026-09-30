@@ -6,7 +6,7 @@ import Swatch from "./Swatch";
 
 export default function MostLiked({ items }: { items: TvLiked[] }) {
   return (
-    <section className="flex shrink-0 flex-col gap-3 rounded-2xl border border-border bg-card px-8 py-5">
+    <section className="flex shrink-0 flex-col gap-3 rounded-2xl border border-border bg-card px-8 py-4">
       <h2 className="flex shrink-0 items-center gap-3 font-mono text-lg font-medium tracking-[0.18em] text-muted-foreground uppercase">
         <Heart className="size-5 text-brand" aria-hidden />
         Most liked

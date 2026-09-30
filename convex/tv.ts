@@ -4,9 +4,11 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { DEFAULT_SETTINGS, readSettings } from "./settings";
 import { reactionCounts } from "./likes";
-import { displayNameFrom, formatPrintCode } from "../lib/files";
+import { listEntries } from "./entries";
+import { DEFAULT_COLOURS } from "../lib/event";
+import { formatPrintCode } from "../lib/files";
 import { usernameKey } from "../lib/usernames";
-import { rankRows } from "../lib/ranking";
+import { compareRanking } from "../lib/ranking";
 
 export const UP_NEXT_LIMIT = 8;
 export const RECENT_DONE_LIMIT = 3;
@@ -32,18 +34,28 @@ export type TvLeader = TvItem & { rank: number; votes: number; likes: number };
 export type TvLiked = { printCode: string; title: string; displayName: string; colour: string | null; likes: number };
 
 export type TvCounts = { submitted: number; queued: number; printing: number; done: number };
+export type TvNotices = { announcement: string | null; submissionsOpen: boolean; submissionsDeadline: number | null };
+export type TvWinner = TvLeader & { file: { url: string; kind: "stl" | "3mf" } | null };
 
 export type TvBoard =
   | {
       mode: "queue";
       counts: TvCounts;
+      notices: TvNotices;
       printing: TvPrintingItem[];
       upNext: TvItem[];
       moreQueued: number;
       recentDone: TvItem[];
       mostLiked: TvLiked[];
     }
-  | { mode: "results"; counts: TvCounts; totalVotes: number; leaderboard: TvLeader[] };
+  | {
+      mode: "results";
+      counts: TvCounts;
+      notices: TvNotices;
+      totalVotes: number;
+      winner: TvWinner | null;
+      runnersUp: TvLeader[];
+    };
 
 async function byStatus(ctx: QueryCtx, status: Doc<"submissions">["status"]) {
   return await ctx.db
@@ -89,12 +101,19 @@ export const board = query({
   handler: async (ctx): Promise<TvBoard> => {
     const settings = await readSettings(ctx);
     const nameOf = makeNamer(ctx);
-    const [submitted, queued, printing, done] = await Promise.all([
+    const [submitted, queued, printing, done, entries, reactions] = await Promise.all([
       byStatus(ctx, "submitted"),
       byStatus(ctx, "queued"),
       byStatus(ctx, "printing"),
       byStatus(ctx, "done"),
+      listEntries(ctx),
+      reactionCounts(ctx),
     ]);
+    const notices: TvNotices = {
+      announcement: settings.announcement ?? null,
+      submissionsOpen: settings.submissionsOpen,
+      submissionsDeadline: settings.submissionsDeadline ?? null,
+    };
     const counts: TvCounts = {
       // Every entry received that hasn't been rejected.
       submitted: submitted.length + queued.length + printing.length + done.length,
@@ -103,23 +122,44 @@ export const board = query({
       done: done.length,
     };
 
-    const reactions = await reactionCounts(ctx);
     const likesOf = (s: Doc<"submissions">) => reactions.get(s._id)?.likes ?? 0;
 
     if (settings.showResultsOnTv) {
       const votes = await ctx.db.query("votes").collect();
       const tally = new Map<Id<"submissions">, number>();
-      for (const vote of votes) tally.set(vote.submissionId, (tally.get(vote.submissionId) ?? 0) + 1);
-      const ranked = rankRows(
-        done
-          .map((s) => ({ s, printCode: s.printCode, votes: tally.get(s._id) ?? 0, likes: likesOf(s) }))
-          .filter((r) => r.votes > 0)
-      ).slice(0, LEADERBOARD_LIMIT);
-      const leaderboard: TvLeader[] = await Promise.all(
-        ranked.map(async (r) => ({ ...(await toItem(r.s, nameOf)), rank: r.rank, votes: r.votes, likes: r.likes }))
+      const entryIds = new Set(entries.map((entry) => entry._id));
+      let totalVotes = 0;
+      for (const vote of votes) {
+        if (!entryIds.has(vote.submissionId)) continue;
+        totalVotes++;
+        tally.set(vote.submissionId, (tally.get(vote.submissionId) ?? 0) + 1);
+      }
+      const ranked = entries
+        .map((s) => ({ s, printCode: s.printCode, votes: tally.get(s._id) ?? 0, likes: likesOf(s) }))
+        .filter((r) => r.votes > 0)
+        .sort(compareRanking)
+        .slice(0, LEADERBOARD_LIMIT);
+      const [first, ...rest] = ranked;
+      const winner: TvWinner | null = first
+        ? {
+            ...(await toItem(first.s, nameOf)),
+            rank: 1,
+            votes: first.votes,
+            likes: first.likes,
+            file: await ctx.storage.getUrl(first.s.storageId).then((url) =>
+              url ? { url, kind: first.s.kind } : null
+            ),
+          }
+        : null;
+      const runnersUp: TvLeader[] = await Promise.all(
+        rest.map(async (r, i) => ({
+          ...(await toItem(r.s, nameOf)),
+          rank: i + 2,
+          votes: r.votes,
+          likes: r.likes,
+        }))
       );
-      const totalVotes = votes.filter((vote) => done.some((s) => s._id === vote.submissionId)).length;
-      return { mode: "results", counts, totalVotes, leaderboard };
+      return { mode: "results", counts, notices, totalVotes, winner, runnersUp };
     }
 
     const sortedQueue = [...queued].sort((a, b) => queueKey(a) - queueKey(b));
@@ -139,7 +179,7 @@ export const board = query({
         .map((s) => toItem(s, nameOf))
     );
     const mostLiked = await Promise.all(
-      done
+      entries
         .map((s) => ({ s, likes: likesOf(s) }))
         .filter((r) => r.likes > 0)
         .sort((a, b) => b.likes - a.likes || a.s.printCode.localeCompare(b.s.printCode))
@@ -157,6 +197,7 @@ export const board = query({
     return {
       mode: "queue",
       counts,
+      notices,
       printing: printingItems,
       upNext,
       moreQueued: Math.max(0, sortedQueue.length - UP_NEXT_LIMIT),
@@ -202,24 +243,31 @@ const DEMO_SHAPES = [
   shape(16, (i) => (i % 2 ? 12 : 20)),
 ];
 
-const DEMO_ENTRIES: { name: string; title: string; colour: string; status: Doc<"submissions">["status"] }[] = [
-  { name: "Ada Lovelace", title: "Analytical Engine", colour: "Blue", status: "printing" },
-  { name: "Grace Hopper", title: "First Bug", colour: "Orange", status: "printing" },
-  { name: "Alan Turing", title: "Enigma Rotor", colour: "Green", status: "queued" },
-  { name: "Katherine Johnson", title: "Orbit Ring", colour: "Purple", status: "queued" },
-  { name: "Linus Torvalds", title: "Tux Tag", colour: "Yellow", status: "queued" },
-  { name: "Margaret Hamilton", title: "Apollo Star", colour: "White", status: "queued" },
-  { name: "Tim Berners-Lee", title: "WWW Hex", colour: "Red", status: "queued" },
-  { name: "Hedy Lamarr", title: "Frequency Hop", colour: "Pink", status: "queued" },
-  { name: "Dennis Ritchie", title: "Curly Brace", colour: "Black", status: "queued" },
-  { name: "Barbara Liskov", title: "Substitution", colour: "Grey", status: "queued" },
-  { name: "Ken Thompson", title: "Unix Tag", colour: "Blue", status: "queued" },
-  { name: "Frances Allen", title: "Optimiser", colour: "Green", status: "queued" },
-  { name: "John McCarthy", title: "Lambda", colour: "Red", status: "done" },
-  { name: "Radia Perlman", title: "Spanning Tree", colour: "Yellow", status: "done" },
-  { name: "Donald Knuth", title: "TeX Drop", colour: "Orange", status: "done" },
-  { name: "Shafi Goldwasser", title: "Zero Knowledge", colour: "Purple", status: "done" },
-  { name: "Vint Cerf", title: "Packet", colour: "White", status: "submitted" },
+const DEMO_ENTRIES: {
+  name: string;
+  username: string;
+  title: string;
+  colour: (typeof DEFAULT_COLOURS)[number];
+  dimensionsMm: { x: number; y: number; z: number };
+  status: Doc<"submissions">["status"];
+}[] = [
+  { name: "Ada Lovelace", username: "ada.codes", title: "Analytical Engine", colour: "Gold", dimensionsMm: { x: 27, y: 51, z: 40 }, status: "printing" },
+  { name: "Grace Hopper", username: "gracebug", title: "First Bug", colour: "Silver", dimensionsMm: { x: 38.5, y: 50, z: 4.5 }, status: "printing" },
+  { name: "Alan Turing", username: "turing_t", title: "Enigma Rotor", colour: "Sea Green", dimensionsMm: { x: 40, y: 40, z: 4 }, status: "queued" },
+  { name: "Katherine Johnson", username: "katherinej", title: "Orbit Ring", colour: "Sky Blue", dimensionsMm: { x: 34, y: 48, z: 6 }, status: "queued" },
+  { name: "Linus Torvalds", username: "linus.dev", title: "Tux Tag", colour: "Black", dimensionsMm: { x: 42, y: 39, z: 5 }, status: "queued" },
+  { name: "Margaret Hamilton", username: "margaret.h", title: "Apollo Star", colour: "White", dimensionsMm: { x: 31, y: 52, z: 7 }, status: "queued" },
+  { name: "Tim Berners-Lee", username: "tim.berners", title: "WWW Hex", colour: "Silver", dimensionsMm: { x: 45, y: 36, z: 4 }, status: "queued" },
+  { name: "Hedy Lamarr", username: "hedywaves", title: "Frequency Hop", colour: "Gold", dimensionsMm: { x: 36, y: 49, z: 8 }, status: "queued" },
+  { name: "Dennis Ritchie", username: "dennis_r", title: "Curly Brace", colour: "Sea Green", dimensionsMm: { x: 39, y: 42, z: 5.5 }, status: "queued" },
+  { name: "Barbara Liskov", username: "barbara.l", title: "Substitution", colour: "Sky Blue", dimensionsMm: { x: 33, y: 46, z: 9 }, status: "queued" },
+  { name: "Ken Thompson", username: "ken.thompson", title: "Unix Tag", colour: "Black", dimensionsMm: { x: 41, y: 37, z: 4.5 }, status: "queued" },
+  { name: "Frances Allen", username: "frances.a", title: "Optimiser", colour: "White", dimensionsMm: { x: 30, y: 54, z: 6 }, status: "queued" },
+  { name: "John McCarthy", username: "johnlambda", title: "Lambda", colour: "Silver", dimensionsMm: { x: 37, y: 43, z: 5 }, status: "done" },
+  { name: "Radia Perlman", username: "radia.p", title: "Spanning Tree", colour: "Gold", dimensionsMm: { x: 35, y: 47, z: 7 }, status: "done" },
+  { name: "Donald Knuth", username: "donaldk", title: "TeX Drop", colour: "Sea Green", dimensionsMm: { x: 44, y: 34, z: 4 }, status: "done" },
+  { name: "Shafi Goldwasser", username: "shafi.gold", title: "Zero Knowledge", colour: "Sky Blue", dimensionsMm: { x: 32, y: 50, z: 8 }, status: "done" },
+  { name: "Vint Cerf", username: "vintc", title: "Packet", colour: "Black", dimensionsMm: { x: 40, y: 40, z: 4 }, status: "submitted" },
 ];
 
 export const seedDemo = internalAction({
@@ -240,13 +288,12 @@ export const insertDemo = internalMutation({
     const participantIds: Id<"participants">[] = [];
     const submissionIds: Id<"submissions">[] = [];
     for (const [i, e] of DEMO_ENTRIES.entries()) {
-      const displayName = displayNameFrom(e.name);
       const participantId = await ctx.db.insert("participants", {
         clerkUserId: `demo-${i}-${now}`,
         email: `demo${i}@example.com`,
         name: e.name,
-        displayName,
-        usernameKey: usernameKey(displayName),
+        displayName: e.username,
+        usernameKey: usernameKey(e.username),
       });
       participantIds.push(participantId);
       const minutes = (DEMO_ENTRIES.length - i) * 60_000;
@@ -259,6 +306,7 @@ export const insertDemo = internalMutation({
         title: e.title,
         notes: "demo notes, never shown on the TV",
         colour: e.colour,
+        dimensionsMm: e.dimensionsMm,
         printRequested: true,
         status: e.status,
         printCode: formatPrintCode(next++),
@@ -269,32 +317,60 @@ export const insertDemo = internalMutation({
       });
       submissionIds.push(submissionId);
     }
-    if (row) await ctx.db.patch(row._id, { nextPrintNumber: next });
-    else await ctx.db.insert("settings", { ...DEFAULT_SETTINGS, nextPrintNumber: next });
-    // A few votes so results mode has something to rank.
-    const doneIds = submissionIds.filter((_, i) => DEMO_ENTRIES[i].status === "done");
-    for (const [voter, picks] of [[0, [0, 1]], [1, [0, 2]], [2, [0, 1]], [3, [1, 3]], [4, [2]]] as const) {
+    const settingsPatch = {
+      nextPrintNumber: next,
+      submissionsDeadline: row?.submissionsDeadline ?? now + 45 * 60_000,
+      announcement: row?.announcement ?? "Pizza's at the bar. Printing runs until 21:00.",
+    };
+    if (row) await ctx.db.patch(row._id, settingsPatch);
+    else await ctx.db.insert("settings", { ...DEFAULT_SETTINGS, ...settingsPatch });
+    const demoVotes = [
+      [0, [3]],
+      [1, [3, 16]],
+      [2, [3]],
+      [3, [2, 4]],
+      [4, [2, 3]],
+      [5, [2, 4]],
+      [6, [3, 4]],
+      [7, [5, 6]],
+      [8, [5, 6]],
+      [9, [5, 7]],
+      [10, [6, 7]],
+      [11, [8, 9]],
+      [12, [8, 9]],
+      [13, [8, 9]],
+      [14, [0, 1]],
+      [15, [0, 1]],
+    ] as const;
+    for (const [voter, picks] of demoVotes) {
       for (const pick of picks) {
-        await ctx.db.insert("votes", { voterId: participantIds[voter], submissionId: doneIds[pick] });
+        await ctx.db.insert("votes", { voterId: participantIds[voter], submissionId: submissionIds[pick] });
       }
     }
-    // Likes and skips for the "Most liked" strip and the tie-breaker.
-    for (const [voter, likes, skips] of [
-      [5, [0, 1, 2], [3]],
-      [6, [1, 3], [0]],
-      [7, [1, 2], []],
-      [8, [0, 1], [2]],
-      [9, [3], [1]],
-    ] as const) {
-      for (const [picks, reaction] of [[likes, "like"], [skips, "skip"]] as const) {
-        for (const pick of picks) {
-          await ctx.db.insert("likes", {
-            participantId: participantIds[voter],
-            submissionId: doneIds[pick],
-            reaction,
-            updatedAt: now,
-          });
-        }
+    const demoLikes = [
+      [0, [4, 16]],
+      [1, [4, 16]],
+      [2, [4, 16, 0]],
+      [3, [4, 16, 1]],
+      [4, [3, 5, 0]],
+      [5, [4, 6, 0]],
+      [6, [4, 7, 0]],
+      [7, [4, 8, 0]],
+      [8, [2, 6, 0]],
+      [9, [2, 8]],
+      [10, [2, 9]],
+      [11, [2, 10]],
+      [12, [5, 6]],
+      [13, [5, 7]],
+    ] as const;
+    for (const [voter, picks] of demoLikes) {
+      for (const pick of picks) {
+        await ctx.db.insert("likes", {
+          participantId: participantIds[voter],
+          submissionId: submissionIds[pick],
+          reaction: "like",
+          updatedAt: now,
+        });
       }
     }
   },
