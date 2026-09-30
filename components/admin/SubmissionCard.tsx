@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Download,
   Printer,
+  TriangleAlert,
   Undo2,
   X,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import { swatchFor } from "@/lib/colours";
+import { formatDimensions } from "@/lib/dimensions";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -56,6 +58,7 @@ export default function SubmissionCard({
   const download = useDownloadSubmission();
   const [expanded, setExpanded] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  const [rejectKind, setRejectKind] = useState<"review" | "print_failed">("review");
   const [busy, setBusy] = useState(false);
 
   const backup = row.status === "submitted" && !row.printRequested;
@@ -92,8 +95,12 @@ export default function SubmissionCard({
 
         <div className="min-w-0 flex-1">
           <div className="font-heading text-lg font-medium tracking-tight">{row.title}</div>
-          <div className="truncate text-sm text-muted-foreground">
-            {row.participantName} · <span className="text-muted-dim">{row.participantEmail}</span>
+          <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
+            <span className="font-medium">{row.participantUsername}</span>
+            <span className="text-muted-foreground">Luma: {row.participantName}</span>
+            {row.participantEmail ? (
+              <span className="text-muted-dim">{row.participantEmail}</span>
+            ) : null}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
@@ -104,16 +111,35 @@ export default function SubmissionCard({
               />
               {row.colour ?? "Any colour"}
             </span>
+            <span>{row.dimensionsMm ? formatDimensions(row.dimensionsMm) : "Size unknown"}</span>
+            {row.oversize ? <Badge variant="destructive">Over size limit</Badge> : null}
             <span className="font-mono uppercase">
               {row.kind} · {formatBytes(row.sizeBytes)}
             </span>
             <span>Submitted {formatTime(row._creationTime)}</span>
           </div>
+          {row.colour ? (
+            row.printersWithColour.length > 0 ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Printers with this colour: {row.printersWithColour.join(", ")}
+              </p>
+            ) : (
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-destructive">
+                <TriangleAlert aria-hidden="true" className="size-4" />
+                No printer has this colour loaded
+              </p>
+            )
+          ) : null}
           {row.notes ? (
             <p className="mt-2 rounded-md bg-surface px-2.5 py-1.5 text-sm">{row.notes}</p>
           ) : null}
           {row.status === "rejected" && row.rejectionReason ? (
-            <p className="mt-2 text-sm text-destructive">Rejected: {row.rejectionReason}</p>
+            <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-destructive">
+              <Badge variant="destructive">
+                {row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"}
+              </Badge>
+              <span>{row.rejectionReason}</span>
+            </p>
           ) : null}
         </div>
 
@@ -124,7 +150,15 @@ export default function SubmissionCard({
                 <Check data-icon="inline-start" />
                 Approve
               </Button>
-              <Button size="sm" variant="destructive" disabled={busy} onClick={() => setRejecting(true)}>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={busy}
+                onClick={() => {
+                  setRejectKind("review");
+                  setRejecting(true);
+                }}
+              >
                 <X data-icon="inline-start" />
                 Reject
               </Button>
@@ -161,10 +195,23 @@ export default function SubmissionCard({
             </>
           ) : null}
           {row.status === "printing" ? (
-            <Button size="sm" disabled={busy} onClick={() => run("done", () => markDone({ id: row._id }))}>
-              <Check data-icon="inline-start" />
-              Mark done
-            </Button>
+            <>
+              <Button size="sm" disabled={busy} onClick={() => run("done", () => markDone({ id: row._id }))}>
+                <Check data-icon="inline-start" />
+                Mark done
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={busy}
+                onClick={() => {
+                  setRejectKind("print_failed");
+                  setRejecting(true);
+                }}
+              >
+                Print failed
+              </Button>
+            </>
           ) : null}
           <Button
             size="sm"
@@ -190,7 +237,15 @@ export default function SubmissionCard({
             </Button>
           ) : null}
           {row.status === "queued" ? (
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => setRejecting(true)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                setRejectKind("review");
+                setRejecting(true);
+              }}
+            >
               <X data-icon="inline-start" />
               Reject
             </Button>
@@ -221,6 +276,7 @@ export default function SubmissionCard({
         printCode={row.printCode}
         open={rejecting}
         onOpenChange={setRejecting}
+        kind={rejectKind}
       />
     </li>
   );

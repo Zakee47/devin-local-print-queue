@@ -22,12 +22,23 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export default function GuestsManager() {
-  const latest = useQuery(api.guests.latestImport);
-  const guests = useQuery(api.guests.list);
+  const role = useQuery(api.admins.role);
+  const latest = useQuery(api.guests.latestImport, role === "owner" ? {} : "skip");
+  const guests = useQuery(api.guests.list, role === "owner" ? {} : "skip");
   const importCsv = useMutation(api.guests.importCsv);
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
+
+  if (role === undefined) return <Skeleton className="h-20 rounded-xl" />;
+  if (role !== "owner") {
+    return (
+      <Alert>
+        <TriangleAlert />
+        <AlertTitle>Only the event owner can manage the guest list.</AlertTitle>
+      </Alert>
+    );
+  }
 
   async function handleFile(file: File) {
     setUploading(true);
@@ -60,9 +71,8 @@ export default function GuestsManager() {
         <TriangleAlert />
         <AlertTitle>Uploading replaces the whole guest list</AlertTitle>
         <AlertDescription>
-          Export the guest CSV from Luma and upload the full file each time. If it has a
-          checked_in_at column, only checked-in guests can register. People who already registered
-          keep their accounts.
+          Upload the Luma export with name and email columns. Each upload replaces the whole list;
+          people who already registered keep their accounts.
         </AlertDescription>
       </Alert>
 
@@ -80,7 +90,7 @@ export default function GuestsManager() {
         />
         <Button onClick={() => inputRef.current?.click()} disabled={uploading}>
           <FileUp data-icon="inline-start" />
-          {uploading ? "Importing..." : "Upload Luma CSV"}
+          {uploading ? "Importing..." : "Upload the Luma export with name and email columns"}
         </Button>
         {latest ? (
           <span className="text-xs text-muted-foreground">
@@ -93,17 +103,11 @@ export default function GuestsManager() {
       {latest === undefined ? (
         <Skeleton className="h-20 rounded-xl" />
       ) : latest ? (
-        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-border ring-1 ring-border sm:grid-cols-4">
+        <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-border ring-1 ring-border sm:grid-cols-3">
           <Stat label="CSV rows" value={latest.rowCount} />
           <Stat label="Eligible" value={latest.eligibleCount} />
           <Stat label="Registered" value={registeredCount} />
-          <Stat label="Check-in column" value={latest.hasCheckInColumn ? "Found" : "Missing"} />
         </dl>
-      ) : null}
-      {latest && !latest.hasCheckInColumn ? (
-        <p className="-mt-5 text-xs text-muted-foreground">
-          No check-in column found, so every guest in the CSV is eligible.
-        </p>
       ) : null}
 
       <div className="flex flex-col gap-3">

@@ -1,12 +1,19 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
+import { entryFor } from "../convex/entries";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const admin = { subject: "admin-user", email: "admin@example.com", emailVerified: true };
 const guest = { subject: "guest-user", email: "ada@example.com", emailVerified: true };
+const previousOwnerEmail = process.env.OWNER_EMAIL;
+
+afterEach(() => {
+  if (previousOwnerEmail === undefined) delete process.env.OWNER_EMAIL;
+  else process.env.OWNER_EMAIL = previousOwnerEmail;
+});
 
 type Status = "submitted" | "rejected" | "queued" | "printing" | "done";
 
@@ -31,7 +38,13 @@ async function setup() {
   let n = 0;
   const addSubmission = (
     participantId: Id<"participants">,
-    opts: { printRequested?: boolean; status?: Status; title?: string } = {}
+    opts: {
+      printRequested?: boolean;
+      status?: Status;
+      title?: string;
+      colour?: string;
+      dimensionsMm?: { x: number; y: number; z: number };
+    } = {}
   ) =>
     t.run(async (ctx) => {
       n += 1;
@@ -43,7 +56,8 @@ async function setup() {
         kind: "stl",
         sizeBytes: 12,
         title: opts.title ?? `Rocket ${n}`,
-        colour: "Red",
+        colour: opts.colour ?? "Red",
+        dimensionsMm: opts.dimensionsMm,
         printRequested: opts.printRequested ?? true,
         status: opts.status ?? "submitted",
         printCode: `KC-${String(n).padStart(3, "0")}`,
@@ -129,6 +143,7 @@ describe("reject", () => {
     const rejected = await get(a);
     expect(rejected?.status).toBe("rejected");
     expect(rejected?.rejectionReason).toBe("Walls too thin");
+    expect(rejected?.rejectionKind).toBe("review");
   });
 
   test("undoing a rejection restores it to review", async () => {
@@ -139,7 +154,59 @@ describe("reject", () => {
     const restored = await get(a);
     expect(restored?.status).toBe("submitted");
     expect(restored?.rejectionReason).toBeUndefined();
+    expect(restored?.rejectionKind).toBeUndefined();
     expect(restored?.printRequested).toBe(true);
+  });
+});
+
+describe("printFailed", () => {
+  test("rejects a printing submission, records the reason, and clears the print entry", async () => {
+    const { t, as, participantId, addSubmission, get } = await setup();
+    const id = await addSubmission(participantId);
+    await as.mutation(api.queue.approve, { id });
+    await as.mutation(api.queue.startPrinting, { id });
+
+    await as.mutation(api.queue.printFailed, { id, reason: "  Detached from the bed  " });
+
+    expect(await get(id)).toMatchObject({
+      status: "rejected",
+      rejectionKind: "print_failed",
+      rejectionReason: "Detached from the bed",
+      printRequested: false,
+    });
+    expect(await t.run((ctx) => entryFor(ctx, participantId))).toBeNull();
+    const audit = await t.run(async (ctx) =>
+      (await ctx.db.query("auditLog").collect()).find((row) => row.action === "queue.printFailed")
+    );
+    expect(audit).toMatchObject({
+      action: "queue.printFailed",
+      detail: "Detached from the bed",
+    });
+  });
+
+  test("requires a non-empty reason and preserves printing status", async () => {
+    const { as, participantId, addSubmission, get } = await setup();
+    const id = await addSubmission(participantId);
+    await as.mutation(api.queue.approve, { id });
+    await as.mutation(api.queue.startPrinting, { id });
+
+    await expect(as.mutation(api.queue.printFailed, { id, reason: "   " })).rejects.toThrow(
+      /reason is required/
+    );
+    expect((await get(id))?.status).toBe("printing");
+  });
+
+  test.each(["submitted", "queued", "done"] as const)("rejects a %s submission", async (status) => {
+    const { as, participantId, addSubmission } = await setup();
+    const id = await addSubmission(participantId);
+    if (status === "queued" || status === "done") {
+      await as.mutation(api.queue.approve, { id });
+    }
+    if (status === "done") {
+      await as.mutation(api.queue.startPrinting, { id });
+      await as.mutation(api.queue.markDone, { id });
+    }
+    await expect(as.mutation(api.queue.printFailed, { id, reason: "Failed mid-print" })).rejects.toThrow();
   });
 });
 
@@ -192,17 +259,59 @@ describe("access", () => {
     }
   });
 
-  test("board includes participant details and download name", async () => {
+  test("staff board includes public participant details but omits email", async () => {
     const { as, participantId, addSubmission } = await setup();
     await addSubmission(participantId, { title: "Rocket Keychain" });
     const [row] = await as.query(api.queue.board);
-    expect(row.participantEmail).toBe(guest.email);
+    expect(row.participantUsername).toBe("Ada L.");
+    expect(row.participantName).toBe("Ada Lovelace");
+    expect("participantEmail" in row).toBe(false);
     expect(row.downloadName).toBe("KC-001_ada-lovelace_red_rocket-keychain.stl");
     expect(row.fileUrl).toBeTruthy();
   });
 
+  test("owner board includes participant email", async () => {
+    process.env.OWNER_EMAIL = "owner@example.com";
+    const { t, participantId, addSubmission } = await setup();
+    const owner = t.withIdentity({ subject: "owner-user", email: "owner@example.com", emailVerified: true });
+    await addSubmission(participantId);
+    const [row] = await owner.query(api.queue.board);
+    expect(row.participantEmail).toBe(guest.email);
+  });
+
+  test("board reports loaded colours and dimensions against settings", async () => {
+    const { as, participantId, addSubmission } = await setup();
+    await as.mutation(api.settings.update, {
+      printers: [
+        { name: "Creality", colours: ["Red"] },
+        { name: "Muon 1", colours: ["red"] },
+        { name: "Ultimaker", colours: [] },
+      ],
+      maxDimensionsMm: { x: 60, y: 60, z: 45 },
+    });
+    await addSubmission(participantId, {
+      colour: "Red",
+      dimensionsMm: { x: 70, y: 10, z: 10 },
+    });
+    await addSubmission(participantId, {
+      colour: "Purple",
+      dimensionsMm: { x: 27, y: 51, z: 40 },
+    });
+    await addSubmission(participantId, { colour: "Red" });
+
+    const rows = await as.query(api.queue.board);
+    expect(rows[0]).toMatchObject({
+      printersWithColour: ["Creality", "Muon 1"],
+      oversize: true,
+    });
+    expect(rows[1]).toMatchObject({ printersWithColour: [], oversize: false });
+    expect(rows[2]).toMatchObject({ oversize: false });
+  });
+
   test("guests.list flags registered guests", async () => {
-    const { t, as } = await setup();
+    process.env.OWNER_EMAIL = "owner@example.com";
+    const { t } = await setup();
+    const owner = t.withIdentity({ subject: "owner-user", email: "owner@example.com", emailVerified: true });
     await t.run(async (ctx) => {
       const importId = await ctx.db.insert("guestImports", {
         fileName: "x.csv",
@@ -214,11 +323,35 @@ describe("access", () => {
       await ctx.db.insert("guests", { email: guest.email, checkedIn: true, importId });
       await ctx.db.insert("guests", { email: "zed@example.com", checkedIn: false, importId });
     });
-    const list = await as.query(api.guests.list);
+    const list = await owner.query(api.guests.list);
     expect(list.map((g) => [g.email, g.registered])).toEqual([
       [guest.email, true],
       ["zed@example.com", false],
     ]);
+  });
+
+  test("staff cannot manage guests, while the owner can import and list them", async () => {
+    process.env.OWNER_EMAIL = "owner@example.com";
+    const { t, as } = await setup();
+    const owner = t.withIdentity({ subject: "owner-user", email: "owner@example.com", emailVerified: true });
+    const importArgs = {
+      fileName: "luma.csv",
+      rowCount: 1,
+      hasCheckInColumn: false,
+      guests: [{ email: "Ada@Example.com", name: "Ada Lovelace", checkedIn: true }],
+    };
+
+    await expect(as.mutation(api.guests.importCsv, importArgs)).rejects.toThrow("Owner only");
+    await expect(as.query(api.guests.list)).rejects.toThrow("Owner only");
+    await expect(as.query(api.guests.latestImport)).rejects.toThrow("Owner only");
+
+    await owner.mutation(api.guests.importCsv, importArgs);
+    expect(await owner.query(api.guests.list)).toMatchObject([
+      { email: "ada@example.com", name: "Ada Lovelace", registered: true },
+    ]);
+    expect(await owner.query(api.guests.latestImport)).toMatchObject({
+      uploadedBy: "owner@example.com",
+    });
   });
 });
 
@@ -232,6 +365,20 @@ describe("download", () => {
       'attachment; filename="KC-001_ada-lovelace_red_rocket-keychain.stl"'
     );
     expect(await res.text()).toBe("solid model-1");
+  });
+
+  test("staff can approve, print, fail or finish jobs, and download files", async () => {
+    const { as, participantId, otherId, addSubmission } = await setup();
+    const failed = await addSubmission(participantId);
+    const done = await addSubmission(otherId);
+    await as.mutation(api.queue.approve, { id: failed });
+    await as.mutation(api.queue.startPrinting, { id: failed });
+    await as.mutation(api.queue.printFailed, { id: failed, reason: "Detached from the bed" });
+    await as.mutation(api.queue.approve, { id: done });
+    await as.mutation(api.queue.startPrinting, { id: done });
+    await as.mutation(api.queue.markDone, { id: done });
+
+    expect((await as.fetch(`/download?id=${done}`)).status).toBe(200);
   });
 
   test("anonymous and non-admin callers are forbidden", async () => {
