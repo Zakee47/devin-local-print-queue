@@ -2,15 +2,17 @@ import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/s
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { requireParticipant, viewerParticipant } from "./participants";
-import { readSettings } from "./settings";
-import { LIKES_REQUIRE_VOTING_OPEN } from "../lib/event";
+import { isEntry, requireVotingOpen } from "./votes";
 
 export type ReactionCounts = { likes: number; skips: number };
 
-// Like/skip totals per submission, across every submission.
+// Like/skip totals per submission from participants who still have an account.
 export async function reactionCounts(ctx: QueryCtx | MutationCtx) {
   const counts = new Map<Id<"submissions">, ReactionCounts>();
+  const exists = new Map<Id<"participants">, boolean>();
   for (const row of await ctx.db.query("likes").collect()) {
+    if (!exists.has(row.participantId)) exists.set(row.participantId, !!(await ctx.db.get(row.participantId)));
+    if (!exists.get(row.participantId)) continue;
     const c = counts.get(row.submissionId) ?? { likes: 0, skips: 0 };
     if (row.reaction === "like") c.likes++;
     else c.skips++;
@@ -53,12 +55,10 @@ export const react = mutation({
   },
   handler: async (ctx, { submissionId, reaction }) => {
     const participant = await requireParticipant(ctx);
-    if (LIKES_REQUIRE_VOTING_OPEN && !(await readSettings(ctx)).votingOpen) {
-      throw new Error("Voting is closed");
-    }
+    await requireVotingOpen(ctx);
     const submission = await ctx.db.get(submissionId);
-    if (!submission || submission.status !== "done") {
-      throw new Error("Only printed entries can be liked");
+    if (!submission || !(await isEntry(ctx, submission))) {
+      throw new Error("That design isn't in the running any more");
     }
     if (submission.participantId === participant._id) {
       throw new Error("You can't like your own entry");
@@ -83,6 +83,7 @@ export const clearReaction = mutation({
   args: { submissionId: v.id("submissions") },
   handler: async (ctx, { submissionId }) => {
     const participant = await requireParticipant(ctx);
+    await requireVotingOpen(ctx);
     const existing = await existingReaction(ctx, participant._id, submissionId);
     if (existing) await ctx.db.delete(existing._id);
   },

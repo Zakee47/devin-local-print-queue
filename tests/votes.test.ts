@@ -1,12 +1,22 @@
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
-import { MAX_VOTES_PER_PARTICIPANT, VOTES_ARE_FINAL } from "../lib/event";
+import { MAX_VOTES_PER_PARTICIPANT } from "../lib/event";
 import { DEFAULT_SETTINGS } from "../convex/settings";
 
 const modules = import.meta.glob("../convex/**/*.ts");
+const previousOwnerEmail = process.env.OWNER_EMAIL;
+
+beforeEach(() => {
+  process.env.OWNER_EMAIL = "owner@example.com";
+});
+
+afterEach(() => {
+  if (previousOwnerEmail === undefined) delete process.env.OWNER_EMAIL;
+  else process.env.OWNER_EMAIL = previousOwnerEmail;
+});
 
 const identityFor = (who: string) => ({
   subject: `user-${who}`,
@@ -16,23 +26,25 @@ const identityFor = (who: string) => ({
 
 type Status = "submitted" | "rejected" | "queued" | "printing" | "done";
 
+// ada: printed, grace: queued design, alan: printing, linus: submitted design
+// (plus a spare upload and a rejected one), zoe: registered, no submissions.
 async function setup({ votingOpen = true }: { votingOpen?: boolean } = {}) {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
-    await ctx.db.insert("admins", { email: "admin@example.com" });
+    await ctx.db.insert("admins", { email: "staff@example.com" });
     await ctx.db.insert("settings", { ...DEFAULT_SETTINGS, votingOpen });
     const storageId = await ctx.storage.store(new Blob(["solid x\nendsolid x\n"]));
     const people: Record<string, Id<"participants">> = {};
-    for (const who of ["ada", "grace", "alan", "linus"]) {
+    for (const who of ["ada", "grace", "alan", "linus", "zoe"]) {
       people[who] = await ctx.db.insert("participants", {
         clerkUserId: `user-${who}`,
         email: `${who}@example.com`,
         name: who[0].toUpperCase() + who.slice(1) + " Test",
-        displayName: who[0].toUpperCase() + who.slice(1) + " T.",
+        displayName: `${who}_t`,
       });
     }
     let n = 1;
-    const submit = (owner: string, status: Status) =>
+    const submit = (owner: string, status: Status, printRequested = true) =>
       ctx.db.insert("submissions", {
         participantId: people[owner],
         storageId,
@@ -40,137 +52,196 @@ async function setup({ votingOpen = true }: { votingOpen?: boolean } = {}) {
         kind: "stl",
         sizeBytes: 20,
         title: `${owner} ${status}`,
-        colour: "Red",
-        printRequested: true,
+        colour: "Gold",
+        printRequested,
         status,
         printCode: `KC-00${n++}`,
       });
     return {
       people,
       ada: await submit("ada", "done"),
-      grace: await submit("grace", "done"),
-      alan: await submit("alan", "done"),
-      queued: await submit("linus", "queued"),
+      grace: await submit("grace", "queued"),
+      alan: await submit("alan", "printing"),
+      linus: await submit("linus", "submitted"),
+      linusSpare: await submit("linus", "submitted", false),
+      rejected: await submit("zoe", "rejected"),
     };
   });
   return { t, ...ids };
 }
 
+const as = (t: Awaited<ReturnType<typeof setup>>["t"], who: string) => t.withIdentity(identityFor(who));
+
 describe("votes", () => {
-  it("caps each participant at two votes", async () => {
-    const { t, ada, grace, alan } = await setup();
-    const linus = t.withIdentity(identityFor("linus"));
-    await linus.mutation(api.votes.cast, { submissionId: ada });
-    await linus.mutation(api.votes.cast, { submissionId: grace });
-    await expect(linus.mutation(api.votes.cast, { submissionId: alan })).rejects.toThrow(
-      /all 2 votes/
-    );
-    const mine = await linus.query(api.votes.mine);
-    expect(mine?.votesLeft).toBe(0);
-    expect(mine?.maxVotes).toBe(MAX_VOTES_PER_PARTICIPANT);
-    expect(mine?.votedSubmissionIds).toEqual([ada, grace]);
+  it("lists every current entry with a stage chip, usernames only", async () => {
+    const { t } = await setup();
+    const gallery = await t.query(api.votes.gallery);
+    expect(gallery.map((g) => [g.printCode, g.stage, g.displayName])).toEqual([
+      ["KC-001", "printed", "ada_t"],
+      ["KC-002", "design", "grace_t"],
+      ["KC-003", "printing", "alan_t"],
+      ["KC-004", "design", "linus_t"],
+    ]);
+    expect(gallery[0].fileUrl).toBeTruthy();
+    expect(JSON.stringify(gallery)).not.toContain("@example.com");
+    expect(JSON.stringify(gallery)).not.toContain("Test");
+  });
+
+  it("allows votes on entries that aren't printed yet", async () => {
+    const { t, grace, linus } = await setup();
+    await as(t, "ada").mutation(api.votes.cast, { submissionId: grace });
+    await as(t, "ada").mutation(api.votes.cast, { submissionId: linus });
+    expect((await as(t, "ada").query(api.votes.mine))?.votedSubmissionIds).toEqual([grace, linus]);
+  });
+
+  it("rejects votes for submissions that aren't entries", async () => {
+    const { t, linusSpare, rejected } = await setup();
+    for (const submissionId of [linusSpare, rejected]) {
+      await expect(as(t, "ada").mutation(api.votes.cast, { submissionId })).rejects.toThrow(/in the running/);
+    }
   });
 
   it("rejects voting for your own entry", async () => {
     const { t, ada } = await setup();
-    await expect(
-      t.withIdentity(identityFor("ada")).mutation(api.votes.cast, { submissionId: ada })
-    ).rejects.toThrow(/own entry/);
+    await expect(as(t, "ada").mutation(api.votes.cast, { submissionId: ada })).rejects.toThrow(/own entry/);
   });
 
-  it("only allows voting for done submissions and only lists those", async () => {
-    const { t, queued } = await setup();
-    await expect(
-      t.withIdentity(identityFor("ada")).mutation(api.votes.cast, { submissionId: queued })
-    ).rejects.toThrow(/printed entries/);
-    const gallery = await t.query(api.votes.gallery);
-    expect(gallery.map((g) => g.printCode)).toEqual(["KC-001", "KC-002", "KC-003"]);
-    expect(gallery[0].displayName).toBe("Ada T.");
-    expect(gallery[0].fileUrl).toBeTruthy();
-    expect(JSON.stringify(gallery)).not.toContain("@example.com");
-  });
-
-  it("rejects casting while voting is closed", async () => {
-    const { t, ada } = await setup({ votingOpen: false });
-    const grace = t.withIdentity(identityFor("grace"));
-    await expect(grace.mutation(api.votes.cast, { submissionId: ada })).rejects.toThrow(
-      /closed/
-    );
-  });
-
-  it("allows one vote per submission", async () => {
-    const { t, ada } = await setup();
-    const grace = t.withIdentity(identityFor("grace"));
-    await grace.mutation(api.votes.cast, { submissionId: ada });
-    await expect(grace.mutation(api.votes.cast, { submissionId: ada })).rejects.toThrow(
-      /already voted/
-    );
-    expect((await grace.query(api.votes.mine))?.votesLeft).toBe(1);
-  });
-
-  it("allows participants to change votes while voting is open", async () => {
-    expect(VOTES_ARE_FINAL).toBe(false);
+  it("lets a participant without submissions vote, capped at two", async () => {
     const { t, ada, grace, alan } = await setup();
-    const linus = t.withIdentity(identityFor("linus"));
-    await linus.mutation(api.votes.cast, { submissionId: ada });
-    await linus.mutation(api.votes.cast, { submissionId: grace });
-    await linus.mutation(api.votes.retract, { submissionId: ada });
-    await linus.mutation(api.votes.cast, { submissionId: alan });
-    const mine = await linus.query(api.votes.mine);
-    expect(mine?.votedSubmissionIds).toEqual([grace, alan]);
-    expect(mine?.votesAreFinal).toBe(false);
+    const zoe = as(t, "zoe");
+    await zoe.mutation(api.votes.cast, { submissionId: ada });
+    await zoe.mutation(api.votes.cast, { submissionId: grace });
+    await expect(zoe.mutation(api.votes.cast, { submissionId: alan })).rejects.toThrow(/all 2 votes/);
+    const mine = await zoe.query(api.votes.mine);
+    expect(mine?.votesLeft).toBe(0);
+    expect(mine?.maxVotes).toBe(MAX_VOTES_PER_PARTICIPANT);
+  });
+
+  it("allows one vote per design", async () => {
+    const { t, ada } = await setup();
+    await as(t, "zoe").mutation(api.votes.cast, { submissionId: ada });
+    await expect(as(t, "zoe").mutation(api.votes.cast, { submissionId: ada })).rejects.toThrow(/already voted/);
+    expect((await as(t, "zoe").query(api.votes.mine))?.votesLeft).toBe(1);
+  });
+
+  it("allows retracting and swapping votes while voting is open", async () => {
+    const { t, ada, grace, alan, linus } = await setup();
+    const zoe = as(t, "zoe");
+    await zoe.mutation(api.votes.cast, { submissionId: ada });
+    await zoe.mutation(api.votes.cast, { submissionId: grace });
+    await zoe.mutation(api.votes.retract, { submissionId: ada });
+    await zoe.mutation(api.votes.cast, { submissionId: alan });
+    await zoe.mutation(api.votes.swap, { from: grace, to: linus });
+    expect((await zoe.query(api.votes.mine))?.votedSubmissionIds).toEqual([alan, linus]);
+    await expect(zoe.mutation(api.votes.swap, { from: alan, to: linus })).rejects.toThrow(/already voted/);
+    await expect(zoe.mutation(api.votes.swap, { from: ada, to: grace })).rejects.toThrow(/haven't voted/);
+  });
+
+  it("locks votes and likes once the owner closes voting", async () => {
+    const { t, ada, grace, alan } = await setup();
+    const zoe = as(t, "zoe");
+    await zoe.mutation(api.votes.cast, { submissionId: ada });
+    await zoe.mutation(api.likes.react, { submissionId: ada, reaction: "like" });
+    await as(t, "owner").mutation(api.settings.update, { votingOpen: false });
+
+    const locked = /Voting has closed — your votes are locked in/;
+    await expect(zoe.mutation(api.votes.cast, { submissionId: grace })).rejects.toThrow(locked);
+    await expect(zoe.mutation(api.votes.retract, { submissionId: ada })).rejects.toThrow(locked);
+    await expect(zoe.mutation(api.votes.swap, { from: ada, to: alan })).rejects.toThrow(locked);
+    await expect(zoe.mutation(api.likes.react, { submissionId: grace, reaction: "like" })).rejects.toThrow(locked);
+    await expect(zoe.mutation(api.likes.clearReaction, { submissionId: ada })).rejects.toThrow(locked);
+    expect((await zoe.query(api.votes.mine))?.votedSubmissionIds).toEqual([ada]);
   });
 
   it("requires a registered participant to vote", async () => {
     const { t, ada } = await setup();
-    await expect(t.mutation(api.votes.cast, { submissionId: ada })).rejects.toThrow(
-      /Not registered/
-    );
-    await expect(
-      t.withIdentity(identityFor("stranger")).mutation(api.votes.cast, { submissionId: ada })
-    ).rejects.toThrow(/Not registered/);
+    await expect(t.mutation(api.votes.cast, { submissionId: ada })).rejects.toThrow(/Not registered/);
+    await expect(as(t, "stranger").mutation(api.votes.cast, { submissionId: ada })).rejects.toThrow(/Not registered/);
     expect(await t.query(api.votes.mine)).toBeNull();
   });
 
-  it("ranks results for admins and hides them from everyone else", async () => {
-    const { t, ada, grace } = await setup();
-    await t.withIdentity(identityFor("linus")).mutation(api.votes.cast, { submissionId: grace });
-    await t.withIdentity(identityFor("alan")).mutation(api.votes.cast, { submissionId: grace });
-    await t.withIdentity(identityFor("alan")).mutation(api.votes.cast, { submissionId: ada });
+  it("drops votes for designs that stop being entries and hands them back", async () => {
+    const { t, ada, grace, linus, linusSpare } = await setup();
+    const zoe = as(t, "zoe");
+    await zoe.mutation(api.votes.cast, { submissionId: grace });
+    await zoe.mutation(api.votes.cast, { submissionId: linus });
+    await as(t, "ada").mutation(api.votes.cast, { submissionId: grace });
 
-    await expect(t.query(api.votes.results)).rejects.toThrow();
-    await expect(t.withIdentity(identityFor("ada")).query(api.votes.results)).rejects.toThrow(
-      /Not an admin/
-    );
+    await t.run(async (ctx) => {
+      await ctx.db.patch(grace, { status: "rejected", rejectionKind: "print_failed" });
+      await ctx.db.patch(linus, { printRequested: false });
+      await ctx.db.patch(linusSpare, { printRequested: true });
+    });
 
-    const results = await t.withIdentity(identityFor("admin")).query(api.votes.results);
-    expect(results.rows.map((r) => [r.rank, r.printCode, r.votes])).toEqual([
-      [1, "KC-002", 2],
-      [2, "KC-001", 1],
-      [3, "KC-003", 0],
-    ]);
-    expect(results.rows[0].participantEmail).toBe("grace@example.com");
-    expect(results.voters).toBe(2);
-    expect(results.participants).toBe(4);
+    const mine = await zoe.query(api.votes.mine);
+    expect(mine?.votedSubmissionIds).toEqual([]);
+    expect(mine?.votesLeft).toBe(2);
+    expect(mine?.droppedVotes.map((d) => d.title)).toEqual(["grace queued", "linus submitted"]);
+
+    const results = await as(t, "owner").query(api.votes.results);
+    expect(results.rows.find((r) => r.submissionId === linusSpare)?.votes).toBe(0);
+    expect(results.rows.some((r) => r.submissionId === grace)).toBe(false);
+    expect(results.voters).toBe(0);
+
+    await zoe.mutation(api.votes.cast, { submissionId: ada });
+    await zoe.mutation(api.votes.cast, { submissionId: linusSpare });
+    // Linus switching back must not resurrect a third vote.
+    await t.run(async (ctx) => {
+      await ctx.db.patch(linusSpare, { printRequested: false });
+      await ctx.db.patch(linus, { printRequested: true });
+    });
+    expect((await zoe.query(api.votes.mine))?.votedSubmissionIds).toEqual([ada]);
+    await zoe.mutation(api.votes.dismissDropped, {});
+    expect((await zoe.query(api.votes.mine))?.droppedVotes).toEqual([]);
   });
 
-  it("breaks vote ties by likes in admin results", async () => {
-    const { t, ada, grace, alan } = await setup();
-    // ada and alan tie on 1 vote each; alan has more likes, so ranks higher.
-    await t.withIdentity(identityFor("linus")).mutation(api.votes.cast, { submissionId: ada });
-    await t.withIdentity(identityFor("grace")).mutation(api.votes.cast, { submissionId: alan });
-    for (const who of ["linus", "grace", "ada"]) {
-      await t.withIdentity(identityFor(who)).mutation(api.likes.react, { submissionId: alan, reaction: "like" });
-    }
-    await t.withIdentity(identityFor("linus")).mutation(api.likes.react, { submissionId: ada, reaction: "like" });
-    await t.withIdentity(identityFor("alan")).mutation(api.likes.react, { submissionId: ada, reaction: "skip" });
-    await t.withIdentity(identityFor("ada")).mutation(api.likes.react, { submissionId: grace, reaction: "skip" });
+  it("shows results to the owner only", async () => {
+    const { t, ada, grace } = await setup();
+    await as(t, "linus").mutation(api.votes.cast, { submissionId: grace });
+    await as(t, "alan").mutation(api.votes.cast, { submissionId: grace });
+    await as(t, "alan").mutation(api.votes.cast, { submissionId: ada });
 
-    const results = await t.withIdentity(identityFor("admin")).query(api.votes.results);
-    expect(results.rows.map((r) => [r.rank, r.printCode, r.votes, r.likes, r.skips])).toEqual([
-      [1, "KC-003", 1, 3, 0],
-      [2, "KC-001", 1, 1, 1],
-      [3, "KC-002", 0, 0, 1],
+    await expect(t.query(api.votes.results)).rejects.toThrow(/Owner only/);
+    await expect(as(t, "ada").query(api.votes.results)).rejects.toThrow(/Owner only/);
+    await expect(as(t, "staff").query(api.votes.results)).rejects.toThrow(/Owner only/);
+    await expect(as(t, "staff").mutation(api.settings.update, { votingOpen: false })).rejects.toThrow(/Owner only/);
+
+    const results = await as(t, "owner").query(api.votes.results);
+    expect(results.rows.map((r) => [r.rank, r.printCode, r.votes, r.stage])).toEqual([
+      [1, "KC-002", 2, "design"],
+      [2, "KC-001", 1, "printed"],
+      [3, "KC-003", 0, "printing"],
+      [4, "KC-004", 0, "design"],
     ]);
+    expect(results.winner?.printCode).toBe("KC-002");
+    expect(results.rows[0]).toMatchObject({ displayName: "grace_t", participantName: "Grace Test", participantEmail: "grace@example.com" });
+    expect(results.voters).toBe(2);
+    expect(results.participants).toBe(5);
+  });
+
+  it("ranks by votes, then likes, then print code with a single winner", async () => {
+    const { t, ada, alan } = await setup();
+    // ada and alan tie on votes; alan has more likes. grace and linus tie on everything.
+    await as(t, "zoe").mutation(api.votes.cast, { submissionId: ada });
+    await as(t, "grace").mutation(api.votes.cast, { submissionId: alan });
+    for (const who of ["linus", "grace", "zoe"]) {
+      await as(t, who).mutation(api.likes.react, { submissionId: alan, reaction: "like" });
+    }
+    await as(t, "linus").mutation(api.likes.react, { submissionId: ada, reaction: "like" });
+    await as(t, "alan").mutation(api.likes.react, { submissionId: ada, reaction: "skip" });
+
+    const results = await as(t, "owner").query(api.votes.results);
+    expect(results.rows.map((r) => [r.rank, r.printCode, r.votes, r.likes, r.skips, r.tiedWithPrevious])).toEqual([
+      [1, "KC-003", 1, 3, 0, false],
+      [2, "KC-001", 1, 1, 1, false],
+      [3, "KC-002", 0, 0, 0, false],
+      [4, "KC-004", 0, 0, 0, true],
+    ]);
+    expect(results.winner?.printCode).toBe("KC-003");
+  });
+
+  it("has no winner before any votes", async () => {
+    const { t } = await setup();
+    expect((await as(t, "owner").query(api.votes.results)).winner).toBeNull();
   });
 });

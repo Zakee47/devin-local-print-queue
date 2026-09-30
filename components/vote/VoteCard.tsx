@@ -5,6 +5,7 @@ import { Heart, Layers, X } from "lucide-react";
 import type { GalleryEntry } from "@/convex/votes";
 import type { Reaction } from "@/lib/event";
 import LazyModelViewer from "@/components/vote/LazyModelViewer";
+import StageChip from "@/components/vote/StageChip";
 import { Button } from "@/components/ui/button";
 import { swatchFor } from "@/lib/colours";
 import { cn } from "@/lib/utils";
@@ -30,7 +31,10 @@ export default function VoteCard({
         voted && "ring-2 ring-brand"
       )}
     >
-      <LazyModelViewer url={entry.fileUrl} kind={entry.kind} colour={colour} />
+      <div className="relative">
+        <LazyModelViewer url={entry.fileUrl} kind={entry.kind} colour={colour} />
+        <StageChip stage={entry.stage} className="pointer-events-none absolute top-3 left-3" />
+      </div>
       <div className="flex flex-1 flex-col gap-3 border-t border-border p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

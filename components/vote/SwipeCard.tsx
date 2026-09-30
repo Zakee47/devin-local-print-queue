@@ -5,6 +5,7 @@ import { Heart, X } from "lucide-react";
 import type { GalleryEntry } from "@/convex/votes";
 import type { Reaction } from "@/lib/event";
 import LazyModelViewer from "@/components/vote/LazyModelViewer";
+import StageChip from "@/components/vote/StageChip";
 import { swatchFor } from "@/lib/colours";
 import { cn } from "@/lib/utils";
 
@@ -108,6 +109,7 @@ const SwipeCard = forwardRef<
           Skip
         </span>
         <div className="absolute top-3 left-1/2 flex -translate-x-1/2 gap-1.5">
+          <StageChip stage={entry.stage} />
           {voted ? <Pill className="bg-brand text-brand-foreground">Your vote</Pill> : null}
           {reaction === "like" ? (
             <Pill>

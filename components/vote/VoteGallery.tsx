@@ -2,17 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Heart, LayoutGrid, Layers, Lock, LogIn, RotateCcw, ShieldAlert, Trophy, Undo2, X } from "lucide-react";
+import { Heart, Info, LayoutGrid, Layers, Lock, LogIn, RotateCcw, ShieldAlert, Trophy, Undo2, X } from "lucide-react";
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import type { GalleryEntry } from "@/convex/votes";
+import type { DroppedVote, GalleryEntry } from "@/convex/votes";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
-import { MAX_VOTES_PER_PARTICIPANT, VOTES_ARE_FINAL, type Reaction } from "@/lib/event";
+import { MAX_VOTES_PER_PARTICIPANT, type Reaction } from "@/lib/event";
 import { DECK_FILTERS, filterCounts, matchesFilter, type DeckFilter } from "@/lib/deck";
-import ConfirmVoteButton, { type VoteButtonState } from "@/components/vote/ConfirmVoteButton";
+import VoteButton, { type VoteButtonState } from "@/components/vote/VoteButton";
 import SwipeCard, { type SwipeCardHandle } from "@/components/vote/SwipeCard";
 import VoteCard from "@/components/vote/VoteCard";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,6 +36,8 @@ type HistoryItem = { id: SubmissionId; previous: Reaction | undefined; saved: bo
 type View = "swipe" | "list";
 
 const END = "end" as const;
+const CHANGE_COPY = "You can change your votes until voting closes.";
+const LOCKED_COPY = "Voting has closed — your votes are locked in";
 
 export default function VoteGallery() {
   const { authReady, signedIn, canQuery } = useViewerAuth();
@@ -45,6 +47,8 @@ export default function VoteGallery() {
   const myReactions = useQuery(api.likes.mine, canQuery ? {} : "skip");
   const cast = useMutation(api.votes.cast);
   const retract = useMutation(api.votes.retract);
+  const swap = useMutation(api.votes.swap);
+  const dismissDropped = useMutation(api.votes.dismissDropped);
   const react = useMutation(api.likes.react);
   const clearReaction = useMutation(api.likes.clearReaction);
 
@@ -62,6 +66,7 @@ export default function VoteGallery() {
     (signedIn && (ballot === undefined || myReactions === undefined));
   const votingOpen = settings?.votingOpen ?? false;
   const interactive = !!ballot;
+  const canReact = interactive && votingOpen;
   // Read-only visitors see every entry; filters only mean something once you react.
   const activeFilter: DeckFilter = interactive ? filter : "all";
 
@@ -81,6 +86,10 @@ export default function VoteGallery() {
   const current: GalleryEntry | undefined =
     cursor === END ? undefined : (list.find((e) => e._id === cursor) ?? list[0]);
   const votedIds = useMemo(() => ballot?.votedSubmissionIds ?? [], [ballot]);
+  const votedEntries = useMemo(
+    () => votedIds.map((id) => entries?.find((e) => e._id === id)).filter((e): e is GalleryEntry => !!e),
+    [votedIds, entries]
+  );
 
   const changeFilter = (next: DeckFilter) => {
     setFilter(next);
@@ -104,14 +113,14 @@ export default function VoteGallery() {
   const commitSwipe = useCallback(
     (entry: GalleryEntry, direction: Reaction) => {
       const previous = reactions.get(entry._id);
-      setHistory((h) => [...h, { id: entry._id, previous, saved: interactive }]);
+      setHistory((h) => [...h, { id: entry._id, previous, saved: canReact }]);
       setCursor(nextAfter(entry._id));
-      if (!interactive || previous === direction) return;
+      if (!canReact || previous === direction) return;
       react({ submissionId: entry._id, reaction: direction }).catch((e: unknown) =>
         toast.error(e instanceof Error ? e.message : "Couldn't save that")
       );
     },
-    [reactions, interactive, nextAfter, react]
+    [reactions, canReact, nextAfter, react]
   );
 
   const undo = useCallback(async () => {
@@ -145,10 +154,10 @@ export default function VoteGallery() {
     return () => window.removeEventListener("keydown", onKey);
   }, [view, undo]);
 
-  const vote = async (id: SubmissionId, action: (args: { submissionId: SubmissionId }) => Promise<unknown>) => {
+  const vote = async (id: SubmissionId, action: () => Promise<unknown>) => {
     setPending(id);
     try {
-      await action({ submissionId: id });
+      await action();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't update your vote");
     } finally {
@@ -160,21 +169,22 @@ export default function VoteGallery() {
     if (!signedIn) return { kind: "signed_out" };
     if (!ballot) return { kind: "unregistered" };
     if (ballot.votedSubmissionIds.includes(id)) {
-      return { kind: "voted", canRetract: !VOTES_ARE_FINAL && votingOpen };
+      return { kind: "voted", canRetract: votingOpen };
     }
     if (!votingOpen) return { kind: "closed" };
-    if (ballot.votesLeft === 0) return { kind: "no_votes_left" };
+    if (ballot.votesLeft === 0) return { kind: "no_votes_left", swapFrom: votedEntries };
     return { kind: "available", votesLeft: ballot.votesLeft };
   };
 
   const voteControl = (entry: GalleryEntry) => (
-    <ConfirmVoteButton
+    <VoteButton
       entry={entry}
       state={voteState(entry._id)}
       prominent={reactions.get(entry._id) === "like"}
       pending={pending === entry._id}
-      onConfirm={() => vote(entry._id, cast)}
-      onRetract={() => vote(entry._id, retract)}
+      onVote={() => vote(entry._id, () => cast({ submissionId: entry._id }))}
+      onRetract={() => vote(entry._id, () => retract({ submissionId: entry._id }))}
+      onSwap={(from) => vote(entry._id, () => swap({ from, to: entry._id }))}
     />
   );
 
@@ -182,15 +192,15 @@ export default function VoteGallery() {
     <>
       <p className="eyebrow text-muted-foreground">People&apos;s choice</p>
       <h1 className="mt-2 font-heading text-2xl font-semibold sm:mt-3 tracking-[-0.03em] sm:text-5xl">
-        Swipe the keychains
+        Swipe the designs
       </h1>
       <p className="mt-1 text-sm text-muted-foreground sm:hidden">
-        Swipe right to like, left to skip.{VOTES_ARE_FINAL ? " Votes are final." : ""}
+        Swipe right to like, left to skip. {votingOpen ? CHANGE_COPY : "Voting has closed."}
       </p>
       <p className="mt-3 hidden max-w-xl text-[15px] leading-relaxed text-muted-foreground sm:block">
-        Swipe right to like, left to skip. Likes are just for you (and break ties). When you find a
-        favourite, confirm one of your {MAX_VOTES_PER_PARTICIPANT} votes
-        {VOTES_ARE_FINAL ? ". Votes are final." : "."}
+        Every entry is in the running, printed or not. Swipe right to like, left to skip. Likes break
+        ties. When you find a favourite, give it one of your {MAX_VOTES_PER_PARTICIPANT} votes.{" "}
+        {votingOpen ? CHANGE_COPY : "Voting has closed."}
       </p>
 
       <div className="mt-4 sm:mt-6">
@@ -204,28 +214,41 @@ export default function VoteGallery() {
                 Sign in to like and vote
               </Button>
             </SignInButton>
-            <span className="text-sm text-muted-dim">Anyone can browse. Checked-in entrants can vote.</span>
+            <span className="text-sm text-muted-dim">Anyone can browse. Every registered guest can vote.</span>
           </div>
         ) : !ballot ? (
           <Alert variant="destructive" className="max-w-xl">
             <ShieldAlert />
-            <AlertTitle>Only registered entrants can like and vote</AlertTitle>
+            <AlertTitle>Only registered guests can like and vote</AlertTitle>
             <AlertDescription>
-              Create your entrant account from the{" "}
+              Pick your username on the{" "}
               <Link href="/" className="underline">
                 home page
               </Link>{" "}
-              first. You can still browse.
+              first. You don&apos;t need a submission to vote. You can still browse.
             </AlertDescription>
           </Alert>
         ) : (
-          <BallotSummary
-            used={ballot.votedSubmissionIds.length}
-            max={ballot.maxVotes}
-            voted={votedIds.map((id) => entries?.find((e) => e._id === id)).filter((e) => !!e)}
-            votingOpen={votingOpen}
-            onOpen={open}
-          />
+          <div className="flex max-w-xl flex-col gap-3">
+            {ballot.droppedVotes.length > 0 ? (
+              <DroppedNotice
+                dropped={ballot.droppedVotes}
+                votingOpen={votingOpen}
+                onDismiss={() =>
+                  dismissDropped({}).catch((e: unknown) =>
+                    toast.error(e instanceof Error ? e.message : "Couldn't dismiss that")
+                  )
+                }
+              />
+            ) : null}
+            <BallotSummary
+              used={ballot.votedSubmissionIds.length}
+              max={ballot.maxVotes}
+              voted={votedEntries}
+              votingOpen={votingOpen}
+              onOpen={open}
+            />
+          </div>
         )}
       </div>
 
@@ -294,7 +317,7 @@ export default function VoteGallery() {
                     className="size-14 rounded-full"
                     disabled={!current}
                     onClick={() => cardRef.current?.fling("skip")}
-                    aria-label={interactive ? "Skip" : "Next"}
+                    aria-label={canReact ? "Skip" : "Next"}
                   >
                     <X className="size-6" />
                   </Button>
@@ -314,7 +337,7 @@ export default function VoteGallery() {
                     className="size-14 rounded-full"
                     disabled={!current}
                     onClick={() => cardRef.current?.fling("like")}
-                    aria-label={interactive ? "Like" : "Next"}
+                    aria-label={canReact ? "Like" : "Next"}
                   >
                     <Heart className="size-6" />
                   </Button>
@@ -322,8 +345,10 @@ export default function VoteGallery() {
                 <p className="hidden text-center text-xs text-muted-dim sm:block">
                   Keyboard: ← skip · → like · Backspace undo
                 </p>
-                {!interactive && current ? (
-                  <p className="text-center text-xs text-muted-dim">Browsing only. Sign in to save likes.</p>
+                {!canReact && current ? (
+                  <p className="text-center text-xs text-muted-dim">
+                    {interactive ? `${LOCKED_COPY}. Browsing only.` : votingOpen ? "Browsing only. Sign in to save likes." : "Voting has closed. Browsing only."}
+                  </p>
                 ) : null}
               </div>
             </TabsContent>
@@ -371,7 +396,7 @@ function BallotSummary({
   onOpen: (id: SubmissionId) => void;
 }) {
   return (
-    <div className="flex max-w-xl flex-col gap-2 rounded-xl bg-card p-3 ring-1 sm:p-4 ring-foreground/10" aria-live="polite">
+    <div className="flex flex-col gap-2 rounded-xl bg-card p-3 ring-1 sm:p-4 ring-foreground/10" aria-live="polite">
       <div className="flex items-center justify-between gap-3">
         <p className="font-heading text-lg font-medium tracking-tight">
           {used} of {max} votes used
@@ -379,10 +404,11 @@ function BallotSummary({
         {!votingOpen ? (
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <Lock className="size-3.5" aria-hidden />
-            Voting closed
+            Locked
           </span>
         ) : null}
       </div>
+      <p className="text-sm text-muted-foreground">{votingOpen ? CHANGE_COPY : LOCKED_COPY}</p>
       {voted.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {voted.map((e) => (
@@ -398,12 +424,40 @@ function BallotSummary({
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          {votingOpen ? "Like the ones you love, then confirm your votes." : "Voting opens soon. Likes still count."}
-        </p>
-      )}
+      ) : votingOpen ? (
+        <p className="text-sm text-muted-dim">Like the ones you love, then vote for your favourites.</p>
+      ) : null}
     </div>
+  );
+}
+
+function DroppedNotice({
+  dropped,
+  votingOpen,
+  onDismiss,
+}: {
+  dropped: DroppedVote[];
+  votingOpen: boolean;
+  onDismiss: () => void;
+}) {
+  const names = dropped.map((d) => (d.printCode ? `${d.printCode} ${d.title}` : "a removed design"));
+  return (
+    <Alert>
+      <Info />
+      <AlertTitle>
+        {dropped.length === 1 ? "A vote came back to you" : `${dropped.length} votes came back to you`}
+      </AlertTitle>
+      <AlertDescription>
+        <p>
+          {names.join(", ")} {dropped.length === 1 ? "is" : "are"} no longer in the running (withdrawn, swapped
+          or rejected), so {dropped.length === 1 ? "that vote doesn't" : "those votes don't"} count.
+          {votingOpen ? ` Spend ${dropped.length === 1 ? "it" : "them"} on another design.` : null}
+        </p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={onDismiss}>
+          Got it
+        </Button>
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -427,7 +481,7 @@ function DeckEnd({
         </EmptyMedia>
         <EmptyTitle>{empty ? `No cards in “${label}”` : "You've reached the end"}</EmptyTitle>
         <EmptyDescription>
-          {filter === "unseen" ? "You've seen every entry. Revisit your likes or skips to vote." : "Go round again or pick another filter."}
+          {filter === "unseen" ? "You've seen every entry. Revisit your likes to pick your votes." : "Go round again or pick another filter."}
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent className="flex-row justify-center">
@@ -454,9 +508,9 @@ function NoEntries() {
         <EmptyMedia variant="icon">
           <Trophy />
         </EmptyMedia>
-        <EmptyTitle>No printed entries yet</EmptyTitle>
+        <EmptyTitle>No entries yet</EmptyTitle>
         <EmptyDescription>
-          Keychains show up here as soon as they come off the printer.{" "}
+          Designs show up here as soon as they&apos;re submitted.{" "}
           <Link href="/submit" className={buttonVariants({ variant: "link" })}>
             Submit yours
           </Link>

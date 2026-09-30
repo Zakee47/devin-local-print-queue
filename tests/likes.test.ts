@@ -13,13 +13,13 @@ const identityFor = (who: string) => ({
   emailVerified: true,
 });
 
-async function setup({ votingOpen = false }: { votingOpen?: boolean } = {}) {
+async function setup({ votingOpen = true }: { votingOpen?: boolean } = {}) {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
     await ctx.db.insert("settings", { ...DEFAULT_SETTINGS, votingOpen });
     const storageId = await ctx.storage.store(new Blob(["solid x\nendsolid x\n"]));
     const people: Record<string, Id<"participants">> = {};
-    for (const who of ["ada", "grace"]) {
+    for (const who of ["ada", "grace", "zoe"]) {
       people[who] = await ctx.db.insert("participants", {
         clerkUserId: `user-${who}`,
         email: `${who}@example.com`,
@@ -27,7 +27,7 @@ async function setup({ votingOpen = false }: { votingOpen?: boolean } = {}) {
         displayName: who,
       });
     }
-    const submit = (owner: string, status: "done" | "queued", n: number) =>
+    const submit = (owner: string, status: "done" | "queued", printRequested: boolean, n: number) =>
       ctx.db.insert("submissions", {
         participantId: people[owner],
         storageId,
@@ -35,35 +35,40 @@ async function setup({ votingOpen = false }: { votingOpen?: boolean } = {}) {
         kind: "stl",
         sizeBytes: 20,
         title: `${owner} ${status}`,
-        printRequested: true,
+        printRequested,
         status,
         printCode: `KC-00${n}`,
       });
     return {
-      ada: await submit("ada", "done", 1),
-      grace: await submit("grace", "done", 2),
-      queued: await submit("grace", "queued", 3),
+      ada: await submit("ada", "done", true, 1),
+      grace: await submit("grace", "queued", true, 2),
+      graceSpare: await submit("grace", "queued", false, 3),
     };
   });
   return { t, ...ids };
 }
 
 describe("likes", () => {
-  it("upserts a reaction and clears it on undo, even while voting is closed", async () => {
-    const { t, grace } = await setup({ votingOpen: false });
-    const ada = t.withIdentity(identityFor("ada"));
-    await ada.mutation(api.likes.react, { submissionId: grace, reaction: "like" });
-    expect(await ada.query(api.likes.mine)).toEqual([{ submissionId: grace, reaction: "like" }]);
+  it("upserts a reaction on a design entry and clears it on undo", async () => {
+    const { t, grace } = await setup();
+    const zoe = t.withIdentity(identityFor("zoe"));
+    await zoe.mutation(api.likes.react, { submissionId: grace, reaction: "like" });
+    expect(await zoe.query(api.likes.mine)).toEqual([{ submissionId: grace, reaction: "like" }]);
 
-    await ada.mutation(api.likes.react, { submissionId: grace, reaction: "skip" });
-    expect(await ada.query(api.likes.mine)).toEqual([{ submissionId: grace, reaction: "skip" }]);
-    const rows = await t.run((ctx) => ctx.db.query("likes").collect());
-    expect(rows).toHaveLength(1);
+    await zoe.mutation(api.likes.react, { submissionId: grace, reaction: "skip" });
+    expect(await zoe.query(api.likes.mine)).toEqual([{ submissionId: grace, reaction: "skip" }]);
+    expect(await t.run((ctx) => ctx.db.query("likes").collect())).toHaveLength(1);
 
-    await ada.mutation(api.likes.clearReaction, { submissionId: grace });
-    expect(await ada.query(api.likes.mine)).toEqual([]);
-    // Clearing again is a no-op.
-    await ada.mutation(api.likes.clearReaction, { submissionId: grace });
+    await zoe.mutation(api.likes.clearReaction, { submissionId: grace });
+    expect(await zoe.query(api.likes.mine)).toEqual([]);
+    await zoe.mutation(api.likes.clearReaction, { submissionId: grace });
+  });
+
+  it("rejects reactions while voting is closed", async () => {
+    const { t, ada } = await setup({ votingOpen: false });
+    await expect(
+      t.withIdentity(identityFor("zoe")).mutation(api.likes.react, { submissionId: ada, reaction: "like" })
+    ).rejects.toThrow(/locked in/);
   });
 
   it("rejects liking your own entry", async () => {
@@ -73,11 +78,11 @@ describe("likes", () => {
     ).rejects.toThrow(/own entry/);
   });
 
-  it("only allows reacting to done submissions", async () => {
-    const { t, queued } = await setup();
+  it("only allows reacting to entries", async () => {
+    const { t, graceSpare } = await setup();
     await expect(
-      t.withIdentity(identityFor("ada")).mutation(api.likes.react, { submissionId: queued, reaction: "like" })
-    ).rejects.toThrow(/printed entries/);
+      t.withIdentity(identityFor("ada")).mutation(api.likes.react, { submissionId: graceSpare, reaction: "like" })
+    ).rejects.toThrow(/in the running/);
   });
 
   it("requires a registered participant", async () => {
