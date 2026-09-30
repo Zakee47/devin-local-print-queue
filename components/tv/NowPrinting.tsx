@@ -90,7 +90,7 @@ export default function NowPrinting({
           >
             <div className="min-w-0">
               <p className="font-mono text-2xl font-medium tracking-[0.12em] text-brand">{current.printCode}</p>
-              <h2 className="mt-2 truncate font-heading text-6xl leading-none font-semibold tracking-[-0.03em]">
+              <h2 className="mt-2 line-clamp-2 font-heading text-5xl leading-[1.05] font-semibold tracking-[-0.03em]">
                 {current.title}
               </h2>
               <p className="mt-4 flex items-center gap-3 text-3xl text-muted-foreground">
