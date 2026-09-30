@@ -5,6 +5,7 @@ import ColourSwatches from "@/components/participant/ColourSwatches";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import type { Printer } from "@/lib/event";
 
 export const MAX_TITLE_LENGTH = 60;
 export const MAX_NOTES_LENGTH = 500;
@@ -15,11 +16,13 @@ export default function SubmissionFields({
   value,
   onChange,
   colours,
+  printers,
   disabled,
 }: {
   value: SubmissionDraft;
   onChange: (next: SubmissionDraft) => void;
   colours: string[];
+  printers: Printer[];
   disabled?: boolean;
 }) {
   const id = useId();
@@ -44,6 +47,7 @@ export default function SubmissionFields({
       <ColourSwatches
         name={`${id}-colour`}
         colours={colours}
+        printers={printers}
         value={value.colour}
         onChange={(colour) => onChange({ ...value, colour })}
         disabled={disabled}

@@ -1,4 +1,4 @@
-import { Ban, Check } from "lucide-react";
+import { Ban, Check, RotateCcw } from "lucide-react";
 import { STATUS_LABELS, type SubmissionStatus } from "@/lib/event";
 import { cn } from "@/lib/utils";
 
@@ -7,12 +7,29 @@ const STEPS = ["submitted", "queued", "printing", "done"] as const;
 export default function StatusStepper({
   status,
   rejectionReason,
+  rejectionKind,
   queuePosition,
 }: {
   status: SubmissionStatus;
   rejectionReason?: string;
+  rejectionKind?: "review" | "print_failed";
   queuePosition: number | null;
 }) {
+  if (status === "rejected" && rejectionKind === "print_failed") {
+    const reason = rejectionReason?.trim().replace(/[.!?]+$/, "");
+    return (
+      <div role="status" className="rounded-lg border border-brand/50 bg-brand/10 p-4">
+        <p className="flex items-center gap-2 font-medium text-brand">
+          <RotateCcw className="size-4" aria-hidden="true" />
+          Print failed
+        </p>
+        <p className="mt-1.5 text-sm text-foreground">
+          {reason ? `The print failed: ${reason}.` : "The print failed."} Please upload a fixed version.
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">This frees a slot, so you can upload another design.</p>
+      </div>
+    );
+  }
   if (status === "rejected") {
     return (
       <div role="status" className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-destructive">

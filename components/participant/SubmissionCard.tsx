@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, Pencil, Printer, Trash2 } from "lucide-react";
+import { Lock, Pencil, Star, Trash2 } from "lucide-react";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { toast } from "sonner";
@@ -25,6 +25,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { swatchFor } from "@/lib/colours";
+import { formatDimensions } from "@/lib/dimensions";
+import type { Printer } from "@/lib/event";
 import { cn } from "@/lib/utils";
 
 export type MySubmission = NonNullable<FunctionReturnType<typeof api.submissions.mine>>[number];
@@ -39,11 +41,15 @@ function errorMessage(e: unknown) {
 export default function SubmissionCard({
   submission: s,
   colours,
-  showPrintChoice,
+  printers,
+  showEntryChoice,
+  submissionsOpen,
 }: {
   submission: MySubmission;
   colours: string[];
-  showPrintChoice: boolean;
+  printers: Printer[];
+  showEntryChoice: boolean;
+  submissionsOpen: boolean;
 }) {
   const setPrintRequested = useMutation(api.submissions.setPrintRequested);
   const update = useMutation(api.submissions.update);
@@ -84,8 +90,8 @@ export default function SubmissionCard({
         </span>
         {s.printRequested && !rejected ? (
           <span className="absolute top-3 right-3 flex items-center gap-1 rounded-md bg-brand px-2 py-1 text-xs font-medium text-brand-foreground">
-            <Printer className="size-3" aria-hidden="true" />
-            Print choice
+            <Star className="size-3" aria-hidden="true" />
+            Your entry
           </span>
         ) : null}
       </div>
@@ -108,7 +114,13 @@ export default function SubmissionCard({
               if (ok) setEditing(null);
             }}
           >
-            <SubmissionFields value={editing} onChange={setEditing} colours={colours} disabled={busy} />
+            <SubmissionFields
+              value={editing}
+              onChange={setEditing}
+              colours={colours}
+              printers={printers}
+              disabled={busy}
+            />
             <div className="flex gap-2">
               <Button type="submit" variant="brand" size="lg" className="flex-1" disabled={busy || !editing.title.trim()}>
                 Save
@@ -136,6 +148,12 @@ export default function SubmissionCard({
                   <span className="uppercase">{s.kind}</span>
                   <span aria-hidden="true">·</span>
                   <span>{formatBytes(s.sizeBytes)}</span>
+                  {s.dimensionsMm ? (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>{formatDimensions(s.dimensionsMm)}</span>
+                    </>
+                  ) : null}
                 </p>
               </div>
               {!s.editable && !rejected ? (
@@ -146,26 +164,31 @@ export default function SubmissionCard({
               ) : null}
             </div>
             {s.notes ? <p className="text-sm whitespace-pre-line text-muted-foreground">{s.notes}</p> : null}
-            <StatusStepper status={s.status} rejectionReason={s.rejectionReason} queuePosition={s.queuePosition} />
+            <StatusStepper
+              status={s.status}
+              rejectionReason={s.rejectionReason}
+              rejectionKind={s.rejectionKind}
+              queuePosition={s.queuePosition}
+            />
             {s.editable ? (
               <div className="flex flex-wrap gap-2">
-                {showPrintChoice && !s.printRequested && s.canChoose ? (
+                {showEntryChoice && !s.printRequested && s.canChoose ? (
                   <Button
                     variant="brand"
                     size="lg"
                     className="h-10 flex-1"
                     disabled={busy}
-                    onClick={() => run(() => setPrintRequested({ id: s._id }), `${s.printCode} will be printed`)}
+                    onClick={() => run(() => setPrintRequested({ id: s._id }), `${s.printCode} is now your entry`)}
                   >
-                    <Printer data-icon="inline-start" />
-                    Print this one
+                    <Star data-icon="inline-start" />
+                    Make this my entry
                   </Button>
                 ) : null}
                 <Button
                   variant="outline"
                   size="lg"
                   className="h-10"
-                  disabled={busy}
+                  disabled={busy || !submissionsOpen}
                   onClick={() => setEditing({ title: s.title, notes: s.notes ?? "", colour: s.colour ?? "" })}
                 >
                   <Pencil data-icon="inline-start" />

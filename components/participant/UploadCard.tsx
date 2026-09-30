@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FileUp, Upload, X } from "lucide-react";
+import { FileUp, Ruler, Upload, X } from "lucide-react";
 import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
@@ -12,10 +12,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { swatchFor } from "@/lib/colours";
-import { ALLOWED_EXTENSIONS } from "@/lib/event";
+import { fitsWithin, formatDimensions } from "@/lib/dimensions";
+import { ALLOWED_EXTENSIONS, MAX_SUBMISSIONS_PER_PARTICIPANT, type Dimensions, type Printer } from "@/lib/event";
 import { fileKindFromName, type FileKind } from "@/lib/files";
+import { measureModel } from "@/lib/model-dimensions";
+import { cn } from "@/lib/utils";
 
 const EMPTY_DRAFT: SubmissionDraft = { title: "", notes: "", colour: "" };
+
+type Measurement =
+  | { state: "measuring" }
+  | { state: "ok"; dimensions: Dimensions }
+  | { state: "too_big"; dimensions: Dimensions }
+  | { state: "error" };
 
 export function formatBytes(bytes: number) {
   if (bytes >= 1024 * 1024) return `${Number((bytes / (1024 * 1024)).toFixed(1))} MB`;
@@ -32,11 +41,15 @@ function titleFromFileName(name: string) {
 
 export default function UploadCard({
   colours,
+  printers,
   maxFileBytes,
+  maxDimensionsMm,
   slotsLeft,
 }: {
   colours: string[];
+  printers: Printer[];
   maxFileBytes: number;
+  maxDimensionsMm: Dimensions;
   slotsLeft: number;
 }) {
   const generateUploadUrl = useMutation(api.submissions.generateUploadUrl);
@@ -45,13 +58,17 @@ export default function UploadCard({
   const [file, setFile] = useState<{ file: File; kind: FileKind; url: string } | null>(null);
   const [draft, setDraft] = useState<SubmissionDraft>(EMPTY_DRAFT);
   const [busy, setBusy] = useState(false);
+  const [measurement, setMeasurement] = useState<Measurement | null>(null);
+  const pickId = useRef(0);
 
   useEffect(() => () => {
     if (file) URL.revokeObjectURL(file.url);
   }, [file]);
 
   function reset() {
+    pickId.current += 1;
     setFile(null);
+    setMeasurement(null);
     setDraft(EMPTY_DRAFT);
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -71,11 +88,26 @@ export default function UploadCard({
     }
     setFile({ file: picked, kind, url: URL.createObjectURL(picked) });
     setDraft((d) => (d.title ? d : { ...d, title: titleFromFileName(picked.name) }));
+    void measure(picked, kind);
+  }
+
+  async function measure(picked: File, kind: FileKind) {
+    const id = ++pickId.current;
+    setMeasurement({ state: "measuring" });
+    let next: Measurement;
+    try {
+      const dimensions = await measureModel(await picked.arrayBuffer(), kind);
+      next = { state: fitsWithin(dimensions, maxDimensionsMm) ? "ok" : "too_big", dimensions };
+    } catch {
+      next = { state: "error" };
+    }
+    if (id === pickId.current) setMeasurement(next);
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || !draft.title.trim()) return;
+    if (!file || !draft.title.trim() || measurement?.state !== "ok") return;
+    const { dimensions } = measurement;
     setBusy(true);
     try {
       const uploadUrl = await generateUploadUrl({});
@@ -92,6 +124,7 @@ export default function UploadCard({
         notes: draft.notes || undefined,
         colour: draft.colour || undefined,
         originalFileName: file.file.name,
+        dimensionsMm: dimensions,
       });
       if (!result.ok) throw new Error(result.error);
       toast.success("Uploaded! The organizers will review it shortly.");
@@ -108,7 +141,8 @@ export default function UploadCard({
       <CardHeader>
         <CardTitle>Upload a design</CardTitle>
         <CardDescription>
-          STL or 3MF, up to {formatBytes(maxFileBytes)}. {slotsLeft} of 2 slots left.
+          STL or 3MF, up to {formatBytes(maxFileBytes)} and {formatDimensions(maxDimensionsMm)}. {slotsLeft} of{" "}
+          {MAX_SUBMISSIONS_PER_PARTICIPANT} slots left.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -130,12 +164,33 @@ export default function UploadCard({
               <div className="flex items-center justify-between gap-2 text-sm">
                 <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
                   {file.file.name} · {formatBytes(file.file.size)}
+                  {measurement?.state === "ok" ? ` · ${formatDimensions(measurement.dimensions)}` : null}
                 </span>
                 <Button type="button" variant="ghost" size="sm" onClick={reset} disabled={busy}>
                   <X data-icon="inline-start" />
                   Change
                 </Button>
               </div>
+              {measurement && measurement.state !== "ok" ? (
+                <p
+                  role={measurement.state === "measuring" ? "status" : "alert"}
+                  className={cn(
+                    "flex items-center gap-2 text-sm",
+                    measurement.state === "measuring" ? "text-muted-foreground" : "text-destructive"
+                  )}
+                >
+                  {measurement.state === "measuring" ? (
+                    <Spinner aria-hidden="true" />
+                  ) : (
+                    <Ruler className="size-4 shrink-0" aria-hidden="true" />
+                  )}
+                  {measurement.state === "measuring"
+                    ? "Measuring your model…"
+                    : measurement.state === "too_big"
+                      ? `Your model is ${formatDimensions(measurement.dimensions)}; the limit is ${formatDimensions(maxDimensionsMm)}`
+                      : "We couldn't read that model. Check it's a valid STL or 3MF and try again."}
+                </p>
+              ) : null}
             </div>
           ) : (
             <label
@@ -154,8 +209,14 @@ export default function UploadCard({
           )}
           {file ? (
             <>
-              <SubmissionFields value={draft} onChange={setDraft} colours={colours} disabled={busy} />
-              <Button type="submit" variant="brand" size="lg" className="h-11 w-full text-[15px]" disabled={busy || !draft.title.trim()}>
+              <SubmissionFields value={draft} onChange={setDraft} colours={colours} printers={printers} disabled={busy} />
+              <Button
+                type="submit"
+                variant="brand"
+                size="lg"
+                className="h-11 w-full text-[15px]"
+                disabled={busy || !draft.title.trim() || measurement?.state !== "ok"}
+              >
                 {busy ? <Spinner data-icon="inline-start" /> : <Upload data-icon="inline-start" />}
                 {busy ? "Uploading…" : "Submit design"}
               </Button>
