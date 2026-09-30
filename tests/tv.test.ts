@@ -162,11 +162,15 @@ test("results mode ranks eligible entries across statuses and returns a public-s
     });
     const voters = await Promise.all(["V1", "V2", "V3", "V4", "V5"].map((n) => addParticipant(ctx, n)));
     const maker = await addParticipant(ctx, "Maker");
+    const queuedMaker = await addParticipant(ctx, "QueuedMaker");
+    const submittedMaker = await addParticipant(ctx, "SubmittedMaker");
+    const rejectedMaker = await addParticipant(ctx, "RejectedMaker");
+    const unrequestedMaker = await addParticipant(ctx, "UnrequestedMaker");
     const printing = await addSubmission(ctx, maker, 5, "printing", { printingAt: 5 });
-    const queued = await addSubmission(ctx, maker, 6, "queued", { queueOrder: 1 });
-    const submitted = await addSubmission(ctx, maker, 7, "submitted");
-    const rejected = await addSubmission(ctx, maker, 8, "rejected");
-    const notRequested = await addSubmission(ctx, maker, 9, "done", { doneAt: 9, printRequested: false });
+    const queued = await addSubmission(ctx, queuedMaker, 6, "queued", { queueOrder: 1 });
+    const submitted = await addSubmission(ctx, submittedMaker, 7, "submitted");
+    const rejected = await addSubmission(ctx, rejectedMaker, 8, "rejected");
+    const notRequested = await addSubmission(ctx, unrequestedMaker, 9, "done", { doneAt: 9, printRequested: false });
     const vote = (voter: number, submissionId: Id<"submissions">) =>
       ctx.db.insert("votes", { voterId: voters[voter], submissionId });
     await vote(0, printing);
@@ -221,6 +225,22 @@ test("results mode has default notices and no winner without votes", async () =>
   expect(board.totalVotes).toBe(0);
   expect(board.winner).toBeNull();
   expect(board.runnersUp).toEqual([]);
+});
+
+test("results mode excludes votes on designs that are no longer entries", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await addSettings(ctx);
+    const voter = await addParticipant(ctx, "Voter");
+    const maker = await addParticipant(ctx, "Maker");
+    const withdrawn = await addSubmission(ctx, maker, 1, "done", { doneAt: 1 });
+    await ctx.db.insert("votes", { voterId: voter, submissionId: withdrawn });
+    await ctx.db.patch(withdrawn, { printRequested: false });
+  });
+  const board = await t.query(api.tv.board);
+  if (board.mode !== "results") throw new Error("expected results mode");
+  expect(board.totalVotes).toBe(0);
+  expect(board.winner).toBeNull();
 });
 
 test("queue mode ranks liked entries across statuses and excludes rejected designs", async () => {
@@ -280,11 +300,12 @@ test("results mode breaks vote ties by likes", async () => {
   await t.run(async (ctx) => {
     await addSettings(ctx);
     const fans = await Promise.all(["V1", "V2", "V3"].map((n) => addParticipant(ctx, n)));
-    const maker = await addParticipant(ctx, "Maker");
-    const a = await addSubmission(ctx, maker, 1, "done", { doneAt: 1 });
-    const b = await addSubmission(ctx, maker, 2, "done", { doneAt: 2 });
-    const c = await addSubmission(ctx, maker, 3, "done", { doneAt: 3 });
-    for (const s of [a, b, c]) await ctx.db.insert("votes", { voterId: fans[0], submissionId: s });
+    const makers = await Promise.all(["MakerA", "MakerB", "MakerC"].map((n) => addParticipant(ctx, n)));
+    const a = await addSubmission(ctx, makers[0], 1, "done", { doneAt: 1 });
+    const b = await addSubmission(ctx, makers[1], 2, "done", { doneAt: 2 });
+    const c = await addSubmission(ctx, makers[2], 3, "done", { doneAt: 3 });
+    for (const s of [a, b]) await ctx.db.insert("votes", { voterId: fans[0], submissionId: s });
+    await ctx.db.insert("votes", { voterId: fans[1], submissionId: c });
     await ctx.db.insert("likes", { participantId: fans[1], submissionId: c, reaction: "like", updatedAt: 1 });
     await ctx.db.insert("likes", { participantId: fans[2], submissionId: c, reaction: "like", updatedAt: 1 });
     await ctx.db.insert("likes", { participantId: fans[1], submissionId: b, reaction: "like", updatedAt: 1 });

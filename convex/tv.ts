@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { DEFAULT_SETTINGS, readSettings } from "./settings";
 import { reactionCounts } from "./likes";
+import { tallyVotes } from "./votes";
 import { listEntries } from "./entries";
 import { DEFAULT_COLOURS } from "../lib/event";
 import { formatPrintCode } from "../lib/files";
@@ -125,15 +126,8 @@ export const board = query({
     const likesOf = (s: Doc<"submissions">) => reactions.get(s._id)?.likes ?? 0;
 
     if (settings.showResultsOnTv) {
-      const votes = await ctx.db.query("votes").collect();
-      const tally = new Map<Id<"submissions">, number>();
-      const entryIds = new Set(entries.map((entry) => entry._id));
-      let totalVotes = 0;
-      for (const vote of votes) {
-        if (!entryIds.has(vote.submissionId)) continue;
-        totalVotes++;
-        tally.set(vote.submissionId, (tally.get(vote.submissionId) ?? 0) + 1);
-      }
+      const { tally } = await tallyVotes(ctx);
+      const totalVotes = [...tally.values()].reduce((total, votes) => total + votes, 0);
       const ranked = entries
         .map((s) => ({ s, printCode: s.printCode, votes: tally.get(s._id) ?? 0, likes: likesOf(s) }))
         .filter((r) => r.votes > 0)
