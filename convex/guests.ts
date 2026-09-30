@@ -47,3 +47,17 @@ export const latestImport = query({
     return await ctx.db.query("guestImports").order("desc").first();
   },
 });
+
+// Current allowlist with whether each guest has registered as a participant.
+export const list = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const guests = await ctx.db.query("guests").collect();
+    const participants = await ctx.db.query("participants").collect();
+    const registered = new Set(participants.map((p) => p.email));
+    return guests
+      .map((g) => ({ ...g, registered: registered.has(g.email) }))
+      .sort((a, b) => a.email.localeCompare(b.email));
+  },
+});

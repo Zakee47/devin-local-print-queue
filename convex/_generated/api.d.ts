@@ -10,7 +10,9 @@
 
 import type * as admins from "../admins.js";
 import type * as guests from "../guests.js";
+import type * as http from "../http.js";
 import type * as participants from "../participants.js";
+import type * as queue from "../queue.js";
 import type * as seed from "../seed.js";
 import type * as settings from "../settings.js";
 import type * as submissions from "../submissions.js";
@@ -25,7 +27,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   admins: typeof admins;
   guests: typeof guests;
+  http: typeof http;
   participants: typeof participants;
+  queue: typeof queue;
   seed: typeof seed;
   settings: typeof settings;
   submissions: typeof submissions;
