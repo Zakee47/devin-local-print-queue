@@ -102,8 +102,10 @@ describe("deleteParticipant cascade", () => {
       });
       const storageIds: Id<"_storage">[] = [];
       const aSubs: Id<"submissions">[] = [];
+      // Both of A's submissions share one storage blob.
+      const sharedStorage = await ctx.storage.store(new Blob(["solid a"]));
       for (let i = 0; i < 2; i++) {
-        const storageId = await ctx.storage.store(new Blob([`solid a${i}`]));
+        const storageId = sharedStorage;
         storageIds.push(storageId);
         aSubs.push(
           await ctx.db.insert("submissions", {

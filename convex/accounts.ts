@@ -136,7 +136,9 @@ export const deleteParticipant = mutation({
         await remove(like._id);
         removedLikes.add(like._id);
       }
-      await ctx.storage.delete(submission.storageId);
+      if (await ctx.db.system.get("_storage", submission.storageId)) {
+        await ctx.storage.delete(submission.storageId);
+      }
       await remove(submission._id);
     }
     for (const vote of await ctx.db
