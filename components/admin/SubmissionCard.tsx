@@ -138,10 +138,7 @@ export default function SubmissionCard({
               <Badge variant="destructive">
                 {row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"}
               </Badge>
-              <span>
-                {row.rejectionKind === "print_failed" ? "Print failed:" : "Rejected:"}{" "}
-                {row.rejectionReason}
-              </span>
+              <span>{row.rejectionReason}</span>
             </p>
           ) : null}
         </div>
