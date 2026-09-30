@@ -87,10 +87,10 @@ export default function NoticeBanner({ width = "default" }: { width?: PageWidth 
           >
             <Megaphone className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
             <div className="min-w-0">
-              <p className="mb-0.5 text-[0.65rem] font-mono font-medium tracking-[0.16em] uppercase">
+              <p className="mb-0.5 text-[0.7rem] font-mono font-semibold tracking-[0.16em] uppercase opacity-90">
                 From the organisers
               </p>
-              <p aria-live="polite" className="whitespace-pre-line text-sm font-medium">
+              <p aria-live="polite" className="whitespace-pre-line text-base font-semibold">
                 {announcement}
               </p>
             </div>

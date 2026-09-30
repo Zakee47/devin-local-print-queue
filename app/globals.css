@@ -33,9 +33,9 @@
   --accent-foreground: #202020;
   --destructive: oklch(0.577 0.245 27.325);
   --input: #c9c9c9;
-  --brand: #467bf7;
-  --brand-hover: #628ff9;
-  --brand-foreground: #121212;
+  --brand: #2d60cf;
+  --brand-hover: #234fb3;
+  --brand-foreground: #ffffff;
   --link: #2d60cf;
   --ring: #2d60cf;
   --selection: #dddddd;
