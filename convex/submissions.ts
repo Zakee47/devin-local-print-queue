@@ -43,6 +43,18 @@ function choiceLocked(submissions: Submission[]) {
   return submissions.some((s) => isActive(s) && s.status !== "submitted");
 }
 
+function hasPrintFailedReplacement(submissions: Submission[]) {
+  const active = submissions.filter(isActive);
+  if (active.some((submission) => submission.printRequested)) return false;
+  return submissions.some(
+    (rejected) =>
+      rejected.status === "rejected" &&
+      rejected.rejectionKind === "print_failed" &&
+      rejected.rejectedAt !== undefined &&
+      !active.some((submission) => submission._creationTime > rejected.rejectedAt!)
+  );
+}
+
 function cleanTitle(title: string) {
   const trimmed = title.trim();
   if (!trimmed) throw new Error("Give your keychain a title");
@@ -88,8 +100,12 @@ async function requireSubmissionsOpen(ctx: MutationCtx) {
 }
 
 async function assertCanUpload(ctx: MutationCtx, participantId: Id<"participants">) {
-  const settings = await requireSubmissionsOpen(ctx);
-  const active = (await ownSubmissions(ctx, participantId)).filter(isActive);
+  const settings = await readSettings(ctx);
+  const submissions = await ownSubmissions(ctx, participantId);
+  const active = submissions.filter(isActive);
+  if (!submissionsAreOpen(settings, Date.now()) && !hasPrintFailedReplacement(submissions)) {
+    throw new Error("Submissions are closed");
+  }
   if (active.length >= MAX_SUBMISSIONS_PER_PARTICIPANT) {
     throw new Error(`You can have at most ${MAX_SUBMISSIONS_PER_PARTICIPANT} active uploads`);
   }
@@ -175,6 +191,7 @@ export const mine = query({
       .withIndex("by_participant", (q) => q.eq("participantId", participant._id))
       .collect();
     const locked = choiceLocked(submissions);
+    const canUploadReplacement = hasPrintFailedReplacement(submissions);
     return await Promise.all(
       submissions.map(async (s) => {
         let queuePosition: number | null = null;
@@ -202,6 +219,7 @@ export const mine = query({
           rejectionReason: s.rejectionReason,
           rejectionKind: s.rejectionKind,
           dimensionsMm: s.dimensionsMm,
+          canUploadReplacement,
           queuePosition,
           editable: s.status === "submitted",
           canChoose: s.status === "submitted" && !locked,

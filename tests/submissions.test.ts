@@ -79,6 +79,7 @@ async function setStatus(
     queueOrder: number;
     rejectionReason: string;
     rejectionKind: "review" | "print_failed";
+    rejectedAt: number;
     printRequested: boolean;
   }>
 ) {
@@ -172,6 +173,83 @@ describe("create", () => {
         nextPrintNumber: 1,
       })
     );
+    await expect(asAda.mutation(api.submissions.generateUploadUrl, {})).rejects.toThrow(/closed/);
+    const { storageId, result } = await upload(t, asAda);
+    expect(result).toEqual({ ok: false, error: "Submissions are closed" });
+    expect(await storageExists(t, storageId)).toBe(false);
+  });
+
+  test("allows a fixed replacement after a print failure when submissions are closed", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-01T18:00:00Z"));
+    const { t, asAda } = await setup();
+    await insertSettings(t);
+    const failed = await uploadOk(t, asAda);
+    const rejectedAt = Date.now();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(failed, {
+        status: "rejected",
+        rejectionKind: "print_failed",
+        rejectedAt,
+        printRequested: false,
+      });
+      const settings = await ctx.db.query("settings").first();
+      await ctx.db.patch(settings!._id, { submissionsOpen: false });
+    });
+    vi.setSystemTime(rejectedAt + 1);
+
+    expect((await asAda.query(api.submissions.mine, {}))![0].canUploadReplacement).toBe(true);
+    expect(await asAda.mutation(api.submissions.generateUploadUrl, {})).toBeTruthy();
+    await expect(uploadOk(t, asAda)).resolves.toBeTruthy();
+  });
+
+  test("blocks uploads after a review rejection when submissions are closed", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-01T18:00:00Z"));
+    const { t, asAda } = await setup();
+    await insertSettings(t);
+    const rejected = await uploadOk(t, asAda);
+    const rejectedAt = Date.now();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(rejected, {
+        status: "rejected",
+        rejectionKind: "review",
+        rejectedAt,
+        printRequested: false,
+      });
+      const settings = await ctx.db.query("settings").first();
+      await ctx.db.patch(settings!._id, { submissionsOpen: false });
+    });
+    vi.setSystemTime(rejectedAt + 1);
+
+    await expect(asAda.mutation(api.submissions.generateUploadUrl, {})).rejects.toThrow(/closed/);
+    const { storageId, result } = await upload(t, asAda);
+    expect(result).toEqual({ ok: false, error: "Submissions are closed" });
+    expect(await storageExists(t, storageId)).toBe(false);
+  });
+
+  test("blocks another closed-window upload after a replacement already exists", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-01T18:00:00Z"));
+    const { t, asAda } = await setup();
+    await insertSettings(t);
+    const failed = await uploadOk(t, asAda);
+    const rejectedAt = Date.now();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(failed, {
+        status: "rejected",
+        rejectionKind: "print_failed",
+        rejectedAt,
+        printRequested: false,
+      });
+      const settings = await ctx.db.query("settings").first();
+      await ctx.db.patch(settings!._id, { submissionsOpen: false });
+    });
+    vi.setSystemTime(rejectedAt + 1);
+    const replacement = await uploadOk(t, asAda);
+    await setStatus(t, replacement, { printRequested: false });
+
+    expect((await asAda.query(api.submissions.mine, {}))![0].canUploadReplacement).toBe(false);
     await expect(asAda.mutation(api.submissions.generateUploadUrl, {})).rejects.toThrow(/closed/);
     const { storageId, result } = await upload(t, asAda);
     expect(result).toEqual({ ok: false, error: "Submissions are closed" });

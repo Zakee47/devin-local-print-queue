@@ -60,6 +60,7 @@ export default function SubmitPage() {
   const choiceLocked = active.some((s) => s.status !== "submitted");
   const hasEntry = active.some((s) => s.printRequested);
   const needsPick = !hasEntry && active.length > 0 && !choiceLocked;
+  const canUploadReplacement = submissions?.some((s) => s.canUploadReplacement) ?? false;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -133,14 +134,24 @@ export default function SubmitPage() {
               />
             ))}
             {slotsLeft > 0 ? (
-              open ? (
-                <UploadCard
-                  colours={settings.colours}
-                  printers={settings.printers}
-                  maxFileBytes={settings.maxFileBytes}
-                  maxDimensionsMm={settings.maxDimensionsMm}
-                  slotsLeft={slotsLeft}
-                />
+              open || canUploadReplacement ? (
+                <>
+                  {!open ? (
+                    <Alert>
+                      <AlertTitle>Your print failed</AlertTitle>
+                      <AlertDescription>
+                        Your print failed — you can upload a fixed version even though submissions have closed.
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+                  <UploadCard
+                    colours={settings.colours}
+                    printers={settings.printers}
+                    maxFileBytes={settings.maxFileBytes}
+                    maxDimensionsMm={settings.maxDimensionsMm}
+                    slotsLeft={slotsLeft}
+                  />
+                </>
               ) : (
                 <Alert>
                   <AlertTitle>Submissions are closed</AlertTitle>
