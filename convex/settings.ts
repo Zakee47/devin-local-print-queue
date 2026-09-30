@@ -7,6 +7,7 @@ import {
   DEFAULT_MAX_DIMENSIONS_MM,
   DEFAULT_MAX_FILE_BYTES,
   DEFAULT_PRINTERS,
+  MAX_BLAST_MESSAGE_LENGTH,
   submissionsAreOpen,
   type Dimensions,
   type Printer,
@@ -44,6 +45,7 @@ async function writeSettings(ctx: MutationCtx, patch: Partial<Settings>) {
     const initialSettings = { ...DEFAULT_SETTINGS, ...patch };
     if (initialSettings.submissionsDeadline === undefined) delete initialSettings.submissionsDeadline;
     if (initialSettings.announcement === undefined) delete initialSettings.announcement;
+    if (initialSettings.announcementUpdatedAt === undefined) delete initialSettings.announcementUpdatedAt;
     await ctx.db.insert("settings", initialSettings);
   }
 }
@@ -82,6 +84,7 @@ export const update = mutation({
   },
   handler: async (ctx, patch) => {
     const actor = await requireAdmin(ctx);
+    const currentSettings = await readSettings(ctx);
     if (patch.votingOpen !== undefined || patch.showResultsOnTv !== undefined) {
       await requireOwner(ctx);
     }
@@ -89,8 +92,18 @@ export const update = mutation({
     const settingsPatch: Partial<Settings> = { ...rest };
     if (submissionsDeadline === null) settingsPatch.submissionsDeadline = undefined;
     else if (submissionsDeadline !== undefined) settingsPatch.submissionsDeadline = submissionsDeadline;
-    if (announcement === null || announcement === "") settingsPatch.announcement = undefined;
-    else if (announcement !== undefined) settingsPatch.announcement = announcement;
+    if (announcement === null || announcement === "") {
+      settingsPatch.announcement = undefined;
+      settingsPatch.announcementUpdatedAt = undefined;
+    } else if (announcement !== undefined) {
+      if (announcement.length > MAX_BLAST_MESSAGE_LENGTH) {
+        throw new Error("Blast message must be 280 characters or fewer");
+      }
+      settingsPatch.announcement = announcement;
+      if (announcement !== currentSettings.announcement) {
+        settingsPatch.announcementUpdatedAt = Date.now();
+      }
+    }
     if (settingsPatch.colours) {
       settingsPatch.colours = [...new Set(settingsPatch.colours.map((c) => c.trim()).filter(Boolean))];
     }

@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { submissionsStatusText } from "@/components/admin/countdown";
 import { useNow } from "@/components/admin/use-now";
@@ -18,12 +18,6 @@ export default function SubmissionsStatus() {
       <Alert variant={settings.submissionsAcceptingNow ? undefined : "destructive"}>
         <AlertTitle>{submissionsStatusText(settings, now)}</AlertTitle>
       </Alert>
-      {settings.announcement ? (
-        <Alert>
-          <AlertTitle>Announcement</AlertTitle>
-          <AlertDescription>{settings.announcement}</AlertDescription>
-        </Alert>
-      ) : null}
     </div>
   );
 }

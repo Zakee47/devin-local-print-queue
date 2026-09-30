@@ -73,8 +73,9 @@ export default function RootLayout({
         <body className="flex min-h-full flex-col overscroll-none">
           <ThemeProvider
             attribute="class"
-            defaultTheme="dark"
+            defaultTheme="light"
             enableSystem
+            storageKey="kpq-theme"
             disableTransitionOnChange
           >
             <a

@@ -105,6 +105,7 @@ export default defineSchema({
     nextPrintNumber: v.number(),
     submissionsDeadline: v.optional(v.number()),
     announcement: v.optional(v.string()),
+    announcementUpdatedAt: v.optional(v.number()),
     maxDimensionsMm: v.optional(v.object({ x: v.number(), y: v.number(), z: v.number() })),
     printers: v.optional(v.array(v.object({ name: v.string(), colours: v.array(v.string()) }))),
   }),

@@ -1,5 +1,6 @@
 import QueueBoard from "@/components/admin/QueueBoard";
 import QueueCounters from "@/components/admin/QueueCounters";
+import BlastComposer from "@/components/admin/BlastComposer";
 import SubmissionsStatus from "@/components/admin/SubmissionsStatus";
 
 export default function AdminQueuePage() {
@@ -11,6 +12,7 @@ export default function AdminQueuePage() {
           Review submissions, queue approved keychains and track them through the printers.
         </p>
       </div>
+      <BlastComposer />
       <SubmissionsStatus />
       <QueueCounters />
       <QueueBoard />

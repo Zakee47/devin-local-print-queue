@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
@@ -131,6 +131,40 @@ describe("admin roles and settings permissions", () => {
     settings = await staff.query(api.settings.get, {});
     expect(settings.submissionsDeadline).toBeUndefined();
     expect(settings.announcement).toBeUndefined();
+    expect(settings.announcementUpdatedAt).toBeUndefined();
+  });
+
+  test("tracks blast changes, allows staff, enforces the length limit, and clears timestamps", async () => {
+    process.env.OWNER_EMAIL = "owner@example.com";
+    const t = convexTest(schema, modules);
+    await t.run((ctx) => ctx.db.insert("admins", { email: "staff@example.com" }));
+    const staff = t.withIdentity(identity("staff", "staff@example.com"));
+    const sentAt = new Date("2026-01-01T12:00:00.000Z");
+
+    vi.useFakeTimers();
+    vi.setSystemTime(sentAt);
+    try {
+      await staff.mutation(api.settings.update, { announcement: "  Doors open soon  " });
+      let settings = await staff.query(api.settings.get, {});
+      expect(settings.announcement).toBe("  Doors open soon  ");
+      expect(settings.announcementUpdatedAt).toBe(sentAt.getTime());
+
+      vi.setSystemTime(new Date(sentAt.getTime() + 60_000));
+      await staff.mutation(api.settings.update, { announcement: "  Doors open soon  " });
+      settings = await staff.query(api.settings.get, {});
+      expect(settings.announcementUpdatedAt).toBe(sentAt.getTime());
+
+      await expect(
+        staff.mutation(api.settings.update, { announcement: "x".repeat(281) })
+      ).rejects.toThrow("Blast message must be 280 characters or fewer");
+
+      await staff.mutation(api.settings.update, { announcement: null });
+      settings = await staff.query(api.settings.get, {});
+      expect(settings.announcement).toBeUndefined();
+      expect(settings.announcementUpdatedAt).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("owner email is the only owner and can be absent", async () => {

@@ -7,6 +7,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   COLOUR_DISCLAIMER,
+  MAX_BLAST_MESSAGE_LENGTH,
   type Dimensions,
   type Printer,
 } from "@/lib/event";
@@ -147,7 +148,7 @@ export default function SettingsManager() {
 
   return (
     <div className="flex flex-col gap-8">
-      <Section title="Submissions" description="Manage the submission window, deadline and participant announcement.">
+      <Section title="Submissions" description="Manage the submission window, deadline and blast message.">
         <FieldGroup>
           <Field>
             <FieldLabel>Submission intake</FieldLabel>
@@ -223,20 +224,21 @@ export default function SettingsManager() {
               event.preventDefault();
               const announcement = announcementValue.trim();
               setAnnouncementInput(announcement);
-              void save({ announcement }, "Announcement saved");
+              void save({ announcement }, "Blast sent");
             }}
           >
             <Field className="w-full">
-              <FieldLabel htmlFor="announcement">Announcement</FieldLabel>
+              <FieldLabel htmlFor="announcement">Blast message</FieldLabel>
               <Textarea
                 id="announcement"
                 rows={3}
+                maxLength={MAX_BLAST_MESSAGE_LENGTH}
                 value={announcementValue}
                 onChange={(event) => setAnnouncementInput(event.target.value)}
-                placeholder="Add a message for participants"
+                placeholder="Share an update with everyone"
               />
             </Field>
-            <Button type="submit" variant="outline">Save announcement</Button>
+            <Button type="submit" variant="outline">Send blast</Button>
           </form>
         </FieldGroup>
       </Section>

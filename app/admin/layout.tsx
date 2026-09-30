@@ -5,6 +5,7 @@ import AdminNav from "@/components/AdminNav";
 import { BrandWordmark } from "@/components/BrandMark";
 import DevinCredit from "@/components/DevinCredit";
 import HeaderBar from "@/components/HeaderBar";
+import NoticeBanner from "@/components/NoticeBanner";
 import RoleBadge from "@/components/admin/team/RoleBadge";
 import { Separator } from "@/components/ui/separator";
 import { getAppName } from "@/lib/app-name";
@@ -39,6 +40,7 @@ export default function AdminLayout({
             <ProfileMenu />
           </div>
         </div>
+        <NoticeBanner width="default" />
       </HeaderBar>
       <main
         id="main-content"

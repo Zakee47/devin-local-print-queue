@@ -5,6 +5,7 @@ export const CHALLENGE = "Design a keychain";
 // Up to 2 uploads; exactly one is the participant's entry for printing and voting.
 export const MAX_SUBMISSIONS_PER_PARTICIPANT = 2;
 export const MAX_VOTES_PER_PARTICIPANT = 2;
+export const MAX_BLAST_MESSAGE_LENGTH = 280;
 export const DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const ALLOWED_EXTENSIONS = ["stl", "3mf"] as const;
 export const DEFAULT_COLOURS = ["Black", "White", "Silver", "Gold", "Sea Green", "Sky Blue"];
