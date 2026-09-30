@@ -1,5 +1,6 @@
 import QueueBoard from "@/components/admin/QueueBoard";
 import QueueCounters from "@/components/admin/QueueCounters";
+import SubmissionsStatus from "@/components/admin/SubmissionsStatus";
 
 export default function AdminQueuePage() {
   return (
@@ -10,6 +11,7 @@ export default function AdminQueuePage() {
           Review submissions, queue approved keychains and track them through the printers.
         </p>
       </div>
+      <SubmissionsStatus />
       <QueueCounters />
       <QueueBoard />
     </div>

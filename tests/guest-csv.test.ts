@@ -22,6 +22,17 @@ describe("parseGuestCsv", () => {
     expect(out.guests).toEqual([{ email: "x@y.com", name: "Alan Turing", checkedIn: true }]);
   });
 
+  it("accepts a Luma export with exactly name and email columns", () => {
+    const out = parseGuestCsv(
+      'name,email\n"Lovelace, Ada",Ada@Example.com\nGrace Hopper,grace@example.com'
+    );
+    expect(out.hasCheckInColumn).toBe(false);
+    expect(out.guests).toEqual([
+      { email: "ada@example.com", name: "Lovelace, Ada", checkedIn: true },
+      { email: "grace@example.com", name: "Grace Hopper", checkedIn: true },
+    ]);
+  });
+
   it("rejects files without an email column", () => {
     expect(() => parseGuestCsv("name\nAda")).toThrow(/email/);
   });

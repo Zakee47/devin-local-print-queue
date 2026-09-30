@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAdmin } from "./admins";
+import { requireOwner } from "./admins";
 
 // Replaces the allowlist with a freshly parsed Luma CSV (parsed client-side
 // with lib/guest-csv.ts). Existing participants are unaffected.
@@ -14,7 +14,7 @@ export const importCsv = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const uploadedBy = await requireAdmin(ctx);
+    const uploadedBy = await requireOwner(ctx);
     for (const g of await ctx.db.query("guests").collect()) await ctx.db.delete(g._id);
     const eligibleCount = args.guests.filter((g) => g.checkedIn).length;
     const importId = await ctx.db.insert("guestImports", {
@@ -43,7 +43,7 @@ export const importCsv = mutation({
 export const latestImport = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireOwner(ctx);
     return await ctx.db.query("guestImports").order("desc").first();
   },
 });
@@ -52,7 +52,7 @@ export const latestImport = query({
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    await requireOwner(ctx);
     const guests = await ctx.db.query("guests").collect();
     const participants = await ctx.db.query("participants").collect();
     const registered = new Set(participants.map((p) => p.email));

@@ -1,11 +1,21 @@
 import { internalQuery, mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
-import { requireAdmin } from "./admins";
+import { viewerRole, requireAdmin } from "./admins";
 import { downloadFileName } from "../lib/files";
-import { MAX_SUBMISSIONS_PER_PARTICIPANT } from "../lib/event";
+import { MAX_SUBMISSIONS_PER_PARTICIPANT, type Printer } from "../lib/event";
+import { fitsWithin } from "../lib/dimensions";
+import { readSettings } from "./settings";
 
 const PIPELINE: Doc<"submissions">["status"][] = ["queued", "printing", "done"];
+
+export function printersWithColour(printers: Printer[], colour?: string): string[] {
+  const requested = colour?.trim().toLowerCase();
+  if (!requested) return printers.map(({ name }) => name);
+  return printers
+    .filter(({ colours }) => colours.some((loaded) => loaded.trim().toLowerCase() === requested))
+    .map(({ name }) => name);
+}
 
 async function load(ctx: MutationCtx, id: Id<"submissions">) {
   const submission = await ctx.db.get(id);
@@ -42,7 +52,10 @@ async function nextQueueOrder(ctx: MutationCtx) {
 export const board = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    const role = await viewerRole(ctx);
+    if (!role) throw new Error("Not an admin");
+    const settings = await readSettings(ctx);
+    const isOwner = role === "owner";
     const submissions = await ctx.db.query("submissions").collect();
     const participants = new Map<Id<"participants">, Doc<"participants"> | null>();
     const rows = [];
@@ -52,10 +65,15 @@ export const board = query({
       }
       const participant = participants.get(s.participantId);
       const participantName = participant?.name ?? "Unknown";
+      const participantUsername = participant?.displayName ?? "Unknown";
+      const oversize = s.dimensionsMm ? !fitsWithin(s.dimensionsMm, settings.maxDimensionsMm) : false;
       rows.push({
         ...s,
+        participantUsername,
         participantName,
-        participantEmail: participant?.email ?? "",
+        ...(isOwner ? { participantEmail: participant?.email ?? "" } : {}),
+        printersWithColour: printersWithColour(settings.printers, s.colour),
+        oversize,
         fileUrl: await ctx.storage.getUrl(s.storageId),
         downloadName: downloadFileName({
           printCode: s.printCode,
@@ -119,6 +137,7 @@ export const approve = mutation({
       queuedAt: Date.now(),
       reviewedBy: actor,
       rejectionReason: undefined,
+      rejectionKind: undefined,
     });
     await audit(ctx, actor, "queue.approve", id);
   },
@@ -158,8 +177,30 @@ export const reject = mutation({
       reviewedBy: actor,
       printRequested: false,
       queueOrder: undefined,
+      rejectionKind: "review",
     });
     await audit(ctx, actor, "queue.reject", id, trimmed);
+  },
+});
+
+export const printFailed = mutation({
+  args: { id: v.id("submissions"), reason: v.string() },
+  handler: async (ctx, { id, reason }) => {
+    const actor = await requireAdmin(ctx);
+    const trimmed = reason.trim();
+    if (!trimmed) throw new Error("A reason is required");
+    const submission = await load(ctx, id);
+    expectStatus(submission, "printing");
+    await ctx.db.patch(id, {
+      status: "rejected",
+      rejectionKind: "print_failed",
+      rejectionReason: trimmed,
+      rejectedAt: Date.now(),
+      reviewedBy: actor,
+      printRequested: false,
+      queueOrder: undefined,
+    });
+    await audit(ctx, actor, "queue.printFailed", id, trimmed);
   },
 });
 
@@ -196,6 +237,7 @@ export const moveBack = mutation({
         await ctx.db.patch(id, {
           status: "submitted",
           rejectionReason: undefined,
+          rejectionKind: undefined,
           rejectedAt: undefined,
           printRequested: !active.some((s) => s.printRequested),
         });
