@@ -5,7 +5,7 @@ import AdminNav from "@/components/AdminNav";
 import { BrandWordmark } from "@/components/BrandMark";
 import DevinCredit from "@/components/DevinCredit";
 import HeaderBar from "@/components/HeaderBar";
-import { Badge } from "@/components/ui/badge";
+import RoleBadge from "@/components/admin/team/RoleBadge";
 import { Separator } from "@/components/ui/separator";
 import { getAppName } from "@/lib/app-name";
 
@@ -26,12 +26,7 @@ export default function AdminLayout({
             >
               <BrandWordmark />
             </Link>
-            <Badge
-              variant="outline"
-              className="shrink-0"
-            >
-              Admin
-            </Badge>
+            <RoleBadge />
           </div>
           <div className="order-last w-full overflow-x-auto sm:order-none sm:ml-auto sm:w-auto">
             <AdminNav />
