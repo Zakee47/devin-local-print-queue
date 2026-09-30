@@ -15,6 +15,7 @@ import type * as seed from "../seed.js";
 import type * as settings from "../settings.js";
 import type * as tv from "../tv.js";
 import type * as validators from "../validators.js";
+import type * as votes from "../votes.js";
 
 import type {
   ApiFromModules,
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   settings: typeof settings;
   tv: typeof tv;
   validators: typeof validators;
+  votes: typeof votes;
 }>;
 
 /**
