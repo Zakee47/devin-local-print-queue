@@ -29,7 +29,17 @@ export default function ModelViewer({
     let disposed = false;
     let frame = 0;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch {
+      queueMicrotask(() => {
+        if (!disposed) setError("WebGL unavailable");
+      });
+      return () => {
+        disposed = true;
+      };
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mount.appendChild(renderer.domElement);
 
