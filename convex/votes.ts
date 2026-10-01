@@ -1,6 +1,6 @@
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { requireOwner } from "./admins";
 import { requireParticipant, viewerParticipant } from "./participants";
 import { readSettings } from "./settings";
@@ -27,7 +27,7 @@ export async function isEntry(ctx: QueryCtx | MutationCtx, submission: Doc<"subm
 }
 
 export async function requireVotingOpen(ctx: QueryCtx | MutationCtx) {
-  if (!(await readSettings(ctx)).votingOpen) throw new Error(VOTING_CLOSED_MESSAGE);
+  if (!(await readSettings(ctx)).votingOpen) throw new ConvexError(VOTING_CLOSED_MESSAGE);
 }
 
 // Splits a voter's rows into the votes that count (oldest first, capped at the
@@ -88,10 +88,10 @@ async function requireVotableEntry(
 ) {
   const submission = await ctx.db.get(submissionId);
   if (!submission || !(await isEntry(ctx, submission))) {
-    throw new Error("That design isn't in the running any more");
+    throw new ConvexError("That design isn't in the running any more");
   }
   if (submission.participantId === participant._id) {
-    throw new Error("You can't vote for your own entry");
+    throw new ConvexError("You can't vote for your own entry");
   }
   return submission;
 }
@@ -169,10 +169,10 @@ export const cast = mutation({
     await requireVotableEntry(ctx, participant, submissionId);
     const ballot = await voterBallot(ctx, participant._id);
     if (ballot.counted.some((vote) => vote.submissionId === submissionId)) {
-      throw new Error("You've already voted for this design");
+      throw new ConvexError("You've already voted for this design");
     }
     if (ballot.counted.length >= MAX_VOTES_PER_PARTICIPANT) {
-      throw new Error(`You've used all ${MAX_VOTES_PER_PARTICIPANT} votes. Remove or swap one to vote again.`);
+      throw new ConvexError(`You've used all ${MAX_VOTES_PER_PARTICIPANT} votes. Remove or swap one to vote again.`);
     }
     await deleteUncounted(ctx, ballot);
     return await ctx.db.insert("votes", { voterId: participant._id, submissionId });
@@ -198,9 +198,9 @@ export const swap = mutation({
     await requireVotableEntry(ctx, participant, to);
     const ballot = await voterBallot(ctx, participant._id);
     const existing = ballot.counted.find((vote) => vote.submissionId === from);
-    if (!existing) throw new Error("You haven't voted for that design");
+    if (!existing) throw new ConvexError("You haven't voted for that design");
     if (ballot.counted.some((vote) => vote.submissionId === to)) {
-      throw new Error("You've already voted for this design");
+      throw new ConvexError("You've already voted for this design");
     }
     await deleteUncounted(ctx, ballot);
     await ctx.db.delete(existing._id);

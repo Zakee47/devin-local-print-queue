@@ -1,6 +1,6 @@
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { requireAdmin, requireOwner } from "./admins";
 import {
   DEFAULT_COLOURS,
@@ -111,7 +111,7 @@ export const update = mutation({
       settingsPatch.announcementUpdatedAt = undefined;
     } else if (announcement !== undefined) {
       if (announcement.length > MAX_BLAST_MESSAGE_LENGTH) {
-        throw new Error("Blast message must be 280 characters or fewer");
+        throw new ConvexError("Blast message must be 280 characters or fewer");
       }
       settingsPatch.announcement = announcement;
       if (announcement !== currentSettings.announcement) {

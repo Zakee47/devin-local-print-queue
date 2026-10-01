@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { errorMessage } from "@/lib/errors";
 
 export default function TeamManager() {
   const team = useQuery(api.accounts.team);
@@ -53,7 +54,7 @@ export default function TeamManager() {
       toast.success(`${normalized} added as staff`);
       setEmail("");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't add staff");
+      toast.error(errorMessage(err, "Couldn't add staff"));
     } finally {
       setAdding(false);
     }
@@ -65,7 +66,7 @@ export default function TeamManager() {
       await removeAdmin({ id });
       toast.success(`${staffEmail} removed`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't remove staff");
+      toast.error(errorMessage(err, "Couldn't remove staff"));
     } finally {
       setRemoving(null);
     }

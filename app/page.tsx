@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CHALLENGE, EVENT_NAME, EVENT_URL, MAX_SUBMISSIONS_PER_PARTICIPANT } from "@/lib/event";
 import { validateUsername } from "@/lib/usernames";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/errors";
 
 const HERO_BUTTON =
   "h-12 min-w-44 gap-2 px-7 text-base has-data-[icon=inline-start]:pl-6 sm:h-11 sm:min-w-0 sm:px-4.5 sm:text-[15px]";
@@ -100,7 +101,7 @@ export default function Home() {
                       try {
                         await register({ username });
                       } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Couldn't create your account");
+                        toast.error(errorMessage(e, "Couldn't create your account"));
                       }
                     }}
                   >

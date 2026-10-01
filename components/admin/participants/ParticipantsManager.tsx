@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import RenameDialog from "./RenameDialog";
 import DeleteDialog from "./DeleteDialog";
 import BlockedEmails from "./BlockedEmails";
+import { errorMessage } from "@/lib/errors";
 
 export type ParticipantRow = {
   _id: Id<"participants">;
@@ -63,7 +64,7 @@ export default function ParticipantsManager() {
       await unblock({ id: row._id });
       toast.success(`${row.email} unblocked`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't unblock");
+      toast.error(errorMessage(err, "Couldn't unblock"));
     }
   }
 

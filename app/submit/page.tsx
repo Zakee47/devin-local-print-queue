@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen, submissionsNotOpenYet } from "@/lib/event";
+import { errorMessage } from "@/lib/errors";
 
 function EntriesSkeleton() {
   return (
@@ -73,7 +74,7 @@ export default function SubmitPage() {
     try {
       await completePlaybookStep({});
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Couldn't update your playbook step");
+      toast.error(errorMessage(error, "Couldn't update your playbook step"));
     } finally {
       setCompletingPlaybookStep(false);
     }
