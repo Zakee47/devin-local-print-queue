@@ -37,7 +37,7 @@ export default function Home() {
     <div className="flex min-h-screen flex-col">
       <SiteHeader width="wide" showSignIn={false} />
       <main id="main-content" className="flex w-full flex-col py-16 sm:py-20">
-        <div className="mx-auto grid w-full max-w-3xl px-4 sm:px-6 lg:max-w-6xl lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-x-12 xl:gap-x-20">
+        <div className="mx-auto grid w-full max-w-3xl px-4 sm:px-6 lg:max-w-6xl lg:grid-cols-[minmax(0,40rem)_minmax(0,24rem)] lg:justify-start lg:gap-x-6">
           <div className="lg:col-start-1">
             <p className="eyebrow text-muted-foreground">{EVENT_NAME}</p>
             <h1 className="mt-6 font-heading text-5xl leading-[0.98] font-semibold tracking-[-0.03em] text-balance sm:text-6xl">

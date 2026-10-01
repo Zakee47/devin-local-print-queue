@@ -48,7 +48,7 @@ export default function HeroKeychains({ className }: { className?: string }) {
 
   return (
     <div aria-hidden className={cn("pointer-events-none relative select-none", className)}>
-      <div className="absolute top-0 left-[40%] aspect-square h-[82%] lg:top-[2%] lg:left-[40%] lg:h-auto lg:w-[52%]">
+      <div className="absolute top-0 left-[40%] aspect-square h-[82%] lg:top-[2%] lg:left-[10%] lg:h-auto lg:w-[52%] xl:left-0">
         {ready ? (
           <ModelViewer
             url="/models/cognition-keychain.stl"
@@ -61,7 +61,7 @@ export default function HeroKeychains({ className }: { className?: string }) {
           />
         ) : null}
       </div>
-      <div className="absolute bottom-0 left-0 aspect-square h-full lg:left-[6%] lg:h-auto lg:w-[76%]">
+      <div className="absolute bottom-0 left-0 aspect-square h-full lg:-left-[24%] lg:h-auto lg:w-[76%] xl:-left-[34%]">
         {ready ? (
           <ModelViewer
             url="/models/devin-mascot-keychain.stl"
