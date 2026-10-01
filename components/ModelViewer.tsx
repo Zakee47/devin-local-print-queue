@@ -1,23 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { cn } from "@/lib/utils";
 import { createModelScene, disposeScene, frameModel, parseModel } from "@/components/model-scene";
 
 // Renders an STL or 3MF from a URL, centred and slowly rotating. Pass a
 // colour name/hex to tint STLs (3MF keeps its own materials when present).
+// `fallback` replaces the "Preview unavailable" note when WebGL or loading fails.
 export default function ModelViewer({
   url,
   kind,
   colour = "#467bf7",
   autoRotate = true,
+  boostLighting = false,
+  fallback = (
+    <p className="absolute inset-0 grid place-items-center text-xs text-muted-foreground">Preview unavailable</p>
+  ),
   className,
 }: {
   url: string;
   kind: "stl" | "3mf";
   colour?: string;
   autoRotate?: boolean;
+  boostLighting?: boolean;
+  fallback?: ReactNode;
   className?: string;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
@@ -43,7 +50,7 @@ export default function ModelViewer({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mount.appendChild(renderer.domElement);
 
-    const { scene, camera, pivot } = createModelScene();
+    const { scene, camera, pivot } = createModelScene({ boostLighting });
 
     const resize = () => {
       const { clientWidth: w, clientHeight: h } = mount;
@@ -85,15 +92,11 @@ export default function ModelViewer({
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, [url, kind, colour, autoRotate]);
+  }, [url, kind, colour, autoRotate, boostLighting]);
 
   return (
     <div ref={mountRef} className={cn("relative aspect-square w-full", className)}>
-      {error ? (
-        <p className="absolute inset-0 grid place-items-center text-xs text-muted-foreground">
-          Preview unavailable
-        </p>
-      ) : null}
+      {error ? fallback : null}
     </div>
   );
 }

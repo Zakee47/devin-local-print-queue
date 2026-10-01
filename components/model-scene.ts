@@ -3,13 +3,23 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
 import type { FileKind } from "@/lib/files";
 
-export function createModelScene() {
+// `boostLighting` adds a front fill and a back rim so very dark models stay
+// readable on dark pages.
+export function createModelScene({ boostLighting = false }: { boostLighting?: boolean } = {}) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 10000);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x333344, 1.6));
   const key = new THREE.DirectionalLight(0xffffff, 1.8);
   key.position.set(1, 2, 3);
   scene.add(key);
+  if (boostLighting) {
+    const fill = new THREE.DirectionalLight(0xffffff, 2.5);
+    fill.position.set(-1.5, 0.5, 3);
+    scene.add(fill);
+    const rim = new THREE.DirectionalLight(0xffffff, 3);
+    rim.position.set(-2, 1.5, -3);
+    scene.add(rim);
+  }
   const pivot = new THREE.Group();
   scene.add(pivot);
   return { scene, camera, pivot };
