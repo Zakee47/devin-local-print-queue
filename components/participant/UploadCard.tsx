@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import ModelViewer from "@/components/ModelViewer";
+import { renderModelSnapshot, uploadPreview } from "@/components/model-snapshot";
 import SubmissionFields, { type SubmissionDraft } from "@/components/participant/SubmissionFields";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,6 +54,7 @@ export default function UploadCard({
   slotsLeft: number;
 }) {
   const generateUploadUrl = useMutation(api.submissions.generateUploadUrl);
+  const generatePreviewUploadUrl = useMutation(api.submissions.generatePreviewUploadUrl);
   const create = useMutation(api.submissions.create);
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<{ file: File; kind: FileKind; url: string } | null>(null);
@@ -110,6 +112,13 @@ export default function UploadCard({
     const { dimensions } = measurement;
     setBusy(true);
     try {
+      const snapshot = renderModelSnapshot(
+        file.file,
+        file.kind,
+        swatchFor(draft.colour)
+      )
+        .then((blob) => uploadPreview(() => generatePreviewUploadUrl({}), blob))
+        .catch(() => undefined);
       const uploadUrl = await generateUploadUrl({});
       const res = await fetch(uploadUrl, {
         method: "POST",
@@ -118,8 +127,10 @@ export default function UploadCard({
       });
       if (!res.ok) throw new Error("Upload failed, try again");
       const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
+      const previewStorageId = await snapshot;
       const result = await create({
         storageId,
+        ...(previewStorageId ? { previewStorageId } : {}),
         title: draft.title,
         notes: draft.notes || undefined,
         colour: draft.colour || undefined,

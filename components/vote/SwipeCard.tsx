@@ -4,7 +4,7 @@ import { forwardRef, useImperativeHandle, useRef, type ReactNode } from "react";
 import { Heart, X } from "lucide-react";
 import type { GalleryEntry } from "@/convex/votes";
 import type { Reaction } from "@/lib/event";
-import LazyModelViewer from "@/components/vote/LazyModelViewer";
+import ModelPreview from "@/components/ModelPreview";
 import StageChip from "@/components/vote/StageChip";
 import { swatchFor } from "@/lib/colours";
 import { cn } from "@/lib/utils";
@@ -93,7 +93,14 @@ const SwipeCard = forwardRef<
       }}
     >
       <div className="pointer-events-none relative">
-        <LazyModelViewer url={entry.fileUrl} kind={entry.kind} colour={colour} className="aspect-[4/3] sm:aspect-square" />
+        <ModelPreview
+          url={entry.fileUrl}
+          previewUrl={entry.previewUrl}
+          kind={entry.kind}
+          colour={colour}
+          alt={entry.title}
+          className="aspect-[4/3] sm:aspect-square"
+        />
         <span
           ref={likeRef}
           aria-hidden

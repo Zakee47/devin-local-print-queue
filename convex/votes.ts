@@ -8,6 +8,7 @@ import { entryFor, listEntries } from "./entries";
 import { reactionCounts } from "./likes";
 import { MAX_VOTES_PER_PARTICIPANT, type SubmissionStatus } from "../lib/event";
 import { compareRanking } from "../lib/ranking";
+import { previewUrlOf } from "./submissions";
 
 export const VOTING_CLOSED_MESSAGE = "Voting has closed — your votes are locked in";
 
@@ -104,6 +105,7 @@ export type GalleryEntry = {
   stage: EntryStage;
   displayName: string;
   fileUrl: string | null;
+  previewUrl: string | null;
 };
 
 // Public: every current entry, whatever its print status. Usernames only.
@@ -123,6 +125,7 @@ export const gallery = query({
         stage: entryStage(s.status),
         displayName: participant.displayName,
         fileUrl: await ctx.storage.getUrl(s.storageId),
+        previewUrl: await previewUrlOf(ctx, s),
       });
     }
     return entries;

@@ -6,6 +6,7 @@ import { downloadFileName } from "../lib/files";
 import { MAX_SUBMISSIONS_PER_PARTICIPANT, type Printer } from "../lib/event";
 import { fitsWithin } from "../lib/dimensions";
 import { readSettings, type Settings } from "./settings";
+import { previewUrlOf } from "./submissions";
 
 const PIPELINE: Doc<"submissions">["status"][] = ["queued", "printing", "done"];
 
@@ -91,6 +92,7 @@ export const board = query({
         ],
         oversize,
         fileUrl: await ctx.storage.getUrl(s.storageId),
+        previewUrl: await previewUrlOf(ctx, s),
         downloadName: downloadFileName({
           printCode: s.printCode,
           participantName,

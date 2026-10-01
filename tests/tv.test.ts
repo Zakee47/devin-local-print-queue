@@ -67,6 +67,7 @@ function expectNoPrivateFields(board: unknown) {
     "reviewedBy",
     "participantId",
     "storageId",
+    "previewStorageId",
     "clerkUserId",
     "_id",
   ]);

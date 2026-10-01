@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type ChangeEvent } from "react";
-import dynamic from "next/dynamic";
 import {
   ArrowDown,
   ArrowUp,
@@ -17,6 +16,7 @@ import { toast } from "sonner";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
+import ModelPreview from "@/components/ModelPreview";
 import { swatchFor } from "@/lib/colours";
 import { formatDimensions } from "@/lib/dimensions";
 import { cn } from "@/lib/utils";
@@ -25,8 +25,6 @@ import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import RejectDialog from "@/components/admin/RejectDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
-
-const ModelViewer = dynamic(() => import("@/components/ModelViewer"), { ssr: false });
 
 export type BoardRow = FunctionReturnType<typeof api.queue.board>[number];
 
@@ -323,7 +321,14 @@ export default function SubmissionCard({
       </button>
       {expanded && row.fileUrl ? (
         <div className="border-t border-border bg-surface p-2">
-          <ModelViewer url={row.fileUrl} kind={row.kind} colour={swatchFor(row.colour)} className="mx-auto max-h-80 max-w-80" />
+          <ModelPreview
+            url={row.fileUrl}
+            previewUrl={row.previewUrl}
+            kind={row.kind}
+            colour={swatchFor(row.colour)}
+            alt={row.title}
+            className="mx-auto max-h-80 max-w-80"
+          />
         </div>
       ) : null}
 

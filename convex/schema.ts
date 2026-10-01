@@ -47,6 +47,8 @@ export default defineSchema({
   submissions: defineTable({
     participantId: v.id("participants"),
     storageId: v.id("_storage"),
+    // Client-rendered snapshot image; shown instead of downloading the model.
+    previewStorageId: v.optional(v.id("_storage")),
     originalFileName: v.string(),
     kind: fileKind,
     sizeBytes: v.number(),
