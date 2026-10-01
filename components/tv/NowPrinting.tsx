@@ -15,10 +15,12 @@ export default function NowPrinting({
   items,
   now,
   fresh,
+  compact = false,
 }: {
   items: TvPrintingItem[];
   now: number;
   fresh: Set<string>;
+  compact?: boolean;
 }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -33,12 +35,17 @@ export default function NowPrinting({
   const current = items[index];
 
   return (
-    <section className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card">
+    <section
+      className={cn(
+        "relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card",
+        compact ? "min-h-0 flex-1" : "h-full"
+      )}
+    >
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-dotgrid [mask-image:radial-gradient(ellipse_70%_60%_at_50%_45%,black,transparent)]"
       />
-      <header className="relative flex items-center justify-between px-10 pt-9">
+      <header className={cn("relative flex items-center justify-between", compact ? "px-6 pt-6" : "px-10 pt-9")}>
         <span className="flex items-center gap-3 font-mono text-lg font-medium tracking-[0.18em] text-muted-foreground uppercase">
           <span className="size-3 rounded-full bg-brand animate-brand-pulse" />
           Now printing
@@ -66,7 +73,7 @@ export default function NowPrinting({
           <div className="relative flex-1">
             <div
               aria-hidden
-              className="absolute inset-0 m-auto size-[520px] rounded-full opacity-25 blur-3xl"
+              className={cn("absolute inset-0 m-auto rounded-full opacity-25 blur-3xl", compact ? "size-[300px]" : "size-[520px]")}
               style={{ backgroundColor: swatchFor(current.colour ?? undefined) }}
             />
             {current.file ? (
@@ -84,29 +91,39 @@ export default function NowPrinting({
           </div>
           <div
             className={cn(
-              "relative mx-6 mb-6 flex items-end justify-between gap-8 rounded-xl border border-border bg-background/80 px-8 py-7 backdrop-blur",
+              "relative flex items-end justify-between gap-8 rounded-xl border border-border bg-background/80 backdrop-blur",
+              compact ? "mx-4 mb-4 flex-col items-stretch gap-4 px-6 py-5" : "mx-6 mb-6 px-8 py-7",
               fresh.has(current.printCode) && "tv-flash"
             )}
           >
             <div className="min-w-0">
-              <p className="font-mono text-2xl font-medium tracking-[0.12em] text-brand">{current.printCode}</p>
-              <h2 className="mt-2 line-clamp-2 font-heading text-5xl leading-[1.05] font-semibold tracking-[-0.03em]">
+              <p className={cn("font-mono font-medium tracking-[0.12em] text-brand", compact ? "text-lg" : "text-2xl")}>
+                {current.printCode}
+              </p>
+              <h2
+                className={cn(
+                  "mt-2 font-heading leading-[1.05] font-semibold tracking-[-0.03em]",
+                  compact ? "line-clamp-1 text-3xl" : "line-clamp-2 text-5xl"
+                )}
+              >
                 {current.title}
               </h2>
-              <p className="mt-4 flex items-center gap-3 text-3xl text-muted-foreground">
+              <p className={cn("mt-3 flex min-w-0 items-center gap-2 text-muted-foreground", compact ? "truncate text-xl" : "mt-4 gap-3 text-3xl")}>
                 by <span className="text-foreground">{current.displayName}</span>
                 {current.colour ? (
                   <>
                     <span className="text-border-strong">·</span>
-                    <Swatch colour={current.colour} className="size-6" />
+                    <Swatch colour={current.colour} className={compact ? "size-5" : "size-6"} />
                     {current.colour}
                   </>
                 ) : null}
               </p>
             </div>
-            <div className="shrink-0 text-right">
-              <p className="font-mono text-base tracking-[0.18em] text-muted-foreground uppercase">Elapsed</p>
-              <p className="mt-1 font-mono text-6xl font-medium tabular-nums">
+            <div className={cn("shrink-0", compact ? "text-left" : "text-right")}>
+              <p className={cn("font-mono tracking-[0.18em] text-muted-foreground uppercase", compact ? "text-xs" : "text-base")}>
+                Elapsed
+              </p>
+              <p className={cn("mt-1 font-mono font-medium tabular-nums", compact ? "text-3xl" : "text-6xl")}>
                 {formatElapsed(now - (current.printingAt ?? now))}
               </p>
             </div>
@@ -114,9 +131,13 @@ export default function NowPrinting({
         </div>
       ) : (
         <div className="relative flex flex-1 flex-col items-center justify-center gap-6 text-center">
-          <Printer className="size-32 text-muted-dim" strokeWidth={1} />
-          <p className="font-heading text-5xl font-semibold tracking-[-0.02em]">The printer is warming up</p>
-          <p className="text-2xl text-muted-foreground">The next keychain will appear here.</p>
+          <Printer className={cn("text-muted-dim", compact ? "size-20" : "size-32")} strokeWidth={1} />
+          <p className={cn("font-heading font-semibold tracking-[-0.02em]", compact ? "text-3xl" : "text-5xl")}>
+            The printer is warming up
+          </p>
+          <p className={cn("text-muted-foreground", compact ? "text-xl" : "text-2xl")}>
+            The next keychain will appear here.
+          </p>
         </div>
       )}
     </section>

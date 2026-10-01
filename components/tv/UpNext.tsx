@@ -7,11 +7,21 @@ import { usePresence } from "./hooks";
 
 const keyOf = (i: TvItem) => i.printCode;
 
-export default function UpNext({ items, more }: { items: TvItem[]; more: number }) {
+export default function UpNext({
+  items,
+  more,
+  compact = false,
+}: {
+  items: TvItem[];
+  more: number;
+  compact?: boolean;
+}) {
   const rows = usePresence(items, keyOf);
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card px-8 py-5">
-      <h2 className="font-mono text-lg font-medium tracking-[0.18em] text-muted-foreground uppercase">Up next</h2>
+    <section className={cn("flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card", compact ? "px-6 py-4" : "px-8 py-5")}>
+      <h2 className={cn("font-mono text-lg font-medium tracking-[0.18em] text-muted-foreground", !compact && "uppercase")}>
+        Up next
+      </h2>
       {items.length === 0 && rows.length === 0 ? (
         <p className="mt-6 text-2xl text-muted-foreground">Queue is empty. Submit yours!</p>
       ) : (
@@ -22,7 +32,8 @@ export default function UpNext({ items, more }: { items: TvItem[]; more: number 
               <li
                 key={key}
                 className={cn(
-                  "flex h-[40px] shrink-0 items-center gap-5 border-b border-border/70 text-[22px] last:border-0",
+                  "flex h-[40px] shrink-0 items-center gap-5 border-b border-border/70 last:border-0",
+                  compact ? "text-xl" : "text-[22px]",
                   leaving
                     ? "animate-out fade-out slide-out-to-left-8 fill-mode-forwards duration-450"
                     : "animate-in fade-in slide-in-from-bottom-3 duration-500"
@@ -31,10 +42,14 @@ export default function UpNext({ items, more }: { items: TvItem[]; more: number 
                 <span className="w-8 font-mono text-xl text-muted-dim tabular-nums">
                   {leaving ? "" : position + 1}
                 </span>
-                <span className="w-28 font-mono text-xl text-muted-foreground">{item.printCode}</span>
+                <span className={cn("font-mono text-xl text-muted-foreground", compact ? "w-24" : "w-28")}>
+                  {item.printCode}
+                </span>
                 <Swatch colour={item.colour} className="size-5" />
                 <span className="min-w-0 flex-1 truncate font-medium">{item.title}</span>
-                <span className="max-w-64 truncate text-muted-foreground">{item.displayName}</span>
+                <span className={cn("truncate text-muted-foreground", compact ? "max-w-36" : "max-w-64")}>
+                  {item.displayName}
+                </span>
               </li>
             );
           })}

@@ -3,18 +3,17 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { DEFAULT_SETTINGS, readSettings } from "./settings";
-import { reactionCounts } from "./likes";
+import { reactionCounts, type ReactionCounts } from "./likes";
 import { tallyVotes } from "./votes";
 import { listEntries } from "./entries";
 import { DEFAULT_COLOURS } from "../lib/event";
 import { formatPrintCode } from "../lib/files";
 import { usernameKey } from "../lib/usernames";
-import { compareRanking } from "../lib/ranking";
+import { compareRanking, rankRows } from "../lib/ranking";
 
 export const UP_NEXT_LIMIT = 8;
 export const RECENT_DONE_LIMIT = 3;
 export const LEADERBOARD_LIMIT = 10;
-export const MOST_LIKED_LIMIT = 5;
 
 // Everything the public TV may show about a submission. Never add emails,
 // notes, file names, rejection reasons or reviewer details here.
@@ -32,7 +31,16 @@ export type TvItem = {
 
 export type TvPrintingItem = TvItem & { file: { url: string; kind: "stl" | "3mf" } | null };
 export type TvLeader = TvItem & { rank: number; votes: number; likes: number };
-export type TvLiked = { printCode: string; title: string; displayName: string; colour: string | null; likes: number };
+export type TvRanked = {
+  rank: number;
+  printCode: string;
+  title: string;
+  displayName: string;
+  colour: string | null;
+  votes: number;
+  likes: number;
+};
+export type TvLive = { leaderboard: TvRanked[]; totalVotes: number; totalLikes: number };
 
 export type TvCounts = { submitted: number; queued: number; printing: number; done: number };
 export type TvNotices = { announcement: string | null; submissionsOpen: boolean; submissionsDeadline: number | null };
@@ -47,7 +55,9 @@ export type TvBoard =
       upNext: TvItem[];
       moreQueued: number;
       recentDone: TvItem[];
-      mostLiked: TvLiked[];
+      leaderboard: TvRanked[];
+      totalVotes: number;
+      totalLikes: number;
     }
   | {
       mode: "results";
@@ -92,6 +102,37 @@ async function toItem(
     printingAt: s.printingAt ?? null,
     doneAt: s.doneAt ?? null,
   };
+}
+
+async function liveRanking(
+  ctx: QueryCtx,
+  entries: Doc<"submissions">[],
+  reactions: Map<Id<"submissions">, ReactionCounts>,
+  nameOf: (id: Id<"participants">) => Promise<string>
+): Promise<TvLive> {
+  const { tally } = await tallyVotes(ctx);
+  const rows = entries.map((s) => ({
+    s,
+    printCode: s.printCode,
+    votes: tally.get(s._id) ?? 0,
+    likes: reactions.get(s._id)?.likes ?? 0,
+  }));
+  const totalVotes = rows.reduce((total, row) => total + row.votes, 0);
+  const totalLikes = rows.reduce((total, row) => total + row.likes, 0);
+  const leaderboard = await Promise.all(
+    rankRows(rows.filter((row) => row.votes > 0 || row.likes > 0))
+      .slice(0, LEADERBOARD_LIMIT)
+      .map(async (row): Promise<TvRanked> => ({
+        rank: row.rank,
+        printCode: row.printCode,
+        title: row.s.title,
+        displayName: await nameOf(row.s.participantId),
+        colour: row.s.colour ?? null,
+        votes: row.votes,
+        likes: row.likes,
+      }))
+  );
+  return { leaderboard, totalVotes, totalLikes };
 }
 
 const queueKey = (s: Doc<"submissions">) => s.queueOrder ?? s.queuedAt ?? s._creationTime;
@@ -172,22 +213,7 @@ export const board = query({
         .slice(0, RECENT_DONE_LIMIT)
         .map((s) => toItem(s, nameOf))
     );
-    const mostLiked = await Promise.all(
-      entries
-        .map((s) => ({ s, likes: likesOf(s) }))
-        .filter((r) => r.likes > 0)
-        .sort((a, b) => b.likes - a.likes || a.s.printCode.localeCompare(b.s.printCode))
-        .slice(0, MOST_LIKED_LIMIT)
-        .map(
-          async ({ s, likes }): Promise<TvLiked> => ({
-            printCode: s.printCode,
-            title: s.title,
-            displayName: await nameOf(s.participantId),
-            colour: s.colour ?? null,
-            likes,
-          })
-        )
-    );
+    const live = await liveRanking(ctx, entries, reactions, nameOf);
     return {
       mode: "queue",
       counts,
@@ -196,7 +222,22 @@ export const board = query({
       upNext,
       moreQueued: Math.max(0, sortedQueue.length - UP_NEXT_LIMIT),
       recentDone,
-      mostLiked,
+      ...live,
+    };
+  },
+});
+
+export const leaderboard = query({
+  args: {},
+  handler: async (ctx): Promise<TvLive & { votingOpen: boolean }> => {
+    const [settings, entries, reactions] = await Promise.all([
+      readSettings(ctx),
+      listEntries(ctx),
+      reactionCounts(ctx),
+    ]);
+    return {
+      ...(await liveRanking(ctx, entries, reactions, makeNamer(ctx))),
+      votingOpen: settings.votingOpen,
     };
   },
 });

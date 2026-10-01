@@ -189,6 +189,42 @@ input:-webkit-autofill:focus {
   }
 }
 
+@utility rank-flash {
+  animation: rank-flash 1.6s ease-out;
+}
+
+@keyframes rank-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--brand) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--brand) 40%, transparent);
+  }
+}
+
+@utility heart-pop {
+  animation: heart-pop 600ms ease-out;
+  transform-origin: center;
+}
+
+@keyframes heart-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rank-flash,
+  .heart-pop {
+    animation: none;
+  }
+}
+
 /* Dark mode — "Paper" after dark: the near-black picks up a faint cool cast
    while the text stays warm off-white, and contrast drops from 18:1 to ~16:1
    to stop white type haloing on OLED. */

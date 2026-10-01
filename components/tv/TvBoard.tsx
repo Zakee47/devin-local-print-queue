@@ -3,9 +3,8 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { TvBoard as Board } from "@/convex/tv";
-import FreshOff from "./FreshOff";
 import Leaderboard from "./Leaderboard";
-import MostLiked from "./MostLiked";
+import LiveLeaderboard from "@/components/leaderboard/LiveLeaderboard";
 import Notices from "./Notices";
 import NowPrinting from "./NowPrinting";
 import QrRail from "./QrRail";
@@ -23,7 +22,9 @@ const EMPTY: Extract<Board, { mode: "queue" }> = {
   upNext: [],
   moreQueued: 0,
   recentDone: [],
-  mostLiked: [],
+  leaderboard: [],
+  totalVotes: 0,
+  totalLikes: 0,
 };
 
 export default function TvBoard() {
@@ -54,14 +55,21 @@ function ResultsView({ board }: { board: Extract<Board, { mode: "results" }> }) 
 function QueueView({ board }: { board: Extract<Board, { mode: "queue" }> }) {
   const now = useNow();
   const freshPrinting = useArrivals(board.printing.map((i) => i.printCode));
-  const freshDone = useArrivals(board.recentDone.map((i) => i.printCode));
   return (
-    <div className="grid min-h-0 grid-cols-[1fr_720px] gap-6 p-8 pt-6">
-      <NowPrinting items={board.printing} now={now} fresh={freshPrinting} />
+    <div className="grid min-h-0 grid-cols-[1fr_540px] gap-6 p-8 pt-6">
+      <LiveLeaderboard
+        variant="tv"
+        rows={board.leaderboard}
+        totalVotes={board.totalVotes}
+        totalLikes={board.totalLikes}
+      />
       <div className="flex min-h-0 flex-col gap-5">
-        <UpNext items={board.upNext} more={board.moreQueued} />
-        <FreshOff items={board.recentDone} now={now} fresh={freshDone} />
-        <MostLiked items={board.mostLiked} />
+        <NowPrinting items={board.printing} now={now} fresh={freshPrinting} compact />
+        <UpNext
+          items={board.upNext.slice(0, 3)}
+          more={Math.max(0, board.upNext.length - 3 + board.moreQueued)}
+          compact
+        />
       </div>
     </div>
   );

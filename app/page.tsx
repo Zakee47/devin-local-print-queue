@@ -10,6 +10,7 @@ import { api } from "@/convex/_generated/api";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
+import LiveLeaderboard from "@/components/leaderboard/LiveLeaderboard";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -26,13 +27,14 @@ export default function Home() {
   const [username, setUsername] = useState("");
   const { authReady, signedIn, canQuery } = useViewerAuth();
   const status = useQuery(api.participants.viewerStatus, canQuery ? {} : "skip");
+  const liveLeaderboard = useQuery(api.tv.leaderboard);
   const register = useMutation(api.participants.register);
   const usernameError = username ? validateUsername(username) : null;
 
   return (
     <div className="flex min-h-screen flex-col">
       <SiteHeader width="wide" showSignIn={false} />
-      <main id="main-content" className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center px-4 py-14 sm:px-6">
+      <main id="main-content" className="mx-auto flex w-full max-w-3xl flex-col px-4 py-16 sm:px-6 sm:py-20">
         <p className="eyebrow text-muted-foreground">{EVENT_NAME}</p>
         <h1 className="mt-6 font-heading text-5xl leading-[0.98] font-semibold tracking-[-0.03em] text-balance sm:text-6xl">
           {CHALLENGE}. We&apos;ll print it.
@@ -121,6 +123,24 @@ export default function Home() {
           )}
         </div>
       </main>
+      <div className="flex-1">
+        <section
+          aria-labelledby="leaderboard-heading"
+          className="mx-auto w-full max-w-3xl px-4 pb-16 sm:px-6"
+        >
+          {liveLeaderboard === undefined ? (
+            <Skeleton className="h-80 rounded-xl" />
+          ) : (
+            <LiveLeaderboard
+              variant="page"
+              rows={liveLeaderboard.leaderboard}
+              totalVotes={liveLeaderboard.totalVotes}
+              totalLikes={liveLeaderboard.totalLikes}
+              votingOpen={liveLeaderboard.votingOpen}
+            />
+          )}
+        </section>
+      </div>
       <SiteFooter width="wide" />
     </div>
   );

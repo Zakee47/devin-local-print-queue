@@ -74,13 +74,14 @@ async function addSettings(
   options: {
     showResultsOnTv?: boolean;
     submissionsOpen?: boolean;
+    votingOpen?: boolean;
     announcement?: string;
     submissionsDeadline?: number;
   } = {}
 ) {
   await ctx.db.insert("settings", {
     submissionsOpen: options.submissionsOpen ?? true,
-    votingOpen: false,
+    votingOpen: options.votingOpen ?? false,
     showResultsOnTv: options.showResultsOnTv ?? true,
     maxFileBytes: 1,
     colours: [],
@@ -284,15 +285,107 @@ test("queue mode ranks liked entries across statuses and excludes rejected desig
     submissionsOpen: false,
     submissionsDeadline: 456_789,
   });
-  expect(board.mostLiked.map((l) => [l.printCode, l.likes])).toEqual([
-    ["KC-003", 4],
-    ["KC-008", 4],
-    ["KC-001", 3],
-    ["KC-009", 3],
-    ["KC-010", 3],
+  expect(board.leaderboard.map((r) => [r.printCode, r.votes, r.likes, r.rank])).toEqual([
+    ["KC-003", 0, 4, 1],
+    ["KC-008", 0, 4, 1],
+    ["KC-001", 0, 3, 3],
+    ["KC-009", 0, 3, 3],
+    ["KC-010", 0, 3, 3],
+    ["KC-002", 0, 2, 6],
+    ["KC-005", 0, 2, 6],
+    ["KC-004", 0, 1, 8],
+    ["KC-006", 0, 1, 8],
   ]);
-  expect(Object.keys(board.mostLiked[0]).sort()).toEqual(["colour", "displayName", "likes", "printCode", "title"]);
-  expect(board.mostLiked[0].displayName).toBe("maker.code");
+  expect(board.leaderboard.some((row) => row.printCode === "KC-007")).toBe(false);
+  expect(board.leaderboard.some((row) => row.printCode === "KC-011")).toBe(false);
+  expect(board.totalVotes).toBe(0);
+  expect(board.totalLikes).toBe(23);
+  expect(Object.keys(board.leaderboard[0]).sort()).toEqual([
+    "colour",
+    "displayName",
+    "likes",
+    "printCode",
+    "rank",
+    "title",
+    "votes",
+  ]);
+  expect(board.leaderboard[0].displayName).toBe("maker.code");
+});
+
+test("live leaderboard ranks by votes, likes break ties", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await addSettings(ctx, { showResultsOnTv: false, votingOpen: true });
+    const makers = await Promise.all(
+      ["MakerA", "MakerB", "MakerC", "MakerD", "MakerE"].map((name) => addParticipant(ctx, name))
+    );
+    const voters = await Promise.all(["V1", "V2", "V3", "V4", "V5"].map((name) => addParticipant(ctx, name)));
+    const entries = await Promise.all(
+      makers.map((maker, index) => addSubmission(ctx, maker, index + 1, "done", { doneAt: index + 1 }))
+    );
+    const vote = (voter: number, entry: number) =>
+      ctx.db.insert("votes", { voterId: voters[voter], submissionId: entries[entry] });
+    const like = (voter: number, entry: number) =>
+      ctx.db.insert("likes", {
+        participantId: voters[voter],
+        submissionId: entries[entry],
+        reaction: "like",
+        updatedAt: 1,
+      });
+
+    await vote(0, 0);
+    await vote(1, 0);
+    await vote(2, 1);
+    await vote(3, 2);
+    for (const voter of [0, 1, 2]) await like(voter, 1);
+    await like(0, 2);
+    for (const voter of [0, 1, 2, 3, 4]) await like(voter, 3);
+  });
+  const board = await t.query(api.tv.board);
+  const live = await t.query(api.tv.leaderboard, {});
+  expectNoPrivateFields(board);
+  expectNoPrivateFields(live);
+  if (board.mode !== "queue") throw new Error("expected queue mode");
+  const expected = [
+    ["KC-001", 2, 0, 1],
+    ["KC-002", 1, 3, 2],
+    ["KC-003", 1, 1, 3],
+    ["KC-004", 0, 5, 4],
+  ];
+  expect(board.leaderboard.map((row) => [row.printCode, row.votes, row.likes, row.rank])).toEqual(expected);
+  expect(board.totalVotes).toBe(4);
+  expect(board.totalLikes).toBe(9);
+  expect(live).toEqual({
+    leaderboard: board.leaderboard,
+    totalVotes: board.totalVotes,
+    totalLikes: board.totalLikes,
+    votingOpen: true,
+  });
+});
+
+test("live leaderboard caps at 10 rows", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await addSettings(ctx, { showResultsOnTv: false });
+    const maker = await addParticipant(ctx, "Maker");
+    const voter = await addParticipant(ctx, "Voter");
+    for (let n = 1; n <= 12; n++) {
+      const entry = await addSubmission(ctx, maker, n, "done", { doneAt: n });
+      await ctx.db.insert("likes", {
+        participantId: voter,
+        submissionId: entry,
+        reaction: "like",
+        updatedAt: n,
+      });
+    }
+  });
+  const live = await t.query(api.tv.leaderboard, {});
+  expectNoPrivateFields(live);
+  expect(live.leaderboard).toHaveLength(10);
+  expect(live.leaderboard.map((row) => row.printCode)).toEqual(
+    Array.from({ length: 10 }, (_, index) => `KC-${String(index + 1).padStart(3, "0")}`)
+  );
+  expect(live.totalLikes).toBe(12);
 });
 
 test("results mode breaks vote ties by likes", async () => {
