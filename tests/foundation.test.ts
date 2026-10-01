@@ -240,6 +240,7 @@ describe("admin roles and settings permissions", () => {
 
 describe("participant registration", () => {
   test("requires unique usernames and rejects blocked email addresses", async () => {
+    process.env.OWNER_EMAIL = "owner@example.com";
     const t = convexTest(schema, modules);
     const importId = await t.run((ctx) =>
       ctx.db.insert("guestImports", {
@@ -251,9 +252,9 @@ describe("participant registration", () => {
       })
     );
     await t.run(async (ctx) => {
-      for (const email of ["ada@example.com", "grace@example.com"]) {
-        await ctx.db.insert("guests", { email, checkedIn: true, importId });
-      }
+      await ctx.db.insert("guests", { email: "ada@example.com", checkedIn: false, importId });
+      await ctx.db.insert("guests", { email: "grace@example.com", checkedIn: true, importId });
+      await ctx.db.insert("admins", { email: "blocked@example.com" });
       await ctx.db.insert("blockedEmails", {
         email: "blocked@example.com",
         reason: "Removed",
@@ -263,7 +264,12 @@ describe("participant registration", () => {
     const ada = t.withIdentity(identity("ada", "ada@example.com"));
     const grace = t.withIdentity(identity("grace", "grace@example.com"));
     const blocked = t.withIdentity(identity("blocked", "blocked@example.com"));
+    const stranger = t.withIdentity(identity("stranger", "stranger@example.com"));
 
+    expect(await ada.query(api.participants.viewerStatus, {})).toEqual({
+      state: "eligible",
+      email: "ada@example.com",
+    });
     await expect(ada.mutation(api.participants.register, { username: "A" })).rejects.toThrow(
       /between 2 and 24/
     );
@@ -281,12 +287,49 @@ describe("participant registration", () => {
       state: "blocked",
       email: "blocked@example.com",
     });
+    expect(await stranger.query(api.participants.viewerStatus, {})).toEqual({
+      state: "not_on_guest_list",
+      email: "stranger@example.com",
+    });
+    await expect(
+      stranger.mutation(api.participants.register, { username: "Stranger" })
+    ).rejects.toThrow("This email isn't on the guest list");
 
     await ada.mutation(api.participants.setUsername, { username: "Ada L." });
     await expect(grace.mutation(api.participants.register, { username: "ada l." })).rejects.toThrow(
       "That username is taken"
     );
     expect(await ada.mutation(api.participants.register, { username: "!" })).toBe(id);
+  });
+
+  test("staff and owner can register without a guest row", async () => {
+    process.env.OWNER_EMAIL = "owner@example.com";
+    const t = convexTest(schema, modules);
+    await t.run((ctx) => ctx.db.insert("admins", { email: "staff@example.com" }));
+    const staff = t.withIdentity(identity("staff", "staff@example.com"));
+    const owner = t.withIdentity(identity("owner", "owner@example.com"));
+
+    expect(await staff.query(api.participants.viewerStatus, {})).toEqual({
+      state: "eligible",
+      email: "staff@example.com",
+    });
+    expect(await owner.query(api.participants.viewerStatus, {})).toEqual({
+      state: "eligible",
+      email: "owner@example.com",
+    });
+    const staffId = await staff.mutation(api.participants.register, { username: "Staff Member" });
+    const ownerId = await owner.mutation(api.participants.register, { username: "Event Owner" });
+
+    expect(await t.run((ctx) => ctx.db.get(staffId))).toMatchObject({
+      email: "staff@example.com",
+      name: "staff",
+      displayName: "Staff Member",
+    });
+    expect(await t.run((ctx) => ctx.db.get(ownerId))).toMatchObject({
+      email: "owner@example.com",
+      name: "owner",
+      displayName: "Event Owner",
+    });
   });
 });
 

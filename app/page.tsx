@@ -66,7 +66,7 @@ export default function Home() {
                     <a href={EVENT_URL} className="underline" target="_blank" rel="noreferrer">
                       Luma
                     </a>
-                    . You need to be checked in at the venue.
+                    . You need to be on the guest list.
                   </p>
                 </div>
               ) : status?.state === "registered" ? (
@@ -119,11 +119,11 @@ export default function Home() {
                 <Alert variant="destructive" className="max-w-xl">
                   <ShieldAlert />
                   <AlertTitle>
-                    {status?.state === "unverified" ? "Verify your email first" : "You're not on the checked-in list"}
+                    {status?.state === "unverified" ? "Verify your email first" : "You're not on the guest list"}
                   </AlertTitle>
                   <AlertDescription>
                     {status?.state === "not_on_guest_list"
-                      ? `${status.email} isn't a checked-in guest yet. Check in at the desk, or sign in with the email you used on Luma.`
+                      ? `${status.email} isn't on the guest list. Check that you're using the email you registered with on Luma.`
                       : "Your sign-in email needs to be verified."}
                   </AlertDescription>
                 </Alert>

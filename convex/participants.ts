@@ -1,5 +1,5 @@
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { viewerEmail } from "./admins";
+import { viewerEmail, viewerRole } from "./admins";
 import { normalizeUsername, usernameKey, validateUsername } from "../lib/usernames";
 import { v } from "convex/values";
 
@@ -8,7 +8,7 @@ export async function eligibleGuest(ctx: QueryCtx | MutationCtx, email: string) 
     .query("guests")
     .withIndex("by_email", (q) => q.eq("email", email))
     .unique();
-  return guest && guest.checkedIn ? guest : null;
+  return guest ?? null;
 }
 
 // The viewer's participant row, or null if they haven't registered.
@@ -41,7 +41,7 @@ export type ViewerStatus =
     };
 
 // Drives the participant landing page: whether the signed-in email is on the
-// checked-in Luma list and whether they've already registered.
+// Luma guest list and whether they've already registered.
 export const viewerStatus = query({
   args: {},
   handler: async (ctx): Promise<ViewerStatus> => {
@@ -63,12 +63,14 @@ export const viewerStatus = query({
       .withIndex("by_email", (q) => q.eq("email", email))
       .unique();
     if (blocked) return { state: "blocked", email };
-    if (!(await eligibleGuest(ctx, email))) return { state: "not_on_guest_list", email };
+    if (!(await eligibleGuest(ctx, email)) && (await viewerRole(ctx)) === null) {
+      return { state: "not_on_guest_list", email };
+    }
     return { state: "eligible", email };
   },
 });
 
-// Idempotent. Only checked-in guests from the latest CSV can register. An
+// Idempotent. Guest-list members and admin team members can register. An
 // existing participant stays registered even if a later CSV drops them.
 export const register = mutation({
   args: { username: v.string() },
@@ -94,13 +96,15 @@ export const register = mutation({
       .unique();
     if (taken) throw new Error("That username is taken");
     const guest = await eligibleGuest(ctx, email);
-    if (!guest) throw new Error("This email isn't on the checked-in guest list");
+    if (!guest && (await viewerRole(ctx)) === null) {
+      throw new Error("This email isn't on the guest list");
+    }
     const sameEmail = await ctx.db
       .query("participants")
       .withIndex("by_email", (q) => q.eq("email", email))
       .unique();
     if (sameEmail) throw new Error("This email is already registered to another account");
-    const name = guest.name || identity.name || email.split("@")[0];
+    const name = guest?.name || identity.name || email.split("@")[0];
     return await ctx.db.insert("participants", {
       clerkUserId: identity.subject,
       email,
