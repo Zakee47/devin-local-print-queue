@@ -156,7 +156,7 @@ export default function GuestsManager() {
       ) : latest ? (
         <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-border ring-1 ring-border sm:grid-cols-3">
           <Stat label="CSV rows" value={latest.rowCount} />
-          <Stat label="Eligible" value={latest.eligibleCount} />
+          <Stat label="Eligible" value={guests?.length ?? 0} />
           <Stat label="Registered" value={registeredCount} />
         </dl>
       ) : null}
