@@ -18,4 +18,5 @@ export function useSiteUrl() {
   );
 }
 
-export const displayUrl = (url: string) => url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+export const displayUrl = (url: string) =>
+  url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
