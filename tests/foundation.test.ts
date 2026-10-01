@@ -362,7 +362,7 @@ describe("settings and design entries", () => {
     expect(publicSettings).not.toHaveProperty("nextPrintNumber");
   });
 
-  test("entry helpers exclude rejected and unrequested submissions", async () => {
+  test("entry helpers fall back to printRequested for legacy rows", async () => {
     const t = convexTest(schema, modules);
     const { first, second, participantId } = await t.run(async (ctx) => {
       const people = await Promise.all(
@@ -389,7 +389,7 @@ describe("settings and design entries", () => {
           printCode,
         });
       const first = await insert(people[0], "KC-003", true, "submitted");
-      await insert(people[0], "KC-001", true, "rejected");
+      await insert(people[0], "KC-001", false, "rejected");
       await insert(people[0], "KC-002", false, "submitted");
       const second = await insert(people[1], "KC-004", true, "submitted");
       return { first, second, participantId: people[0] };

@@ -193,7 +193,7 @@ test("results mode ranks eligible entries across statuses and returns a public-s
     const printing = await addSubmission(ctx, maker, 5, "printing", { printingAt: 5 });
     const queued = await addSubmission(ctx, queuedMaker, 6, "queued", { queueOrder: 1 });
     const submitted = await addSubmission(ctx, submittedMaker, 7, "submitted");
-    const rejected = await addSubmission(ctx, rejectedMaker, 8, "rejected");
+    const rejected = await addSubmission(ctx, rejectedMaker, 8, "rejected", { printRequested: false });
     const notRequested = await addSubmission(ctx, unrequestedMaker, 9, "done", { doneAt: 9, printRequested: false });
     const vote = (voter: number, submissionId: Id<"submissions">) =>
       ctx.db.insert("votes", { voterId: voters[voter], submissionId });
@@ -283,7 +283,7 @@ test("queue mode ranks liked entries across statuses and excludes rejected desig
     const queued = await addSubmission(ctx, maker, 8, "queued", { queueOrder: 1 });
     const printing = await addSubmission(ctx, maker, 9, "printing", { printingAt: 9 });
     const submitted = await addSubmission(ctx, maker, 10, "submitted");
-    const rejected = await addSubmission(ctx, maker, 11, "rejected");
+    const rejected = await addSubmission(ctx, maker, 11, "rejected", { printRequested: false });
     const like = (fan: number, submissionId: Id<"submissions">, reaction: "like" | "skip" = "like") =>
       ctx.db.insert("likes", { participantId: fans[fan], submissionId, reaction, updatedAt: 1 });
     // Ties sort by print code.

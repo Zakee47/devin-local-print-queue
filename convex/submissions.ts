@@ -16,6 +16,7 @@ import { fileKindFromName, formatPrintCode } from "../lib/files";
 import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen, type Dimensions } from "../lib/event";
 import { fitsWithin, formatDimensions } from "../lib/dimensions";
 import { isPreviewImage, MAX_PREVIEW_BYTES } from "../lib/preview-image";
+import { isDesignEntry, printRequestPatch } from "./entries";
 
 export const MAX_TITLE_LENGTH = 60;
 export const MAX_NOTES_LENGTH = 500;
@@ -212,7 +213,7 @@ async function assertCanUpload(ctx: MutationCtx, participantId: Id<"participants
   if (active.length >= MAX_SUBMISSIONS_PER_PARTICIPANT) {
     throw new Error(`You can have at most ${MAX_SUBMISSIONS_PER_PARTICIPANT} active uploads`);
   }
-  return { settings, active };
+  return { settings, active, submissions };
 }
 
 export const generateUploadUrl = mutation({
@@ -259,7 +260,7 @@ export const create = mutation({
     }
 
     try {
-      const { settings, active } = await assertCanUpload(ctx, participant._id);
+      const { settings, active, submissions } = await assertCanUpload(ctx, participant._id);
       const kind = fileKindFromName(args.originalFileName);
       if (!kind) throw new Error("Only STL or 3MF files are accepted");
       if (file.size > settings.maxFileBytes) {
@@ -284,6 +285,7 @@ export const create = mutation({
         // A fresh upload fills a vacant entry; an existing upload is never
         // promoted without the participant choosing it.
         printRequested: !active.some((s) => s.printRequested),
+        designEntry: !submissions.some(isDesignEntry),
         status: "submitted",
         printCode,
       });
@@ -335,6 +337,9 @@ export const mine = query({
           sizeBytes: s.sizeBytes,
           originalFileName: s.originalFileName,
           printRequested: s.printRequested,
+          designEntry: isDesignEntry(s),
+          designRemoved: s.designRemoved ?? false,
+          designRemovedReason: s.designRemoved ? s.designRemovedReason : undefined,
           status: s.status,
           rejectionReason: s.rejectionReason,
           rejectionKind: s.rejectionKind,
@@ -363,7 +368,23 @@ export const setPrintRequested = mutation({
     if (all.some((s) => isActive(s) && s.printRequested)) await requireSubmissionsOpen(ctx);
     for (const s of all) {
       const want = s._id === id;
-      if (s.printRequested !== want) await ctx.db.patch(s._id, { printRequested: want });
+      if (s.printRequested !== want) await ctx.db.patch(s._id, printRequestPatch(s, want));
+    }
+  },
+});
+
+// Moves the participant's competition entry. Independent of the print request
+// and of staff review, so only gated on submissions being open.
+export const setDesignEntry = mutation({
+  args: { submissionId: v.id("submissions") },
+  handler: async (ctx, { submissionId }) => {
+    const { participant, submission } = await requireOwnSubmission(ctx, submissionId);
+    if (!isActive(submission)) throw new Error("Pick one of your active uploads");
+    if (submission.designRemoved) throw new Error("The organizers removed this design from the competition");
+    await requireSubmissionsOpen(ctx);
+    for (const s of await ownSubmissions(ctx, participant._id)) {
+      const want = s._id === submissionId;
+      if (s.designEntry !== want) await ctx.db.patch(s._id, { designEntry: want });
     }
   },
 });
@@ -399,9 +420,12 @@ export const remove = mutation({
     if (submission.previewStorageId && submission.previewStorageId !== submission.storageId) {
       await deleteIfOrphan(ctx, submission.previewStorageId);
     }
-    if (submission.printRequested) {
-      const next = (await ownSubmissions(ctx, participant._id)).find(isActive);
-      if (next) await ctx.db.patch(next._id, { printRequested: true });
+    const next = (await ownSubmissions(ctx, participant._id)).find(isActive);
+    if (next && submission.printRequested && !next.printRequested) {
+      await ctx.db.patch(next._id, printRequestPatch(next, true));
+    }
+    if (next && isDesignEntry(submission)) {
+      await ctx.db.patch(next._id, { designEntry: true });
     }
   },
 });

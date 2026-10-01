@@ -1,7 +1,7 @@
 import type { TvCounts } from "@/convex/tv";
 
 const LABELS: [keyof TvCounts, string][] = [
-  ["submitted", "Entries"],
+  ["submitted", "Print requests"],
   ["queued", "Queued"],
   ["printing", "Printing"],
   ["done", "Done"],

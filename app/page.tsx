@@ -44,8 +44,9 @@ export default function Home() {
               {CHALLENGE}. We&apos;ll print it.
             </h1>
             <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
-              Upload up to {MAX_SUBMISSIONS_PER_PARTICIPANT} STL or 3MF files and pick one to print. Follow it
-              from queued to printing to done, then vote for your two favourite designs.
+              Upload up to {MAX_SUBMISSIONS_PER_PARTICIPANT} STL or 3MF files. Enter one design in the competition,
+              where everyone votes and the winner takes home a 3D printer. Request a print of one, the same file or
+              the other, and follow it from queued to printing to done.
             </p>
           </div>
           <HeroKeychains className="mt-4 h-36 w-64 sm:h-44 sm:w-80 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mt-0 lg:aspect-square lg:h-auto lg:w-full lg:self-center" />

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, Pencil, Star, Trash2 } from "lucide-react";
+import { Lock, Pencil, Printer as PrinterIcon, Trash2, Trophy } from "lucide-react";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { toast } from "sonner";
@@ -40,26 +40,56 @@ function errorMessage(e: unknown) {
   return match ? match[1] : e.message;
 }
 
+function PickRow({
+  icon,
+  title,
+  description,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 text-muted-foreground [&>svg]:size-4" aria-hidden="true">
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{title}</p>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
 export default function SubmissionCard({
   submission: s,
   colours,
   printers,
-  showEntryChoice,
+  showPrintChoice,
   submissionsOpen,
 }: {
   submission: MySubmission;
   colours: string[];
   printers: Printer[];
-  showEntryChoice: boolean;
+  showPrintChoice: boolean;
   submissionsOpen: boolean;
 }) {
   const setPrintRequested = useMutation(api.submissions.setPrintRequested);
+  const setDesignEntry = useMutation(api.submissions.setDesignEntry);
   const update = useMutation(api.submissions.update);
   const generatePreviewUploadUrl = useMutation(api.submissions.generatePreviewUploadUrl);
   const remove = useMutation(api.submissions.remove);
   const [editing, setEditing] = useState<SubmissionDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const rejected = s.status === "rejected";
+  const liveDesign = s.designEntry && !s.designRemoved;
+  const printing = s.printRequested && !rejected;
 
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true);
@@ -76,7 +106,7 @@ export default function SubmissionCard({
   }
 
   return (
-    <Card className={cn("gap-0 overflow-hidden py-0", s.printRequested && !rejected && "ring-2 ring-brand")}>
+    <Card className={cn("gap-0 overflow-hidden py-0", (liveDesign || printing) && "ring-2 ring-brand")}>
       <div className="relative border-b border-border bg-surface">
         {s.fileUrl ? (
           editing ? (
@@ -93,7 +123,7 @@ export default function SubmissionCard({
               kind={s.kind}
               colour={swatchFor(s.colour)}
               alt={s.title}
-              className={cn("aspect-4/3", rejected && "opacity-50 grayscale")}
+              className={cn("aspect-4/3", rejected && !liveDesign && "opacity-50 grayscale")}
             />
           )
         ) : (
@@ -102,12 +132,20 @@ export default function SubmissionCard({
         <span className="absolute top-3 left-3 rounded-md bg-background/85 px-2 py-1 font-mono text-xs font-semibold backdrop-blur">
           {s.printCode}
         </span>
-        {s.printRequested && !rejected ? (
-          <span className="absolute top-3 right-3 flex items-center gap-1 rounded-md bg-brand px-2 py-1 text-xs font-medium text-brand-foreground">
-            <Star className="size-3" aria-hidden="true" />
-            Your entry
-          </span>
-        ) : null}
+        <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
+          {liveDesign ? (
+            <span className="flex items-center gap-1 rounded-md bg-brand px-2 py-1 text-xs font-medium text-brand-foreground">
+              <Trophy className="size-3" aria-hidden="true" />
+              Competition entry
+            </span>
+          ) : null}
+          {printing ? (
+            <span className="flex items-center gap-1 rounded-md bg-background/85 px-2 py-1 text-xs font-medium backdrop-blur">
+              <PrinterIcon className="size-3" aria-hidden="true" />
+              Print request
+            </span>
+          ) : null}
+        </div>
       </div>
       <CardContent className="flex flex-col gap-5 p-4 sm:p-5">
         {editing ? (
@@ -189,26 +227,65 @@ export default function SubmissionCard({
               ) : null}
             </div>
             {s.notes ? <p className="text-sm whitespace-pre-line text-muted-foreground">{s.notes}</p> : null}
-            <StatusStepper
-              status={s.status}
-              rejectionReason={s.rejectionReason}
-              rejectionKind={s.rejectionKind}
-              queuePosition={s.queuePosition}
-            />
+            <PickRow
+              icon={<Trophy />}
+              title="Competition entry"
+              description="Voted on to win a 3D printer. No staff approval needed."
+            >
+              {s.designRemoved ? (
+                <p role="status" className="text-sm text-destructive">
+                  Removed from the competition by the organizers
+                  {s.designRemovedReason ? `: ${s.designRemovedReason}` : ""}.
+                </p>
+              ) : s.designEntry ? (
+                <Badge variant="secondary" className="gap-1 text-brand">
+                  <span className="size-1.5 rounded-full bg-brand" aria-hidden="true" />
+                  Live in voting
+                </Badge>
+              ) : !rejected && submissionsOpen ? (
+                <Button
+                  variant="outline"
+                  className="h-9 w-fit"
+                  disabled={busy}
+                  onClick={() =>
+                    run(() => setDesignEntry({ submissionId: s._id }), `${s.printCode} is now your competition entry`)
+                  }
+                >
+                  <Trophy data-icon="inline-start" />
+                  Enter in competition
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">Not entered</p>
+              )}
+            </PickRow>
+            <PickRow
+              icon={<PrinterIcon />}
+              title="Print request"
+              description="Printed for you. Needs staff approval."
+            >
+              {s.printRequested || s.status !== "submitted" ? (
+                <StatusStepper
+                  status={s.status}
+                  rejectionReason={s.rejectionReason}
+                  rejectionKind={s.rejectionKind}
+                  queuePosition={s.queuePosition}
+                />
+              ) : showPrintChoice && s.canChoose && s.editable ? (
+                <Button
+                  variant="outline"
+                  className="h-9 w-fit"
+                  disabled={busy}
+                  onClick={() => run(() => setPrintRequested({ id: s._id }), `${s.printCode} is now your print request`)}
+                >
+                  <PrinterIcon data-icon="inline-start" />
+                  Request print
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">Not requested</p>
+              )}
+            </PickRow>
             {s.editable ? (
               <div className="flex flex-wrap gap-2">
-                {showEntryChoice && !s.printRequested && s.canChoose ? (
-                  <Button
-                    variant="brand"
-                    size="lg"
-                    className="h-10 flex-1"
-                    disabled={busy}
-                    onClick={() => run(() => setPrintRequested({ id: s._id }), `${s.printCode} is now your entry`)}
-                  >
-                    <Star data-icon="inline-start" />
-                    Make this my entry
-                  </Button>
-                ) : null}
                 <Button
                   variant="outline"
                   size="lg"
