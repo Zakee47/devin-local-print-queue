@@ -47,7 +47,7 @@ export default function TvBoard() {
 
 function ResultsView({ board }: { board: Extract<Board, { mode: "results" }> }) {
   return (
-    <div className="grid min-h-0 grid-cols-[1fr_620px] gap-6 p-8 pt-6">
+    <div className="row-start-3 grid min-h-0 grid-cols-[1fr_620px] gap-6 p-8 pt-6">
       <Winner winner={board.winner} totalVotes={board.totalVotes} />
       <Leaderboard leaders={board.runnersUp} top={board.winner?.votes ?? 1} />
     </div>
@@ -58,7 +58,7 @@ function QueueView({ board }: { board: Extract<Board, { mode: "queue" }> }) {
   const now = useNow();
   const freshPrinting = useArrivals(board.printing.map((i) => i.printCode));
   return (
-    <div className="grid min-h-0 grid-cols-[1fr_540px] gap-6 p-8 pt-6">
+    <div className="row-start-3 grid min-h-0 grid-cols-[1fr_540px] gap-6 p-8 pt-6">
       <LiveLeaderboard
         variant="tv"
         rows={board.leaderboard}
