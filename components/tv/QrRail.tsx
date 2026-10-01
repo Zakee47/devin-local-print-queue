@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { TRY_DEVIN_URL, displayUrl, useSiteUrl } from "./links";
 
@@ -19,7 +20,20 @@ function QrCard({ label, hint, url }: { label: string; hint: string; url: string
           <div style={{ width: QR_SIZE, height: QR_SIZE }} />
         )}
       </div>
-      <p className="w-full truncate font-mono text-xl font-medium">{displayUrl(url)}</p>
+      <p className="w-full font-mono text-xl font-medium">
+        {displayUrl(url)
+          .split("/")
+          .map((part, i) => (
+            <Fragment key={i}>
+              {i > 0 ? (
+                <>
+                  /<wbr />
+                </>
+              ) : null}
+              {part}
+            </Fragment>
+          ))}
+      </p>
     </div>
   );
 }
