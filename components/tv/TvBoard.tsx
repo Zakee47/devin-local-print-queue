@@ -5,11 +5,8 @@ import { api } from "@/convex/_generated/api";
 import type { TvBoard as Board } from "@/convex/tv";
 import Leaderboard from "./Leaderboard";
 import LiveLeaderboard from "@/components/leaderboard/LiveLeaderboard";
-import Notices from "./Notices";
 import NowPrinting from "./NowPrinting";
-import QrRail from "./QrRail";
-import TvHeader from "./TvHeader";
-import TvStage from "./TvStage";
+import TvLayout from "./TvLayout";
 import UpNext from "./UpNext";
 import Winner from "./Winner";
 import { useArrivals, useNow } from "./hooks";
@@ -32,16 +29,9 @@ const EMPTY: Extract<Board, { mode: "queue" }> = {
 export default function TvBoard() {
   const board = useQuery(api.tv.board) ?? EMPTY;
   return (
-    <TvStage>
-      <div className="grid h-full grid-cols-[1fr_340px]">
-        <div className="grid min-h-0 min-w-0 grid-rows-[112px_auto_1fr]">
-          <TvHeader counts={board.counts} />
-          <Notices notices={board.notices} />
-          {board.mode === "results" ? <ResultsView board={board} /> : <QueueView board={board} />}
-        </div>
-        <QrRail />
-      </div>
-    </TvStage>
+    <TvLayout counts={board.counts} notices={board.notices}>
+      {board.mode === "results" ? <ResultsView board={board} /> : <QueueView board={board} />}
+    </TvLayout>
   );
 }
 
