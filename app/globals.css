@@ -33,9 +33,9 @@
   --accent-foreground: #202020;
   --destructive: oklch(0.577 0.245 27.325);
   --input: #c9c9c9;
-  --brand: #467bf7;
-  --brand-hover: #628ff9;
-  --brand-foreground: #121212;
+  --brand: #2d60cf;
+  --brand-hover: #234fb3;
+  --brand-foreground: #ffffff;
   --link: #2d60cf;
   --ring: #2d60cf;
   --selection: #dddddd;
@@ -186,6 +186,42 @@ input:-webkit-autofill:focus {
   }
   50% {
     opacity: 0.3;
+  }
+}
+
+@utility rank-flash {
+  animation: rank-flash 1.6s ease-out;
+}
+
+@keyframes rank-flash {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--brand) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in oklab, var(--brand) 40%, transparent);
+  }
+}
+
+@utility heart-pop {
+  animation: heart-pop 600ms ease-out;
+  transform-origin: center;
+}
+
+@keyframes heart-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rank-flash,
+  .heart-pop {
+    animation: none;
   }
 }
 

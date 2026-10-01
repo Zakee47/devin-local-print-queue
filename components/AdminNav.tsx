@@ -2,17 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useConvexAuth, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
+
+const STAFF_LINKS = [
+  { href: "/admin", label: "Queue" },
+  { href: "/admin/settings", label: "Settings" },
+  { href: "/tv", label: "TV" },
+];
+
+const OWNER_LINKS = [
+  { href: "/admin", label: "Queue" },
+  { href: "/admin/guests", label: "Guests" },
+  { href: "/admin/participants", label: "Participants" },
+  { href: "/admin/team", label: "Team" },
+  { href: "/admin/votes", label: "Votes" },
+  { href: "/admin/settings", label: "Settings" },
+  { href: "/tv", label: "TV" },
+];
 
 export default function AdminNav() {
   const pathname = usePathname();
-  const links = [
-    { href: "/admin", label: "Queue" },
-    { href: "/admin/guests", label: "Guests" },
-    { href: "/admin/votes", label: "Votes" },
-    { href: "/admin/settings", label: "Settings" },
-    { href: "/tv", label: "TV" },
-  ];
+  const { isAuthenticated } = useConvexAuth();
+  const role = useQuery(api.admins.role, isAuthenticated ? {} : "skip");
+  const links = role === "owner" ? OWNER_LINKS : STAFF_LINKS;
 
   return (
     <nav aria-label="Admin" className="flex items-center gap-1">

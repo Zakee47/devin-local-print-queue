@@ -14,15 +14,18 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 
-export default function AdminGate({ children }: { children: ReactNode }) {
+export default function AdminGate({
+  children,
+  ownerOnly,
+}: {
+  children: ReactNode;
+  ownerOnly?: boolean;
+}) {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { user } = useUser();
-  const access = useQuery(
-    api.admins.isAdmin,
-    isAuthenticated ? {} : "skip"
-  );
+  const role = useQuery(api.admins.role, isAuthenticated ? {} : "skip");
 
-  if (isLoading || (isAuthenticated && access === undefined)) {
+  if (isLoading || (isAuthenticated && role === undefined)) {
     return (
       <div className="flex flex-col gap-3">
         <Skeleton className="h-24 rounded-xl" />
@@ -32,7 +35,7 @@ export default function AdminGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!isAuthenticated || !access) {
+  if (!isAuthenticated || role === null || role === undefined) {
     const email = user?.primaryEmailAddress?.emailAddress;
     return (
       <Empty className="border border-dashed border-border-strong py-20">
@@ -52,6 +55,22 @@ export default function AdminGate({ children }: { children: ReactNode }) {
               "Your account isn't an organizer account."
             )}{" "}
             Ask an existing organizer to add your email.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
+  if (ownerOnly && role !== "owner") {
+    return (
+      <Empty className="border border-dashed border-border-strong py-20">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <ShieldX />
+          </EmptyMedia>
+          <EmptyTitle>Owner only</EmptyTitle>
+          <EmptyDescription>
+            Only the event owner can open this page.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>

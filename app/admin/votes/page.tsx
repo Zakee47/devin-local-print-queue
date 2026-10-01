@@ -1,4 +1,10 @@
-// Placeholder: vote results + open/close voting (Workstream D).
+import VoteResults from "@/components/vote/VoteResults";
+import AdminGate from "@/components/AdminGate";
+
 export default function AdminVotesPage() {
-  return <h1 className="font-heading text-3xl font-semibold">Votes</h1>;
+  return (
+    <AdminGate ownerOnly>
+      <VoteResults />
+    </AdminGate>
+  );
 }

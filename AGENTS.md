@@ -14,39 +14,38 @@ components in `components/ui` and the existing page chrome (`SiteHeader`,
 
 ## Domain rules
 
-- Eligibility: admins upload the Luma guest CSV at `/admin/guests`
-  (`lib/guest-csv.ts` → `guests.importCsv`). If the CSV has a `checked_in_at`
-  column only checked-in rows are eligible. Each upload replaces the list;
-  existing participants keep their accounts. There is no Luma API integration.
-- A participant registers once (`participants.register`) with their verified
-  Clerk email. Everything participant-facing requires `requireParticipant`.
-- Max 2 active (non-rejected) submissions per participant, STL or 3MF only,
-  size capped by `settings.maxFileBytes`. Exactly one active submission may have
-  `printRequested: true`. A rejected submission frees its slot.
-- Status lifecycle: `submitted` → `rejected` (with `rejectionReason`) or
-  `queued` → `printing` → `done`. Participants see `STATUS_LABELS`.
-  Participants may edit / swap the print choice only while `submitted`.
-- Colours are requests from `settings.colours`; always say "not guaranteed".
-- Download names come from `downloadFileName` in `lib/files.ts`
-  (`KC-007_ada-lovelace_red_rocket-keychain.3mf`). Print codes are allocated
-  with `takePrintNumber` + `formatPrintCode`.
-- Voting: each participant gets 2 votes, only for `done` submissions, never
-  their own, only while `settings.votingOpen`.
-- Public surfaces (TV, gallery) show `participant.displayName` only, never emails.
-- Every admin mutation calls `requireAdmin` and writes an `auditLog` row.
-- Render STL/3MF previews with `components/ModelViewer.tsx`.
+- The verified email configured as `OWNER_EMAIL` is the owner; rows in
+  `admins` are staff. Guest import, votes/results, participant management and
+  team management are owner-only. The owner can delete participant accounts
+  and block email addresses.
+- Checked-in guests register with their verified email and choose a unique
+  username stored as `displayName`; public pages show usernames, never emails.
+- Each participant may have two active STL/3MF uploads and one
+  `printRequested` entry, which is used for printing and voting. Enforce
+  `settings.maxFileBytes` and `settings.maxDimensionsMm` in any orientation.
+- Intake follows `settings.submissionsOpen` and its optional
+  `settings.submissionsDeadline`; `settings.announcement` is shown publicly.
+  Printers and available colours come from settings; colour requests are not
+  guaranteed.
+- A `print_failed` rejection may permit a fixed replacement after submissions
+  close only when there is no active entry or newer active upload.
+- Each participant gets two votes on eligible entries, never their own. Votes
+  can change while voting is open; the owner closes voting to lock them.
+- Admin mutations use `requireAdmin` and write an `auditLog` row. Render STL/3MF
+  previews with `components/ModelViewer.tsx`.
 
 ## File ownership (parallel workstreams)
 
-- A participant: `app/submit/**`, `convex/submissions.ts`, `components/participant/**`
-- B admin: `app/admin/page.tsx`, `app/admin/guests/**`, `app/admin/settings/**`,
-  `convex/queue.ts`, `convex/http.ts`, `components/admin/**`
+- A participant submissions: `app/submit/**`, `components/participant/**`,
+  `convex/submissions.ts`
+- B administration: `app/admin/**` except `app/admin/votes/**`,
+  `components/admin/**`, `convex/queue.ts`, `convex/http.ts`, guest-import code
 - C TV: `app/tv/**`, `convex/tv.ts`, `components/tv/**`
-- D voting: `app/vote/**`, `app/admin/votes/**`, `convex/votes.ts`, `components/vote/**`
-
-Shared files (`convex/schema.ts`, `lib/*`, `convex/admins.ts`,
-`convex/participants.ts`, `convex/settings.ts`, `components/ModelViewer.tsx`)
-should only get small additive changes; call them out in the PR.
+- D voting: `app/vote/**`, `app/admin/votes/**`, `convex/votes.ts`,
+  `convex/likes.ts`, `components/vote/**`
+- Coordinate changes to shared contracts in `convex/schema.ts`, `convex/admins.ts`,
+  `convex/entries.ts`, `convex/participants.ts`, `convex/settings.ts`, `lib/**`,
+  and `convex/_generated/**`; regenerate and commit generated Convex files.
 
 ## Local development (no cloud accounts needed)
 
@@ -54,6 +53,7 @@ should only get small additive changes; call them out in the PR.
 npm install
 CONVEX_AGENT_MODE=anonymous npx convex dev      # local backend on :3210, writes .env.local
 npx convex env set CLERK_JWT_ISSUER_DOMAIN <issuer>  # placeholder ok for codegen
+npx convex env set OWNER_EMAIL you@example.com
 npm run dev                                     # Clerk runs in keyless dev mode
 npx convex run seed:dev '{"adminEmail":"you@example.com"}'
 ```
