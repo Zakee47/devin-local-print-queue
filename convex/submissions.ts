@@ -1,11 +1,21 @@
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import {
+  internalAction,
+  internalMutation,
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { requireParticipant, viewerParticipant } from "./participants";
+import { requireAdmin, viewerRole } from "./admins";
 import { readSettings, takePrintNumber } from "./settings";
 import { fileKindFromName, formatPrintCode } from "../lib/files";
 import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen, type Dimensions } from "../lib/event";
 import { fitsWithin, formatDimensions } from "../lib/dimensions";
+import { isPreviewImage, MAX_PREVIEW_BYTES } from "../lib/preview-image";
 
 export const MAX_TITLE_LENGTH = 60;
 export const MAX_NOTES_LENGTH = 500;
@@ -20,6 +30,99 @@ async function ownSubmissions(ctx: MutationCtx, participantId: Id<"participants"
     .withIndex("by_participant", (q) => q.eq("participantId", participantId))
     .collect();
 }
+
+export async function previewUrlOf(ctx: QueryCtx, submission: Doc<"submissions">): Promise<string | null> {
+  return submission.previewStorageId ? await ctx.storage.getUrl(submission.previewStorageId) : null;
+}
+
+async function deleteIfOrphan(ctx: MutationCtx, storageId: Id<"_storage">) {
+  const referenced = await ctx.db
+    .query("submissions")
+    .filter((q) =>
+      q.or(
+        q.eq(q.field("storageId"), storageId),
+        q.eq(q.field("previewStorageId"), storageId)
+      )
+    )
+    .first();
+  if (!referenced && (await ctx.db.system.get("_storage", storageId))) {
+    await ctx.storage.delete(storageId);
+  }
+}
+
+async function stagePreview(
+  ctx: MutationCtx,
+  submissionId: Id<"submissions">,
+  previewStorageId: Id<"_storage">
+) {
+  const referenced = await ctx.db
+    .query("submissions")
+    .filter((q) =>
+      q.or(
+        q.eq(q.field("storageId"), previewStorageId),
+        q.eq(q.field("previewStorageId"), previewStorageId)
+      )
+    )
+    .first();
+  if (referenced) return;
+  const meta = await ctx.db.system.get("_storage", previewStorageId);
+  if (!meta) return;
+  if (meta.size > MAX_PREVIEW_BYTES) {
+    await ctx.storage.delete(previewStorageId);
+    return;
+  }
+  await ctx.scheduler.runAfter(0, internal.submissions.verifyPreview, {
+    submissionId,
+    previewStorageId,
+  });
+}
+
+export const verifyPreview = internalAction({
+  args: {
+    submissionId: v.id("submissions"),
+    previewStorageId: v.id("_storage"),
+  },
+  handler: async (ctx, { submissionId, previewStorageId }) => {
+    const blob = await ctx.storage.get(previewStorageId);
+    if (!blob) return;
+    const bytes = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
+    if (blob.size > MAX_PREVIEW_BYTES || !isPreviewImage(bytes)) {
+      await ctx.storage.delete(previewStorageId);
+      return;
+    }
+    await ctx.runMutation(internal.submissions.attachPreview, {
+      submissionId,
+      previewStorageId,
+    });
+  },
+});
+
+export const attachPreview = internalMutation({
+  args: {
+    submissionId: v.id("submissions"),
+    previewStorageId: v.id("_storage"),
+  },
+  handler: async (ctx, { submissionId, previewStorageId }) => {
+    const submission = await ctx.db.get(submissionId);
+    if (!submission) {
+      if (await ctx.db.system.get("_storage", previewStorageId)) {
+        await ctx.storage.delete(previewStorageId);
+      }
+      return;
+    }
+    const old = submission.previewStorageId;
+    await ctx.db.patch(submissionId, { previewStorageId });
+    if (old && old !== previewStorageId) await deleteIfOrphan(ctx, old);
+  },
+});
+
+export const generatePreviewUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    if (!(await viewerRole(ctx))) await requireParticipant(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
 
 // Loads a submission the viewer owns; anyone else gets the same "not found".
 async function requireOwnSubmission(ctx: MutationCtx, id: Id<"submissions">) {
@@ -128,6 +231,7 @@ export type CreateResult = { ok: true; id: Id<"submissions"> } | { ok: false; er
 export const create = mutation({
   args: {
     storageId: v.id("_storage"),
+    previewStorageId: v.optional(v.id("_storage")),
     title: v.string(),
     notes: v.optional(v.string()),
     colour: v.optional(v.string()),
@@ -137,12 +241,22 @@ export const create = mutation({
   handler: async (ctx, args): Promise<CreateResult> => {
     const participant = await requireParticipant(ctx);
     const file = await ctx.db.system.get(args.storageId);
-    if (!file) return { ok: false, error: "Upload not found, try again" };
+    if (!file) {
+      if (args.previewStorageId && args.previewStorageId !== args.storageId) {
+        await deleteIfOrphan(ctx, args.previewStorageId);
+      }
+      return { ok: false, error: "Upload not found, try again" };
+    }
     const alreadyUsed = await ctx.db
       .query("submissions")
       .filter((q) => q.eq(q.field("storageId"), args.storageId))
       .first();
-    if (alreadyUsed) return { ok: false, error: "That file has already been submitted" };
+    if (alreadyUsed) {
+      if (args.previewStorageId && args.previewStorageId !== args.storageId) {
+        await deleteIfOrphan(ctx, args.previewStorageId);
+      }
+      return { ok: false, error: "That file has already been submitted" };
+    }
 
     try {
       const { settings, active } = await assertCanUpload(ctx, participant._id);
@@ -173,9 +287,15 @@ export const create = mutation({
         status: "submitted",
         printCode,
       });
+      if (args.previewStorageId && args.previewStorageId !== args.storageId) {
+        await stagePreview(ctx, id, args.previewStorageId);
+      }
       return { ok: true, id };
     } catch (e) {
       await ctx.storage.delete(args.storageId);
+      if (args.previewStorageId && args.previewStorageId !== args.storageId) {
+        await deleteIfOrphan(ctx, args.previewStorageId);
+      }
       return { ok: false, error: e instanceof Error ? e.message : "Upload failed" };
     }
   },
@@ -224,6 +344,7 @@ export const mine = query({
           editable: s.status === "submitted",
           canChoose: s.status === "submitted" && !locked,
           fileUrl: await ctx.storage.getUrl(s.storageId),
+          previewUrl: await previewUrlOf(ctx, s),
         };
       })
     );
@@ -253,6 +374,7 @@ export const update = mutation({
     title: v.string(),
     notes: v.optional(v.string()),
     colour: v.optional(v.string()),
+    previewStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const { submission } = await requireOwnSubmission(ctx, args.id);
@@ -263,6 +385,7 @@ export const update = mutation({
       notes: cleanNotes(args.notes),
       colour: cleanColour(args.colour, settings.colours),
     });
+    if (args.previewStorageId) await stagePreview(ctx, submission._id, args.previewStorageId);
   },
 });
 
@@ -273,9 +396,49 @@ export const remove = mutation({
     requireEditable(submission);
     await ctx.db.delete(submission._id);
     await ctx.storage.delete(submission.storageId);
+    if (submission.previewStorageId && submission.previewStorageId !== submission.storageId) {
+      await deleteIfOrphan(ctx, submission.previewStorageId);
+    }
     if (submission.printRequested) {
       const next = (await ownSubmissions(ctx, participant._id)).find(isActive);
       if (next) await ctx.db.patch(next._id, { printRequested: true });
     }
+  },
+});
+
+export const setPreview = mutation({
+  args: {
+    id: v.id("submissions"),
+    previewStorageId: v.id("_storage"),
+  },
+  handler: async (
+    ctx,
+    { id, previewStorageId }
+  ): Promise<{ ok: true } | { ok: false; error: string }> => {
+    const actor = await requireAdmin(ctx);
+    const submission = await ctx.db.get(id);
+    if (!submission) {
+      await deleteIfOrphan(ctx, previewStorageId);
+      return { ok: false, error: "Submission not found" };
+    }
+    await stagePreview(ctx, id, previewStorageId);
+    await ctx.db.insert("auditLog", {
+      actor,
+      action: "submission.preview",
+      submissionId: id,
+    });
+    return { ok: true };
+  },
+});
+
+export const missingPreviews = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const submissions = await ctx.db.query("submissions").collect();
+    return submissions
+      .filter((submission) => submission.status !== "rejected" && !submission.previewStorageId)
+      .map(({ _id, printCode, kind, colour }) => ({ _id, printCode, kind, colour }))
+      .sort((a, b) => a.printCode.localeCompare(b.printCode));
   },
 });

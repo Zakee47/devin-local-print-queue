@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
-import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
 import { cn } from "@/lib/utils";
+import { createModelScene, disposeScene, frameModel, parseModel } from "@/components/model-scene";
 
 // Renders an STL or 3MF from a URL, centred and slowly rotating. Pass a
 // colour name/hex to tint STLs (3MF keeps its own materials when present).
@@ -34,14 +33,7 @@ export default function ModelViewer({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     mount.appendChild(renderer.domElement);
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 10000);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x333344, 1.6));
-    const key = new THREE.DirectionalLight(0xffffff, 1.8);
-    key.position.set(1, 2, 3);
-    scene.add(key);
-    const pivot = new THREE.Group();
-    scene.add(pivot);
+    const { scene, camera, pivot } = createModelScene();
 
     const resize = () => {
       const { clientWidth: w, clientHeight: h } = mount;
@@ -55,37 +47,13 @@ export default function ModelViewer({
     observer.observe(mount);
     resize();
 
-    const frameObject = (object: THREE.Object3D) => {
-      // Printers use Z-up; rotate so the model stands upright in Y-up three.js.
-      object.rotation.x = -Math.PI / 2;
-      const box = new THREE.Box3().setFromObject(object);
-      const size = box.getSize(new THREE.Vector3());
-      const center = box.getCenter(new THREE.Vector3());
-      object.position.sub(center);
-      pivot.add(object);
-      const radius = Math.max(size.x, size.y, size.z) || 1;
-      camera.position.set(0, radius * 0.6, radius * 2.2);
-      camera.lookAt(0, 0, 0);
-    };
-
     const load = async () => {
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const buffer = await res.arrayBuffer();
         if (disposed) return;
-        if (kind === "stl") {
-          const geometry = new STLLoader().parse(buffer);
-          geometry.computeVertexNormals();
-          const material = new THREE.MeshStandardMaterial({
-            color: new THREE.Color().setStyle(colour),
-            roughness: 0.55,
-            metalness: 0.05,
-          });
-          frameObject(new THREE.Mesh(geometry, material));
-        } else {
-          frameObject(new ThreeMFLoader().parse(buffer));
-        }
+        frameModel(parseModel(buffer, kind, colour), pivot, camera);
       } catch (e) {
         if (!disposed) setError(e instanceof Error ? e.message : "Couldn't load model");
       }
@@ -103,13 +71,7 @@ export default function ModelViewer({
       disposed = true;
       cancelAnimationFrame(frame);
       observer.disconnect();
-      scene.traverse((obj) => {
-        if (obj instanceof THREE.Mesh) {
-          obj.geometry.dispose();
-          const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
-          materials.forEach((m) => m.dispose());
-        }
-      });
+      disposeScene(scene);
       renderer.dispose();
       renderer.domElement.remove();
     };

@@ -7,6 +7,8 @@ import type { FunctionReturnType } from "convex/server";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import ModelViewer from "@/components/ModelViewer";
+import ModelPreview from "@/components/ModelPreview";
+import { renderModelSnapshot, uploadPreview } from "@/components/model-snapshot";
 import StatusStepper from "@/components/participant/StatusStepper";
 import SubmissionFields, { type SubmissionDraft } from "@/components/participant/SubmissionFields";
 import { formatBytes } from "@/components/participant/UploadCard";
@@ -53,6 +55,7 @@ export default function SubmissionCard({
 }) {
   const setPrintRequested = useMutation(api.submissions.setPrintRequested);
   const update = useMutation(api.submissions.update);
+  const generatePreviewUploadUrl = useMutation(api.submissions.generatePreviewUploadUrl);
   const remove = useMutation(api.submissions.remove);
   const [editing, setEditing] = useState<SubmissionDraft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,12 +79,23 @@ export default function SubmissionCard({
     <Card className={cn("gap-0 overflow-hidden py-0", s.printRequested && !rejected && "ring-2 ring-brand")}>
       <div className="relative border-b border-border bg-surface">
         {s.fileUrl ? (
-          <ModelViewer
-            url={s.fileUrl}
-            kind={s.kind}
-            colour={swatchFor(editing ? editing.colour : s.colour)}
-            className={cn("aspect-4/3", rejected && "opacity-50 grayscale")}
-          />
+          editing ? (
+            <ModelViewer
+              url={s.fileUrl}
+              kind={s.kind}
+              colour={swatchFor(editing.colour)}
+              className="aspect-4/3"
+            />
+          ) : (
+            <ModelPreview
+              url={s.fileUrl}
+              previewUrl={s.previewUrl}
+              kind={s.kind}
+              colour={swatchFor(s.colour)}
+              alt={s.title}
+              className={cn("aspect-4/3", rejected && "opacity-50 grayscale")}
+            />
+          )
         ) : (
           <div className="grid aspect-4/3 place-items-center text-xs text-muted-foreground">File unavailable</div>
         )}
@@ -101,16 +115,27 @@ export default function SubmissionCard({
             className="flex flex-col gap-5"
             onSubmit={async (e) => {
               e.preventDefault();
-              const ok = await run(
-                () =>
-                  update({
-                    id: s._id,
-                    title: editing.title,
-                    notes: editing.notes || undefined,
-                    colour: editing.colour || undefined,
-                  }),
-                "Saved"
-              );
+              const ok = await run(async () => {
+                let previewStorageId;
+                if (s.fileUrl && (editing.colour !== (s.colour ?? "") || !s.previewUrl)) {
+                  previewStorageId = await renderModelSnapshot(
+                    s.fileUrl,
+                    s.kind,
+                    swatchFor(editing.colour)
+                  )
+                    .then((blob) =>
+                      uploadPreview(() => generatePreviewUploadUrl({}), blob)
+                    )
+                    .catch(() => undefined);
+                }
+                await update({
+                  id: s._id,
+                  title: editing.title,
+                  notes: editing.notes || undefined,
+                  colour: editing.colour || undefined,
+                  ...(previewStorageId ? { previewStorageId } : {}),
+                });
+              }, "Saved");
               if (ok) setEditing(null);
             }}
           >

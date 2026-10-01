@@ -10,6 +10,7 @@ import { DEFAULT_COLOURS } from "../lib/event";
 import { formatPrintCode } from "../lib/files";
 import { usernameKey } from "../lib/usernames";
 import { compareRanking, rankRows } from "../lib/ranking";
+import { previewUrlOf } from "./submissions";
 
 export const UP_NEXT_LIMIT = 8;
 export const RECENT_DONE_LIMIT = 3;
@@ -31,6 +32,7 @@ export type TvItem = {
 
 export type TvPrintingItem = TvItem & {
   file: { url: string; kind: "stl" | "3mf" } | null;
+  previewUrl: string | null;
   printer: string | null;
 };
 export type TvLeader = TvItem & { rank: number; votes: number; likes: number };
@@ -47,7 +49,10 @@ export type TvLive = { leaderboard: TvRanked[]; totalVotes: number; totalLikes: 
 
 export type TvCounts = { submitted: number; queued: number; printing: number; done: number };
 export type TvNotices = { announcement: string | null; submissionsOpen: boolean; submissionsDeadline: number | null };
-export type TvWinner = TvLeader & { file: { url: string; kind: "stl" | "3mf" } | null };
+export type TvWinner = TvLeader & {
+  file: { url: string; kind: "stl" | "3mf" } | null;
+  previewUrl: string | null;
+};
 
 export type TvBoard =
   | {
@@ -187,6 +192,7 @@ export const board = query({
             file: await ctx.storage.getUrl(first.s.storageId).then((url) =>
               url ? { url, kind: first.s.kind } : null
             ),
+            previewUrl: await previewUrlOf(ctx, first.s),
           }
         : null;
       const runnersUp: TvLeader[] = await Promise.all(
@@ -210,6 +216,7 @@ export const board = query({
           return {
             ...(await toItem(s, nameOf)),
             file: url ? { url, kind: s.kind } : null,
+            previewUrl: await previewUrlOf(ctx, s),
             printer: s.printer ?? null,
           };
         })

@@ -124,7 +124,10 @@ export const deleteParticipant = mutation({
     // still references it (blobs can be shared).
     const referencedElsewhere = new Set<string>();
     for (const other of await ctx.db.query("submissions").collect()) {
-      if (!doomedSubmissionIds.has(other._id)) referencedElsewhere.add(other.storageId);
+      if (!doomedSubmissionIds.has(other._id)) {
+        referencedElsewhere.add(other.storageId);
+        if (other.previewStorageId) referencedElsewhere.add(other.previewStorageId);
+      }
     }
     const removedStorage = new Set<string>();
     const removedVotes = new Set<string>();
@@ -151,6 +154,16 @@ export const deleteParticipant = mutation({
       ) {
         await ctx.storage.delete(submission.storageId);
         removedStorage.add(submission.storageId);
+      }
+      if (
+        submission.previewStorageId &&
+        submission.previewStorageId !== submission.storageId &&
+        !referencedElsewhere.has(submission.previewStorageId) &&
+        !removedStorage.has(submission.previewStorageId) &&
+        (await ctx.db.system.get("_storage", submission.previewStorageId))
+      ) {
+        await ctx.storage.delete(submission.previewStorageId);
+        removedStorage.add(submission.previewStorageId);
       }
       await remove(submission._id);
     }
