@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Tv } from "lucide-react";
 import { BrandWordmark } from "@/components/BrandMark";
 import HeaderAuth from "@/components/HeaderAuth";
 import HeaderBar from "@/components/HeaderBar";
@@ -32,6 +33,14 @@ export default function SiteHeader({
           <BrandWordmark />
         </Link>
         <nav aria-label="Account" className="flex shrink-0 items-center gap-2">
+          <Link
+            href="/tv"
+            aria-label="TV mode"
+            title="TV mode"
+            className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <Tv aria-hidden className="size-4.5" />
+          </Link>
           <ThemeToggle />
           <HeaderAuth showSignIn={showSignIn} />
         </nav>
