@@ -11,6 +11,7 @@ import { useViewerAuth } from "@/lib/use-viewer-auth";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import LiveLeaderboard from "@/components/leaderboard/LiveLeaderboard";
+import DevinPlaybookCard from "@/components/participant/DevinPlaybookCard";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -129,6 +130,15 @@ export default function Home() {
           <Tv data-icon="inline-start" />
           TV mode
         </Link>
+        <section aria-labelledby="design-with-devin-heading" className="mt-12">
+          <h2
+            id="design-with-devin-heading"
+            className="font-heading text-xl font-semibold tracking-[-0.02em]"
+          >
+            Design your keychain with Devin
+          </h2>
+          <DevinPlaybookCard variant="compact" className="mt-4" />
+        </section>
       </main>
       <div className="flex-1">
         <div className="mx-auto w-full max-w-3xl px-4 pb-16 sm:px-6">
