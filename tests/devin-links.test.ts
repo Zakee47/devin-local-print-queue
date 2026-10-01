@@ -3,6 +3,8 @@ import { describe, expect, test } from "vitest";
 import {
   DEVIN_NEW_SESSION_URL,
   DEVIN_PLAYBOOK_CREATE_URL,
+  devinPlaybookCreateUrl,
+  devinPlaybookStub,
   devinStartPrompt,
   devinStartUrl,
   PLAYBOOK_PATH,
@@ -14,7 +16,7 @@ describe("Devin links", () => {
   test.each([
     "https://keychains.example.com",
     `https://${"workshop.".repeat(80)}keychains.example.com`,
-  ])("creates a short prompt URL for %s", (origin) => {
+  ])("creates short prompt and playbook URLs for %s", (origin) => {
     const url = devinStartUrl(origin);
     expect(url.length).toBeLessThan(6000);
     expect(url.startsWith(`${DEVIN_NEW_SESSION_URL}?prompt=`)).toBe(true);
@@ -22,6 +24,18 @@ describe("Devin links", () => {
       devinStartPrompt(origin)
     );
     expect(decodeURIComponent(url)).toContain(`${origin}${PLAYBOOK_PATH}`);
+
+    const playbookUrl = devinPlaybookCreateUrl(origin);
+    expect(playbookUrl.length).toBeLessThan(6000);
+    expect(playbookUrl.startsWith(`${DEVIN_PLAYBOOK_CREATE_URL}?body=`)).toBe(true);
+    expect(
+      decodeURIComponent(
+        playbookUrl.slice(
+          playbookUrl.indexOf("?body=") + "?body=".length
+        )
+      )
+    ).toBe(devinPlaybookStub(origin));
+    expect(decodeURIComponent(playbookUrl)).toContain(`${origin}${PLAYBOOK_PATH}`);
   });
 
   test("uses the generic playbook creation page", () => {
@@ -30,7 +44,12 @@ describe("Devin links", () => {
   });
 
   test("never embeds the playbook in either link", () => {
-    const urls = [DEVIN_PLAYBOOK_CREATE_URL, devinStartUrl("https://keychains.example.com")];
+    const origin = "https://keychains.example.com";
+    const urls = [
+      DEVIN_PLAYBOOK_CREATE_URL,
+      devinStartUrl(origin),
+      devinPlaybookCreateUrl(origin),
+    ];
     const excerpt = playbook.slice(0, 200);
 
     for (const url of urls) {
