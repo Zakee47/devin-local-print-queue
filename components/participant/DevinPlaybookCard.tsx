@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import Image from "next/image";
 import { Copy, Download, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,6 @@ import {
 } from "@/components/ui/card";
 import { copyText } from "@/lib/clipboard";
 import {
-  devinPlaybookCreateUrl,
   devinStartUrl,
   PLAYBOOK_DOWNLOAD_NAME,
   PLAYBOOK_PATH,
@@ -59,7 +59,7 @@ function usePlaybookText() {
     return text ?? (await requestRef.current);
   }
 
-  return { text, getText };
+  return { getText };
 }
 
 export default function DevinPlaybookCard({
@@ -71,37 +71,13 @@ export default function DevinPlaybookCard({
   className?: string;
   children?: ReactNode;
 }) {
-  const { text, getText } = usePlaybookText();
+  const { getText } = usePlaybookText();
   const origin = useSyncExternalStore(
     subscribeToOrigin,
     getOriginSnapshot,
     getServerOriginSnapshot
   );
   const compact = variant === "compact";
-
-  async function createPlaybook() {
-    let copied = false;
-    if (text) {
-      try {
-        await navigator.clipboard.writeText(text);
-        copied = true;
-      } catch {
-        copied = false;
-      }
-    }
-
-    if (!copied) {
-      const fallbackText = await getText();
-      if (fallbackText) copied = await copyText(fallbackText);
-    }
-
-    window.open(devinPlaybookCreateUrl(window.location.origin), "_blank", "noopener");
-    toast.success(
-      copied
-        ? "Opened in Devin with the playbook filled in — name it and save. Full text also copied to your clipboard."
-        : "Opened in Devin with the playbook filled in — name it and save."
-    );
-  }
 
   async function copyMarkdown() {
     const markdown = await getText();
@@ -121,16 +97,8 @@ export default function DevinPlaybookCard({
       <CardContent className={cn("flex flex-col gap-3", compact && "gap-2.5")}>
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            type="button"
             variant="brand"
             size={compact ? "default" : "lg"}
-            onClick={createPlaybook}
-          >
-            Create playbook in Devin
-            <ExternalLink data-icon="inline-end" />
-          </Button>
-          <Button
-            variant="outline"
             render={
               <a
                 href={origin ? devinStartUrl(origin) : undefined}
@@ -141,6 +109,15 @@ export default function DevinPlaybookCard({
               />
             }
           >
+            <Image
+              src="/devin-white.png"
+              alt=""
+              aria-hidden
+              width={16}
+              height={16}
+              data-icon="inline-start"
+              className="size-4"
+            />
             Start in Devin
             <ExternalLink data-icon="inline-end" />
           </Button>
@@ -161,19 +138,15 @@ export default function DevinPlaybookCard({
         {!compact ? (
           <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
             <ol className="list-decimal space-y-1 pl-5">
-              <li>Name it &quot;Keychain 3D print&quot;.</li>
-              <li>Save.</li>
-              <li>Start a session with it and describe your keychain idea.</li>
+              <li>Click Start in Devin — it opens a new Devin session that loads the competition playbook.</li>
+              <li>Type your keychain idea after “My idea:” and send it.</li>
+              <li>Iterate with Devin until you have your STL and 3MF, then upload them here.</li>
             </ol>
-            <p>
-              Want the full text inline instead? Select all in the body and paste (Ctrl/Cmd+V) — it&apos;s on your
-              clipboard.
-            </p>
           </div>
         ) : (
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Name it &quot;Keychain 3D print&quot;, save, then start a session with it and describe your keychain idea.
-            The full text is also on your clipboard.
+            Opens a new Devin session with the competition playbook — type your keychain idea after “My idea:” and
+            send it.
           </p>
         )}
       </CardContent>
