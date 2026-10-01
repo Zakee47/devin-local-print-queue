@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, readSettings } from "./settings";
 import { reactionCounts, type ReactionCounts } from "./likes";
 import { tallyVotes } from "./votes";
 import { listEntries } from "./entries";
-import { DEFAULT_COLOURS } from "../lib/event";
+import { DEFAULT_COLOURS, votingNotOpenYet } from "../lib/event";
 import { formatPrintCode } from "../lib/files";
 import { usernameKey } from "../lib/usernames";
 import { compareRanking, rankRows } from "../lib/ranking";
@@ -59,6 +59,8 @@ export type TvBoard =
       mode: "queue";
       counts: TvCounts;
       notices: TvNotices;
+      votingOpen: boolean;
+      votingNotOpenYet: boolean;
       printing: TvPrintingItem[];
       upNext: TvItem[];
       moreQueued: number;
@@ -232,6 +234,8 @@ export const board = query({
       mode: "queue",
       counts,
       notices,
+      votingOpen: settings.votingOpen,
+      votingNotOpenYet: votingNotOpenYet(settings),
       printing: printingItems,
       upNext,
       moreQueued: Math.max(0, sortedQueue.length - UP_NEXT_LIMIT),
@@ -243,7 +247,7 @@ export const board = query({
 
 export const leaderboard = query({
   args: {},
-  handler: async (ctx): Promise<TvLive & { votingOpen: boolean }> => {
+  handler: async (ctx): Promise<TvLive & { votingOpen: boolean; votingNotOpenYet: boolean }> => {
     const [settings, entries, reactions] = await Promise.all([
       readSettings(ctx),
       listEntries(ctx),
@@ -252,6 +256,7 @@ export const leaderboard = query({
     return {
       ...(await liveRanking(ctx, entries, reactions, makeNamer(ctx))),
       votingOpen: settings.votingOpen,
+      votingNotOpenYet: votingNotOpenYet(settings),
     };
   },
 });

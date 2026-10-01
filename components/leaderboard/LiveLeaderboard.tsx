@@ -14,12 +14,14 @@ export default function LiveLeaderboard({
   totalLikes,
   variant,
   votingOpen,
+  votingNotOpenYet,
 }: {
   rows: TvRanked[];
   totalVotes: number;
   totalLikes: number;
   variant: "tv" | "page";
   votingOpen?: boolean;
+  votingNotOpenYet?: boolean;
 }) {
   const { register, changes } = useRankMotion(rows);
   const topVotes = Math.max(1, ...rows.map((row) => row.votes));
@@ -50,7 +52,9 @@ export default function LiveLeaderboard({
           </div>
           <div className={cn("flex shrink-0 flex-col", tv ? "items-end gap-2" : "gap-1 sm:items-end")}>
             <p className={cn("flex items-center gap-2 font-mono font-medium", tv ? "text-lg" : "text-xs")}>
-              {votingOpen === false ? (
+              {votingNotOpenYet ? (
+                <span className="text-muted-foreground">Voting opens soon</span>
+              ) : votingOpen === false ? (
                 <span className="text-muted-foreground">Voting closed</span>
               ) : (
                 <>

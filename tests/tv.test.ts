@@ -383,7 +383,33 @@ test("live leaderboard ranks by votes, likes break ties", async () => {
     totalVotes: board.totalVotes,
     totalLikes: board.totalLikes,
     votingOpen: true,
+    votingNotOpenYet: false,
   });
+});
+
+test("live leaderboard distinguishes unopened voting from voting that has closed", async () => {
+  const previousOwnerEmail = process.env.OWNER_EMAIL;
+  process.env.OWNER_EMAIL = "owner@example.com";
+  try {
+    const t = convexTest(schema, modules);
+    const owner = t.withIdentity({
+      subject: "owner-user",
+      email: "owner@example.com",
+      emailVerified: true,
+    });
+    const initial = await t.query(api.tv.leaderboard, {});
+    expect(initial.votingOpen).toBe(false);
+    expect(initial.votingNotOpenYet).toBe(true);
+
+    await owner.mutation(api.settings.update, { votingOpen: true });
+    await owner.mutation(api.settings.update, { votingOpen: false });
+    const closed = await t.query(api.tv.leaderboard, {});
+    expect(closed.votingOpen).toBe(false);
+    expect(closed.votingNotOpenYet).toBe(false);
+  } finally {
+    if (previousOwnerEmail === undefined) delete process.env.OWNER_EMAIL;
+    else process.env.OWNER_EMAIL = previousOwnerEmail;
+  }
 });
 
 test("live leaderboard caps at 10 rows", async () => {

@@ -24,6 +24,14 @@ async function setup() {
   process.env.OWNER_EMAIL = OWNER;
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
+    await ctx.db.insert("settings", {
+      submissionsOpen: true,
+      votingOpen: false,
+      showResultsOnTv: false,
+      maxFileBytes: 10 * 1024 * 1024,
+      colours: [],
+      nextPrintNumber: 1,
+    });
     const participantId = await ctx.db.insert("participants", {
       clerkUserId: ada.subject,
       email: ada.email,

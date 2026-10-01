@@ -141,6 +141,7 @@ export default function Home() {
               totalVotes={liveLeaderboard.totalVotes}
               totalLikes={liveLeaderboard.totalLikes}
               votingOpen={liveLeaderboard.votingOpen}
+              votingNotOpenYet={liveLeaderboard.votingNotOpenYet}
             />
           )}
         </div>

@@ -18,6 +18,8 @@ const EMPTY: Extract<Board, { mode: "queue" }> = {
   mode: "queue",
   counts: { submitted: 0, queued: 0, printing: 0, done: 0 },
   notices: { announcement: null, submissionsOpen: true, submissionsDeadline: null },
+  votingOpen: false,
+  votingNotOpenYet: true,
   printing: [],
   upNext: [],
   moreQueued: 0,
@@ -62,6 +64,8 @@ function QueueView({ board }: { board: Extract<Board, { mode: "queue" }> }) {
         rows={board.leaderboard}
         totalVotes={board.totalVotes}
         totalLikes={board.totalLikes}
+        votingOpen={board.votingOpen}
+        votingNotOpenYet={board.votingNotOpenYet}
       />
       <div className="flex min-h-0 flex-col gap-5">
         <NowPrinting items={board.printing} now={now} fresh={freshPrinting} compact />
