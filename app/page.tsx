@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, LogIn, Printer, ShieldAlert, Tv } from "lucide-react";
+import { ArrowRight, LogIn, Printer, ShieldAlert } from "lucide-react";
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
@@ -129,13 +129,6 @@ export default function Home() {
                 </Alert>
               )}
             </div>
-            <Link
-              href="/tv"
-              className={cn(buttonVariants({ variant: "outline", size: "lg" }), "mt-4 w-fit")}
-            >
-              <Tv data-icon="inline-start" />
-              TV mode
-            </Link>
           </div>
         </div>
         <section aria-labelledby="design-with-devin-heading" className="mx-auto mt-12 w-full max-w-3xl px-4 sm:px-6">
