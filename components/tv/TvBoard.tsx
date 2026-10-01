@@ -3,7 +3,7 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { TvBoard as Board } from "@/convex/tv";
-import Leaderboard from "./Leaderboard";
+import Collage from "./Collage";
 import LiveLeaderboard from "@/components/leaderboard/LiveLeaderboard";
 import Notices from "./Notices";
 import NowPrinting from "./NowPrinting";
@@ -11,7 +11,6 @@ import QrRail from "./QrRail";
 import TvHeader from "./TvHeader";
 import TvStage from "./TvStage";
 import UpNext from "./UpNext";
-import Winner from "./Winner";
 import { useArrivals, useNow } from "./hooks";
 
 const EMPTY: Extract<Board, { mode: "queue" }> = {
@@ -47,9 +46,16 @@ export default function TvBoard() {
 
 function ResultsView({ board }: { board: Extract<Board, { mode: "results" }> }) {
   return (
-    <div className="row-start-3 grid min-h-0 grid-cols-[1fr_620px] gap-6 p-8 pt-6">
-      <Winner winner={board.winner} totalVotes={board.totalVotes} />
-      <Leaderboard leaders={board.runnersUp} top={board.winner?.votes ?? 1} />
+    <div className="row-start-3 grid min-h-0 grid-cols-[720px_minmax(0,1fr)] gap-6 p-8 pt-6">
+      <LiveLeaderboard
+        variant="tv"
+        rows={board.leaderboard}
+        totalVotes={board.totalVotes}
+        totalLikes={board.totalLikes}
+        votingOpen={board.votingOpen}
+        votingNotOpenYet={board.votingNotOpenYet}
+      />
+      <Collage items={board.collage} />
     </div>
   );
 }

@@ -9,12 +9,13 @@ import { listEntries } from "./entries";
 import { DEFAULT_COLOURS, votingNotOpenYet } from "../lib/event";
 import { formatPrintCode } from "../lib/files";
 import { usernameKey } from "../lib/usernames";
-import { compareRanking, rankRows } from "../lib/ranking";
+import { rankRows } from "../lib/ranking";
 import { previewUrlOf } from "./submissions";
 
 export const UP_NEXT_LIMIT = 8;
 export const RECENT_DONE_LIMIT = 3;
 export const LEADERBOARD_LIMIT = 10;
+export const COLLAGE_LIMIT = 60;
 
 // Everything the public TV may show about a submission. Never add emails,
 // notes, file names, rejection reasons or reviewer details here.
@@ -35,7 +36,6 @@ export type TvPrintingItem = TvItem & {
   previewUrl: string | null;
   printer: string | null;
 };
-export type TvLeader = TvItem & { rank: number; votes: number; likes: number };
 export type TvRanked = {
   rank: number;
   printCode: string;
@@ -49,9 +49,12 @@ export type TvLive = { leaderboard: TvRanked[]; totalVotes: number; totalLikes: 
 
 export type TvCounts = { submitted: number; queued: number; printing: number; done: number };
 export type TvNotices = { announcement: string | null; submissionsOpen: boolean; submissionsDeadline: number | null };
-export type TvWinner = TvLeader & {
-  file: { url: string; kind: "stl" | "3mf" } | null;
-  previewUrl: string | null;
+export type TvCollageItem = {
+  printCode: string;
+  title: string;
+  displayName: string;
+  colour: string | null;
+  previewUrl: string;
 };
 
 export type TvBoard =
@@ -73,9 +76,12 @@ export type TvBoard =
       mode: "results";
       counts: TvCounts;
       notices: TvNotices;
+      votingOpen: boolean;
+      votingNotOpenYet: boolean;
+      leaderboard: TvRanked[];
       totalVotes: number;
-      winner: TvWinner | null;
-      runnersUp: TvLeader[];
+      totalLikes: number;
+      collage: TvCollageItem[];
     };
 
 async function byStatus(ctx: QueryCtx, status: Doc<"submissions">["status"]) {
@@ -174,38 +180,35 @@ export const board = query({
       done: done.length,
     };
 
-    const likesOf = (s: Doc<"submissions">) => reactions.get(s._id)?.likes ?? 0;
-
     if (settings.showResultsOnTv) {
-      const { tally } = await tallyVotes(ctx);
-      const totalVotes = [...tally.values()].reduce((total, votes) => total + votes, 0);
-      const ranked = entries
-        .map((s) => ({ s, printCode: s.printCode, votes: tally.get(s._id) ?? 0, likes: likesOf(s) }))
-        .filter((r) => r.votes > 0)
-        .sort(compareRanking)
-        .slice(0, LEADERBOARD_LIMIT);
-      const [first, ...rest] = ranked;
-      const winner: TvWinner | null = first
-        ? {
-            ...(await toItem(first.s, nameOf)),
-            rank: 1,
-            votes: first.votes,
-            likes: first.likes,
-            file: await ctx.storage.getUrl(first.s.storageId).then((url) =>
-              url ? { url, kind: first.s.kind } : null
-            ),
-            previewUrl: await previewUrlOf(ctx, first.s),
-          }
-        : null;
-      const runnersUp: TvLeader[] = await Promise.all(
-        rest.map(async (r, i) => ({
-          ...(await toItem(r.s, nameOf)),
-          rank: i + 2,
-          votes: r.votes,
-          likes: r.likes,
-        }))
-      );
-      return { mode: "results", counts, notices, totalVotes, winner, runnersUp };
+      const collageCandidates = [...entries].sort((a, b) => b._creationTime - a._creationTime);
+      const collage = (
+        await Promise.all(
+          collageCandidates.map(async (s): Promise<TvCollageItem | null> => {
+            const previewUrl = await previewUrlOf(ctx, s);
+            if (!previewUrl) return null;
+            return {
+              printCode: s.printCode,
+              title: s.title,
+              displayName: await nameOf(s.participantId),
+              colour: s.colour ?? null,
+              previewUrl,
+            };
+          })
+        )
+      )
+        .filter((item): item is TvCollageItem => item !== null)
+        .slice(0, COLLAGE_LIMIT);
+      const live = await liveRanking(ctx, entries, reactions, nameOf);
+      return {
+        mode: "results",
+        counts,
+        notices,
+        votingOpen: settings.votingOpen,
+        votingNotOpenYet: votingNotOpenYet(settings),
+        ...live,
+        collage,
+      };
     }
 
     const sortedQueue = [...queued].sort((a, b) => queueKey(a) - queueKey(b));

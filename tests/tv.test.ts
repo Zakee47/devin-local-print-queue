@@ -29,10 +29,11 @@ async function addSubmission(
     doneAt?: number;
     printRequested?: boolean;
     printer?: string;
+    preview?: boolean;
   } = {}
 ) {
   const storageId = await ctx.storage.store(new Blob(["solid x\nendsolid x\n"]));
-  return await ctx.db.insert("submissions", {
+  const submissionId = await ctx.db.insert("submissions", {
     participantId,
     storageId,
     originalFileName: `private-file-${n}.stl`,
@@ -52,6 +53,11 @@ async function addSubmission(
     printer: extra.printer,
     doneAt: extra.doneAt,
   });
+  if (extra.preview) {
+    const previewStorageId = await ctx.storage.store(new Blob(["preview"], { type: "image/png" }));
+    await ctx.db.patch(submissionId, { previewStorageId });
+  }
+  return submissionId;
 }
 
 function expectNoPrivateFields(board: unknown) {
@@ -176,11 +182,12 @@ test("orders the queue, printers and finished prints", async () => {
   expect(board.recentDone.map((i) => i.printCode)).toEqual(["KC-041", "KC-043", "KC-042"]);
 });
 
-test("results mode ranks eligible entries across statuses and returns a public-safe winner", async () => {
+test("results mode exposes the live ranking across eligible statuses", async () => {
   const t = convexTest(schema, modules);
   await t.run(async (ctx) => {
     await addSettings(ctx, {
       submissionsOpen: false,
+      votingOpen: true,
       announcement: "Pizza is ready",
       submissionsDeadline: 123_456,
     });
@@ -209,33 +216,45 @@ test("results mode ranks eligible entries across statuses and returns a public-s
   const board = await t.query(api.tv.board);
   expectNoPrivateFields(board);
   if (board.mode !== "results") throw new Error("expected results mode");
-  expect(Object.keys(board).sort()).toEqual(["counts", "mode", "notices", "runnersUp", "totalVotes", "winner"]);
+  expect(Object.keys(board).sort()).toEqual([
+    "collage",
+    "counts",
+    "leaderboard",
+    "mode",
+    "notices",
+    "totalLikes",
+    "totalVotes",
+    "votingNotOpenYet",
+    "votingOpen",
+  ]);
   expect(board.notices).toEqual({
     announcement: "Pizza is ready",
     submissionsOpen: false,
     submissionsDeadline: 123_456,
   });
+  expect(board.votingOpen).toBe(true);
+  expect(board.votingNotOpenYet).toBe(false);
   expect(board.totalVotes).toBe(6);
-  expect(board.winner).toMatchObject({
+  expect(board.totalLikes).toBe(0);
+  expect(board.leaderboard[0]).toMatchObject({
     rank: 1,
     printCode: "KC-005",
     title: "Design 5",
     displayName: "maker.code",
-    status: "printing",
     votes: 3,
-    file: { kind: "stl" },
+    likes: 0,
   });
-  expect(board.winner?.file?.url).toMatch(/^https?:\/\//);
-  expect(board.runnersUp.map((l) => [l.rank, l.printCode, l.votes])).toEqual([
+  expect(board.leaderboard.map((l) => [l.rank, l.printCode, l.votes])).toEqual([
+    [1, "KC-005", 3],
     [2, "KC-006", 2],
     [3, "KC-007", 1],
   ]);
-  expect(board.runnersUp.every((l) => !Object.hasOwn(l, "file"))).toBe(true);
+  expect(board.collage).toEqual([]);
   expect(JSON.stringify(board)).toContain("maker.code");
   expect(JSON.stringify(board)).not.toContain("Maker Luma Guest");
 });
 
-test("results mode has default notices and no winner without votes", async () => {
+test("results mode has default notices and an empty leaderboard without votes", async () => {
   const t = convexTest(schema, modules);
   await t.run(async (ctx) => {
     await addSettings(ctx);
@@ -246,9 +265,46 @@ test("results mode has default notices and no winner without votes", async () =>
   expectNoPrivateFields(board);
   if (board.mode !== "results") throw new Error("expected results mode");
   expect(board.notices).toEqual({ announcement: null, submissionsOpen: true, submissionsDeadline: null });
+  expect(board.votingOpen).toBe(false);
+  expect(board.votingNotOpenYet).toBe(true);
   expect(board.totalVotes).toBe(0);
-  expect(board.winner).toBeNull();
-  expect(board.runnersUp).toEqual([]);
+  expect(board.leaderboard).toEqual([]);
+  expect(board.totalLikes).toBe(0);
+  expect(board.collage).toEqual([]);
+});
+
+test("results collage includes newest public previews and caps at 60", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await addSettings(ctx);
+    const maker = await addParticipant(ctx, "Maker");
+    for (let n = 1; n <= 63; n++) {
+      await addSubmission(ctx, maker, n, "done", { doneAt: n, preview: true });
+    }
+    await addSubmission(ctx, maker, 64, "rejected", { preview: true });
+    await addSubmission(ctx, maker, 65, "done", { doneAt: 65, printRequested: false, preview: true });
+    await addSubmission(ctx, maker, 66, "done", { doneAt: 66 });
+  });
+
+  const board = await t.query(api.tv.board);
+  expectNoPrivateFields(board);
+  if (board.mode !== "results") throw new Error("expected results mode");
+  expect(board.collage).toHaveLength(60);
+  expect(board.collage[0].printCode).toBe("KC-063");
+  expect(board.collage.at(-1)?.printCode).toBe("KC-004");
+  expect(board.collage.map((item) => item.printCode)).not.toContain("KC-064");
+  expect(board.collage.map((item) => item.printCode)).not.toContain("KC-065");
+  expect(board.collage.map((item) => item.printCode)).not.toContain("KC-066");
+  expect(board.collage.every((item) => item.previewUrl.startsWith("http"))).toBe(true);
+  for (const item of board.collage) {
+    expect(Object.keys(item).sort()).toEqual([
+      "colour",
+      "displayName",
+      "previewUrl",
+      "printCode",
+      "title",
+    ]);
+  }
 });
 
 test("results mode excludes votes on designs that are no longer entries", async () => {
@@ -264,7 +320,7 @@ test("results mode excludes votes on designs that are no longer entries", async 
   const board = await t.query(api.tv.board);
   if (board.mode !== "results") throw new Error("expected results mode");
   expect(board.totalVotes).toBe(0);
-  expect(board.winner).toBeNull();
+  expect(board.leaderboard).toEqual([]);
 });
 
 test("queue mode ranks liked entries across statuses and excludes rejected designs", async () => {
@@ -456,11 +512,9 @@ test("results mode breaks vote ties by likes", async () => {
   const board = await t.query(api.tv.board);
   expectNoPrivateFields(board);
   if (board.mode !== "results") throw new Error("expected results mode");
-  expect(board.winner && [board.winner.rank, board.winner.printCode, board.winner.votes, board.winner.likes]).toEqual([
-    1, "KC-003", 1, 2,
-  ]);
-  expect(board.runnersUp.map((l) => [l.rank, l.printCode, l.votes, l.likes])).toEqual([
+  expect(board.leaderboard.map((l) => [l.rank, l.printCode, l.votes, l.likes])).toEqual([
+    [1, "KC-003", 1, 2],
     [2, "KC-001", 1, 1],
-    [3, "KC-002", 1, 1],
+    [2, "KC-002", 1, 1],
   ]);
 });
