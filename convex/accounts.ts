@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { requireOwner } from "./admins";
 import { entryFor } from "./entries";
 import { normalizeUsername, usernameKey, validateUsername } from "../lib/usernames";
@@ -76,16 +76,16 @@ export const renameParticipant = mutation({
   handler: async (ctx, { participantId, username }) => {
     const actor = await requireOwner(ctx);
     const participant = await ctx.db.get(participantId);
-    if (!participant) throw new Error("Participant not found");
+    if (!participant) throw new ConvexError("Participant not found");
     const validationError = validateUsername(username);
-    if (validationError) throw new Error(validationError);
+    if (validationError) throw new ConvexError(validationError);
     const normalized = normalizeUsername(username);
     const key = usernameKey(normalized);
     const taken = await ctx.db
       .query("participants")
       .withIndex("by_usernameKey", (q) => q.eq("usernameKey", key))
       .unique();
-    if (taken && taken._id !== participant._id) throw new Error("That username is taken");
+    if (taken && taken._id !== participant._id) throw new ConvexError("That username is taken");
     await ctx.db.patch(participantId, { displayName: normalized, usernameKey: key });
     await ctx.db.insert("auditLog", {
       actor,
@@ -104,7 +104,7 @@ export const deleteParticipant = mutation({
   handler: async (ctx, { participantId, block, reason }) => {
     const actor = await requireOwner(ctx);
     const participant = await ctx.db.get(participantId);
-    if (!participant) throw new Error("Participant not found");
+    if (!participant) throw new ConvexError("Participant not found");
 
     const deleted = new Set<string>();
     const remove = async (id: Parameters<typeof ctx.db.delete>[0]) => {

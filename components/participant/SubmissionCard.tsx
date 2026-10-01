@@ -30,15 +30,9 @@ import { swatchFor } from "@/lib/colours";
 import { formatDimensions } from "@/lib/dimensions";
 import type { Printer } from "@/lib/event";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/errors";
 
 export type MySubmission = NonNullable<FunctionReturnType<typeof api.submissions.mine>>[number];
-
-function errorMessage(e: unknown) {
-  if (!(e instanceof Error)) return "Something went wrong";
-  // Convex prefixes server errors with request metadata.
-  const match = e.message.match(/Uncaught Error: (.+?)(\n|$)/);
-  return match ? match[1] : e.message;
-}
 
 export default function SubmissionCard({
   submission: s,

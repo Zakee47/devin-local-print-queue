@@ -1,4 +1,5 @@
 import { convexTest } from "convex-test";
+import { ConvexError } from "convex/values";
 import { afterEach, describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
@@ -312,6 +313,17 @@ describe("one in pipeline per participant", () => {
     await expect(as.mutation(api.queue.approve, { id: second })).rejects.toThrow(/already has/);
     await as.mutation(api.queue.markDone, { id: first });
     await expect(as.mutation(api.queue.approve, { id: second })).rejects.toThrow(/already has/);
+  });
+
+  test("the one-in-pipeline guard rejects with a ConvexError carrying the reason", async () => {
+    const { as, participantId, addSubmission, get } = await setup();
+    const first = await addSubmission(participantId);
+    const second = await addSubmission(participantId, { printRequested: false });
+    await as.mutation(api.queue.approve, { id: first });
+    const code = (await get(first))?.printCode;
+    const error = await as.mutation(api.queue.approve, { id: second }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ConvexError);
+    expect((error as ConvexError<string>).data).toBe(`This participant already has ${code} queued`);
   });
 
   test("approving the backup file makes it the print", async () => {

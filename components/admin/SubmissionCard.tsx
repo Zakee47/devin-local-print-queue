@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import RejectDialog from "@/components/admin/RejectDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
+import { errorMessage } from "@/lib/errors";
 
 export type BoardRow = FunctionReturnType<typeof api.queue.board>[number];
 
@@ -96,7 +97,7 @@ export default function SubmissionCard({
       await fn();
       toast.success(`${row.printCode} ${label}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : "Failed");
+      toast.error(errorMessage(err, "Failed"));
     } finally {
       setBusy(false);
     }
@@ -168,7 +169,7 @@ export default function SubmissionCard({
               size="sm"
               onClick={() =>
                 download(row._id, row.downloadName).catch((err) =>
-                  toast.error(err instanceof Error ? err.message : "Download failed")
+                  toast.error(errorMessage(err, "Download failed"))
                 )
               }
             >

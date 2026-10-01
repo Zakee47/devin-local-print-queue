@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
+import { errorMessage } from "@/lib/errors";
 
 const REVIEW_REASONS = [
   "Too large, over the max size",
@@ -63,7 +64,7 @@ export default function RejectDialog({
       setReason("");
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't reject");
+      toast.error(errorMessage(err, "Couldn't reject"));
     } finally {
       setSaving(false);
     }

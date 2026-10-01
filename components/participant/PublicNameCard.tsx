@@ -19,12 +19,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { normalizeUsername, USERNAME_MAX, validateUsername } from "@/lib/usernames";
-
-function errorMessage(e: unknown) {
-  if (!(e instanceof Error)) return "Couldn't save your username";
-  const match = e.message.match(/Uncaught Error: (.+?)(\n|$)/);
-  return match ? match[1] : e.message;
-}
+import { errorMessage } from "@/lib/errors";
 
 export default function PublicNameCard({ username }: { username: string }) {
   const setUsername = useMutation(api.participants.setUsername);
@@ -45,7 +40,7 @@ export default function PublicNameCard({ username }: { username: string }) {
       toast.success("Username updated");
       setOpen(false);
     } catch (err) {
-      setServerError(errorMessage(err));
+      setServerError(errorMessage(err, "Couldn't save your username"));
     } finally {
       setSaving(false);
     }

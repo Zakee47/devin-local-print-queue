@@ -8,7 +8,7 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { requireParticipant, viewerParticipant } from "./participants";
 import { requireAdmin, viewerRole } from "./admins";
 import { readSettings, takePrintNumber } from "./settings";
@@ -129,14 +129,14 @@ async function requireOwnSubmission(ctx: MutationCtx, id: Id<"submissions">) {
   const participant = await requireParticipant(ctx);
   const submission = await ctx.db.get(id);
   if (!submission || submission.participantId !== participant._id) {
-    throw new Error("Submission not found");
+    throw new ConvexError("Submission not found");
   }
   return { participant, submission };
 }
 
 function requireEditable(submission: Submission) {
   if (submission.status !== "submitted") {
-    throw new Error("This upload has been reviewed and can't be changed");
+    throw new ConvexError("This upload has been reviewed and can't be changed");
   }
 }
 
@@ -160,9 +160,9 @@ function hasPrintFailedReplacement(submissions: Submission[]) {
 
 function cleanTitle(title: string) {
   const trimmed = title.trim();
-  if (!trimmed) throw new Error("Give your keychain a title");
+  if (!trimmed) throw new ConvexError("Give your keychain a title");
   if (trimmed.length > MAX_TITLE_LENGTH) {
-    throw new Error(`Title must be ${MAX_TITLE_LENGTH} characters or fewer`);
+    throw new ConvexError(`Title must be ${MAX_TITLE_LENGTH} characters or fewer`);
   }
   return trimmed;
 }
@@ -171,7 +171,7 @@ function cleanNotes(notes: string | undefined) {
   const trimmed = notes?.trim();
   if (!trimmed) return undefined;
   if (trimmed.length > MAX_NOTES_LENGTH) {
-    throw new Error(`Notes must be ${MAX_NOTES_LENGTH} characters or fewer`);
+    throw new ConvexError(`Notes must be ${MAX_NOTES_LENGTH} characters or fewer`);
   }
   return trimmed;
 }
@@ -181,24 +181,24 @@ function cleanColour(colour: string | undefined, allowed: string[]) {
   const trimmed = colour?.trim();
   if (!trimmed) return undefined;
   const match = allowed.find((c) => c.toLowerCase() === trimmed.toLowerCase());
-  if (!match) throw new Error("Pick a colour from the list");
+  if (!match) throw new ConvexError("Pick a colour from the list");
   return match;
 }
 
 function cleanDimensions(d: Dimensions, max: Dimensions): Dimensions {
   const values = [d.x, d.y, d.z];
   if (values.some((value) => !Number.isFinite(value) || value <= 0)) {
-    throw new Error("We couldn't measure that model, try exporting it again");
+    throw new ConvexError("We couldn't measure that model, try exporting it again");
   }
   if (!fitsWithin(d, max)) {
-    throw new Error(`Your model is ${formatDimensions(d)}; the limit is ${formatDimensions(max)}`);
+    throw new ConvexError(`Your model is ${formatDimensions(d)}; the limit is ${formatDimensions(max)}`);
   }
   return { x: d.x, y: d.y, z: d.z };
 }
 
 async function requireSubmissionsOpen(ctx: MutationCtx) {
   const settings = await readSettings(ctx);
-  if (!submissionsAreOpen(settings, Date.now())) throw new Error("Submissions are closed");
+  if (!submissionsAreOpen(settings, Date.now())) throw new ConvexError("Submissions are closed");
   return settings;
 }
 
@@ -207,10 +207,10 @@ async function assertCanUpload(ctx: MutationCtx, participantId: Id<"participants
   const submissions = await ownSubmissions(ctx, participantId);
   const active = submissions.filter(isActive);
   if (!submissionsAreOpen(settings, Date.now()) && !hasPrintFailedReplacement(submissions)) {
-    throw new Error("Submissions are closed");
+    throw new ConvexError("Submissions are closed");
   }
   if (active.length >= MAX_SUBMISSIONS_PER_PARTICIPANT) {
-    throw new Error(`You can have at most ${MAX_SUBMISSIONS_PER_PARTICIPANT} active uploads`);
+    throw new ConvexError(`You can have at most ${MAX_SUBMISSIONS_PER_PARTICIPANT} active uploads`);
   }
   return { settings, active };
 }
@@ -261,10 +261,10 @@ export const create = mutation({
     try {
       const { settings, active } = await assertCanUpload(ctx, participant._id);
       const kind = fileKindFromName(args.originalFileName);
-      if (!kind) throw new Error("Only STL or 3MF files are accepted");
+      if (!kind) throw new ConvexError("Only STL or 3MF files are accepted");
       if (file.size > settings.maxFileBytes) {
         const mb = Math.round(settings.maxFileBytes / (1024 * 1024));
-        throw new Error(`Files must be ${mb} MB or smaller`);
+        throw new ConvexError(`Files must be ${mb} MB or smaller`);
       }
       const dimensionsMm = cleanDimensions(args.dimensionsMm, settings.maxDimensionsMm);
       const title = cleanTitle(args.title);
@@ -357,7 +357,7 @@ export const setPrintRequested = mutation({
     const { participant, submission } = await requireOwnSubmission(ctx, id);
     requireEditable(submission);
     const all = await ownSubmissions(ctx, participant._id);
-    if (choiceLocked(all)) throw new Error("Your entry is locked in");
+    if (choiceLocked(all)) throw new ConvexError("Your entry is locked in");
     // Picking a vacant entry (after a rejection) is always allowed; swapping
     // an existing one only while submissions are open.
     if (all.some((s) => isActive(s) && s.printRequested)) await requireSubmissionsOpen(ctx);
