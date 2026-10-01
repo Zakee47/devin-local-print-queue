@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, Check, Lock, LogIn, Vote } from "lucide-react";
+import { ArrowLeftRight, Check, Clock, Lock, LogIn, Vote } from "lucide-react";
 import { SignInButton } from "@clerk/nextjs";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { GalleryEntry } from "@/convex/votes";
@@ -20,6 +20,7 @@ export type VoteButtonState =
   | { kind: "unregistered" }
   | { kind: "voted"; canRetract: boolean }
   | { kind: "closed" }
+  | { kind: "not_open" }
   | { kind: "no_votes_left"; swapFrom: GalleryEntry[] }
   | { kind: "available"; votesLeft: number };
 
@@ -74,6 +75,13 @@ export default function VoteButton({
         <Button variant="outline" className={base} disabled>
           <Lock data-icon="inline-start" />
           Voting has closed
+        </Button>
+      );
+    case "not_open":
+      return (
+        <Button variant="outline" className={base} disabled>
+          <Clock data-icon="inline-start" />
+          Voting hasn&apos;t opened yet
         </Button>
       );
     case "no_votes_left":

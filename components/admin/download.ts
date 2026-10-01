@@ -15,39 +15,41 @@ function fileNameFrom(res: Response) {
   return match?.[1];
 }
 
-// Fetches /download with the viewer's Convex token and saves the blob under
-// the server-provided name (a same-origin blob URL honours `download`).
-export function useDownloadSubmission() {
-  const fetchSubmissionFile = useFetchSubmissionFile();
-  return useCallback(
-    async (id: string, fallbackName: string) => {
-      const { blob, fileName } = await fetchSubmissionFile(id);
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = href;
-      a.download = fileName ?? fallbackName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(href), 10_000);
-    },
-    [fetchSubmissionFile]
-  );
+export function saveBlob(blob: Blob, fileName: string) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
 }
 
 export function useFetchSubmissionFile() {
   const { getToken } = useAuth();
   return useCallback(
-    async (id: string) => {
+    async (id: string, fallbackName?: string) => {
       const token = await getToken({ template: "convex" });
       if (!token) throw new Error("Not signed in");
       const res = await fetch(`${convexSiteUrl()}/download?id=${encodeURIComponent(id)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Download failed (${res.status})`);
-      const fileName = fileNameFrom(res);
+      const fileName = fileNameFrom(res) ?? fallbackName;
       return { blob: await res.blob(), fileName };
     },
     [getToken]
+  );
+}
+
+export function useDownloadSubmission() {
+  const fetchFile = useFetchSubmissionFile();
+  return useCallback(
+    async (id: string, fallbackName: string) => {
+      const { blob, fileName } = await fetchFile(id, fallbackName);
+      saveBlob(blob, fileName ?? fallbackName);
+    },
+    [fetchFile]
   );
 }

@@ -15,7 +15,9 @@ export const importCsv = mutation({
   },
   handler: async (ctx, args) => {
     const uploadedBy = await requireOwner(ctx);
-    for (const g of await ctx.db.query("guests").collect()) await ctx.db.delete(g._id);
+    for (const g of await ctx.db.query("guests").collect()) {
+      if (g.manual !== true) await ctx.db.delete(g._id);
+    }
     const eligibleCount = args.guests.filter((g) => g.checkedIn).length;
     const importId = await ctx.db.insert("guestImports", {
       fileName: args.fileName,
@@ -29,6 +31,17 @@ export const importCsv = mutation({
       const email = g.email.trim().toLowerCase();
       if (!email || seen.has(email)) continue;
       seen.add(email);
+      const manual = await ctx.db
+        .query("guests")
+        .withIndex("by_email", (q) => q.eq("email", email))
+        .unique();
+      if (manual?.manual === true) {
+        await ctx.db.patch(manual._id, {
+          checkedIn: true,
+          ...(manual.name ? {} : g.name ? { name: g.name } : {}),
+        });
+        continue;
+      }
       await ctx.db.insert("guests", { email, name: g.name, checkedIn: g.checkedIn, importId });
     }
     await ctx.db.insert("auditLog", {
@@ -37,6 +50,45 @@ export const importCsv = mutation({
       detail: `${args.fileName}: ${eligibleCount}/${seen.size} eligible`,
     });
     return { total: seen.size, eligibleCount };
+  },
+});
+
+// Adds a checked-in guest by hand; upserts an existing row so it stays manual.
+export const addGuest = mutation({
+  args: { email: v.string(), name: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const actor = await requireOwner(ctx);
+    const email = args.email.trim().toLowerCase();
+    if (!email.includes("@")) throw new Error("Enter a valid email address");
+    const name = args.name?.trim() || undefined;
+    const existing = await ctx.db
+      .query("guests")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .unique();
+    let id;
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        checkedIn: true,
+        manual: true,
+        ...(name ? { name } : {}),
+      });
+      id = existing._id;
+    } else {
+      id = await ctx.db.insert("guests", { email, name, checkedIn: true, manual: true });
+    }
+    await ctx.db.insert("auditLog", { actor, action: "guests.add", detail: email });
+    return id;
+  },
+});
+
+export const removeGuest = mutation({
+  args: { id: v.id("guests") },
+  handler: async (ctx, { id }) => {
+    const actor = await requireOwner(ctx);
+    const guest = await ctx.db.get(id);
+    if (!guest) throw new Error("Guest not found");
+    await ctx.db.delete(id);
+    await ctx.db.insert("auditLog", { actor, action: "guests.remove", detail: guest.email });
   },
 });
 

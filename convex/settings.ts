@@ -19,8 +19,8 @@ export type Settings = Omit<Doc<"settings">, "_id" | "_creationTime" | "maxDimen
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  submissionsOpen: true,
-  votingOpen: true,
+  submissionsOpen: false,
+  votingOpen: false,
   showResultsOnTv: false,
   maxFileBytes: DEFAULT_MAX_FILE_BYTES,
   colours: DEFAULT_COLOURS,
@@ -46,6 +46,8 @@ async function writeSettings(ctx: MutationCtx, patch: Partial<Settings>) {
     if (initialSettings.submissionsDeadline === undefined) delete initialSettings.submissionsDeadline;
     if (initialSettings.announcement === undefined) delete initialSettings.announcement;
     if (initialSettings.announcementUpdatedAt === undefined) delete initialSettings.announcementUpdatedAt;
+    if (initialSettings.submissionsOpenedAt === undefined) delete initialSettings.submissionsOpenedAt;
+    if (initialSettings.votingOpenedAt === undefined) delete initialSettings.votingOpenedAt;
     await ctx.db.insert("settings", initialSettings);
   }
 }
@@ -90,6 +92,18 @@ export const update = mutation({
     }
     const { submissionsDeadline, announcement, ...rest } = patch;
     const settingsPatch: Partial<Settings> = { ...rest };
+    if (
+      currentSettings.submissionsOpenedAt === undefined &&
+      (patch.submissionsOpen === true || currentSettings.submissionsOpen === true)
+    ) {
+      settingsPatch.submissionsOpenedAt = Date.now();
+    }
+    if (
+      currentSettings.votingOpenedAt === undefined &&
+      (patch.votingOpen === true || currentSettings.votingOpen === true)
+    ) {
+      settingsPatch.votingOpenedAt = Date.now();
+    }
     if (submissionsDeadline === null) settingsPatch.submissionsDeadline = undefined;
     else if (submissionsDeadline !== undefined) settingsPatch.submissionsDeadline = submissionsDeadline;
     if (announcement === null || announcement === "") {

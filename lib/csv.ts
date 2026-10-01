@@ -2,8 +2,12 @@ function csvField(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
+export function toCsv(rows: string[][]): string {
+  return rows.map((row) => row.map(csvField).join(",")).join("\r\n");
+}
+
 export function downloadCsv(filename: string, rows: string[][]) {
-  const csv = rows.map((row) => row.map(csvField).join(",")).join("\r\n");
+  const csv = toCsv(rows);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

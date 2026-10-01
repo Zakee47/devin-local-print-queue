@@ -18,7 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen } from "@/lib/event";
+import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen, submissionsNotOpenYet } from "@/lib/event";
 
 function EntriesSkeleton() {
   return (
@@ -152,6 +152,14 @@ export default function SubmitPage() {
                     slotsLeft={slotsLeft}
                   />
                 </>
+              ) : submissionsNotOpenYet(settings, now) ? (
+                <Alert>
+                  <AlertTitle>Submissions are not open yet</AlertTitle>
+                  <AlertDescription>
+                    The organizers will open submissions soon — keep this page open and the upload
+                    form will appear here.
+                  </AlertDescription>
+                </Alert>
               ) : (
                 <Alert>
                   <AlertTitle>Submissions are closed</AlertTitle>

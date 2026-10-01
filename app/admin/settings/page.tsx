@@ -1,5 +1,6 @@
 import SettingsManager from "@/components/admin/SettingsManager";
 import PreviewBackfill from "@/components/admin/PreviewBackfill";
+import StaffSettingsSection from "@/components/admin/StaffSettingsSection";
 
 export default function AdminSettingsPage() {
   return (
@@ -12,6 +13,7 @@ export default function AdminSettingsPage() {
       </div>
       <SettingsManager />
       <PreviewBackfill />
+      <StaffSettingsSection />
     </div>
   );
 }

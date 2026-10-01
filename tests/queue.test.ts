@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { entryFor } from "../convex/entries";
 import schema from "../convex/schema";
@@ -483,5 +483,62 @@ describe("download", () => {
     const { as } = await setup();
     expect((await as.fetch("/download")).status).toBe(400);
     expect((await as.fetch("/download?id=nope")).status).toBe(404);
+  });
+});
+
+describe("exportRows", () => {
+  test("staff can read it, non-admins cannot", async () => {
+    const { t, as, participantId, addSubmission } = await setup();
+    await addSubmission(participantId);
+    expect(await as.query(api.queue.exportRows)).toHaveLength(1);
+    await expect(t.query(api.queue.exportRows)).rejects.toThrow();
+    await expect(t.withIdentity(guest).query(api.queue.exportRows)).rejects.toThrow();
+  });
+
+  test("rows are sorted by printCode with participant details and counts", async () => {
+    const { t, as, participantId, otherId, addSubmission } = await setup();
+    const b = await addSubmission(otherId, { title: "Second" });
+    const a = await addSubmission(participantId, { title: "First" });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(b, { printCode: "KC-010", printer: "Creality" });
+      await ctx.db.patch(a, { printCode: "KC-002" });
+      await ctx.db.insert("likes", {
+        participantId: otherId,
+        submissionId: a,
+        reaction: "like",
+        updatedAt: 1,
+      });
+      await ctx.db.insert("likes", {
+        participantId: participantId,
+        submissionId: a,
+        reaction: "skip",
+        updatedAt: 2,
+      });
+      await ctx.db.insert("votes", { voterId: otherId, submissionId: a });
+    });
+
+    const rows = await as.query(api.queue.exportRows);
+    expect(rows.map((r) => r.printCode)).toEqual(["KC-002", "KC-010"]);
+    expect(rows[0]).toMatchObject({
+      id: a,
+      title: "First",
+      username: "Ada L.",
+      name: "Ada Lovelace",
+      email: "ada@example.com",
+      colour: "Red",
+      status: "submitted",
+      printRequested: true,
+      likes: 1,
+      votes: 1,
+      rejectionReason: "",
+    });
+    expect(rows[1]).toMatchObject({ printer: "Creality", likes: 0, votes: 0 });
+
+    const info = await as.query(internal.queue.downloadInfo, { id: a });
+    expect(rows[0].downloadName).toBe(info?.fileName);
+    for (const row of rows) {
+      expect(row).not.toHaveProperty("storageId");
+      expect(row).not.toHaveProperty("fileUrl");
+    }
   });
 });
