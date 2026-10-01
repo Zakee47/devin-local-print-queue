@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-export const TRY_DEVIN_URL = "https://trydevin.ai";
+export const TRY_DEVIN_URL = "https://www.trydevin.ai/devin-local-london";
 
 function subscribeNoop() {
   return () => {};
@@ -18,4 +18,5 @@ export function useSiteUrl() {
   );
 }
 
-export const displayUrl = (url: string) => url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+export const displayUrl = (url: string) =>
+  url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
