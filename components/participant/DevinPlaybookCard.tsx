@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/card";
 import { copyText } from "@/lib/clipboard";
 import {
-  DEVIN_PLAYBOOK_CREATE_URL,
+  devinPlaybookCreateUrl,
   devinStartUrl,
   PLAYBOOK_DOWNLOAD_NAME,
   PLAYBOOK_PATH,
@@ -62,13 +62,6 @@ function usePlaybookText() {
   return { text, getText };
 }
 
-function downloadPlaybook() {
-  const anchor = document.createElement("a");
-  anchor.href = PLAYBOOK_PATH;
-  anchor.download = PLAYBOOK_DOWNLOAD_NAME;
-  anchor.click();
-}
-
 export default function DevinPlaybookCard({
   variant = "full",
   className,
@@ -102,17 +95,12 @@ export default function DevinPlaybookCard({
       if (fallbackText) copied = await copyText(fallbackText);
     }
 
-    if (!copied) {
-      downloadPlaybook();
-      toast.error(
-        "Couldn't copy — downloaded the playbook instead; open it and paste its contents into Devin"
-      );
-    }
-
-    window.open(DEVIN_PLAYBOOK_CREATE_URL, "_blank", "noopener");
-    if (copied) {
-      toast.success("Playbook copied — paste it into the playbook body in Devin and save");
-    }
+    window.open(devinPlaybookCreateUrl(window.location.origin), "_blank", "noopener");
+    toast.success(
+      copied
+        ? "Opened in Devin with the playbook filled in — name it and save. Full text also copied to your clipboard."
+        : "Opened in Devin with the playbook filled in — name it and save."
+    );
   }
 
   async function copyMarkdown() {
@@ -171,15 +159,21 @@ export default function DevinPlaybookCard({
           </Button>
         </div>
         {!compact ? (
-          <ol className="list-decimal space-y-1 pl-5 text-xs leading-relaxed text-muted-foreground">
-            <li>Paste (Ctrl/Cmd+V) into the playbook body.</li>
-            <li>Name it &quot;Keychain 3D print&quot;.</li>
-            <li>Save, then start a session with it and describe your keychain idea.</li>
-          </ol>
+          <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>Name it &quot;Keychain 3D print&quot;.</li>
+              <li>Save.</li>
+              <li>Start a session with it and describe your keychain idea.</li>
+            </ol>
+            <p>
+              Want the full text inline instead? Select all in the body and paste (Ctrl/Cmd+V) — it&apos;s on your
+              clipboard.
+            </p>
+          </div>
         ) : (
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Paste into the playbook body, name it &quot;Keychain 3D print&quot;, save, then start a session with
-            it and describe your keychain idea.
+            Name it &quot;Keychain 3D print&quot;, save, then start a session with it and describe your keychain idea.
+            The full text is also on your clipboard.
           </p>
         )}
       </CardContent>
