@@ -5,7 +5,7 @@ import { viewerRole, requireAdmin } from "./admins";
 import { downloadFileName } from "../lib/files";
 import { MAX_SUBMISSIONS_PER_PARTICIPANT, type Printer } from "../lib/event";
 import { fitsWithin } from "../lib/dimensions";
-import { readSettings } from "./settings";
+import { readSettings, type Settings } from "./settings";
 
 const PIPELINE: Doc<"submissions">["status"][] = ["queued", "printing", "done"];
 
@@ -15,6 +15,16 @@ export function printersWithColour(printers: Printer[], colour?: string): string
   return printers
     .filter(({ colours }) => colours.some((loaded) => loaded.trim().toLowerCase() === requested))
     .map(({ name }) => name);
+}
+
+function requireKnownPrinter(settings: Settings, name: string | undefined): string | undefined {
+  const trimmed = name?.trim();
+  if (!trimmed) return undefined;
+  const printer = settings.printers.find(
+    ({ name: configuredName }) => configuredName.trim().toLowerCase() === trimmed.toLowerCase()
+  );
+  if (!printer) throw new Error(`Unknown printer "${trimmed}"`);
+  return printer.name;
 }
 
 async function load(ctx: MutationCtx, id: Id<"submissions">) {
@@ -67,12 +77,18 @@ export const board = query({
       const participantName = participant?.name ?? "Unknown";
       const participantUsername = participant?.displayName ?? "Unknown";
       const oversize = s.dimensionsMm ? !fitsWithin(s.dimensionsMm, settings.maxDimensionsMm) : false;
+      const printersWithRequestedColour = printersWithColour(settings.printers, s.colour);
+      const matchingPrinters = new Set(printersWithRequestedColour);
       rows.push({
         ...s,
         participantUsername,
         participantName,
         ...(isOwner ? { participantEmail: participant?.email ?? "" } : {}),
-        printersWithColour: printersWithColour(settings.printers, s.colour),
+        printersWithColour: printersWithRequestedColour,
+        printerOptions: [
+          ...printersWithRequestedColour,
+          ...settings.printers.filter(({ name }) => !matchingPrinters.has(name)).map(({ name }) => name),
+        ],
         oversize,
         fileUrl: await ctx.storage.getUrl(s.storageId),
         downloadName: downloadFileName({
@@ -144,12 +160,25 @@ export const approve = mutation({
 });
 
 export const startPrinting = mutation({
-  args: { id: v.id("submissions") },
-  handler: async (ctx, { id }) => {
+  args: { id: v.id("submissions"), printer: v.optional(v.string()) },
+  handler: async (ctx, { id, printer }) => {
     const actor = await requireAdmin(ctx);
     expectStatus(await load(ctx, id), "queued");
-    await ctx.db.patch(id, { status: "printing", printingAt: Date.now() });
-    await audit(ctx, actor, "queue.startPrinting", id);
+    const resolved = requireKnownPrinter(await readSettings(ctx), printer);
+    await ctx.db.patch(id, { status: "printing", printingAt: Date.now(), printer: resolved });
+    await audit(ctx, actor, "queue.startPrinting", id, resolved);
+  },
+});
+
+export const setPrinter = mutation({
+  args: { id: v.id("submissions"), printer: v.optional(v.string()) },
+  handler: async (ctx, { id, printer }) => {
+    const actor = await requireAdmin(ctx);
+    const submission = await load(ctx, id);
+    expectStatus(submission, "printing", "done");
+    const resolved = requireKnownPrinter(await readSettings(ctx), printer);
+    await ctx.db.patch(id, { printer: resolved });
+    await audit(ctx, actor, "queue.setPrinter", id, resolved ?? "cleared");
   },
 });
 
@@ -218,6 +247,7 @@ export const moveBack = mutation({
         await ctx.db.patch(id, {
           status: "queued",
           printingAt: undefined,
+          printer: undefined,
           queueOrder: submission.queueOrder ?? (await nextQueueOrder(ctx)),
         });
         break;

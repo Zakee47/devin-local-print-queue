@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ChangeEvent } from "react";
 import dynamic from "next/dynamic";
 import {
   ArrowDown,
@@ -22,6 +22,7 @@ import { formatDimensions } from "@/lib/dimensions";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
 import RejectDialog from "@/components/admin/RejectDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
 
@@ -39,6 +40,32 @@ function formatTime(ms: number) {
   return new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
+function PrinterSelect({
+  row,
+  value,
+  disabled,
+  onChange,
+}: {
+  row: BoardRow;
+  value: string;
+  disabled?: boolean;
+  onChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+}) {
+  return (
+    <NativeSelect aria-label="Printer" size="sm" value={value} disabled={disabled} onChange={onChange}>
+      <option value="">Printer: not set</option>
+      {row.printer && !row.printerOptions.includes(row.printer) ? (
+        <option value={row.printer}>{row.printer}</option>
+      ) : null}
+      {row.printerOptions.map((name) => (
+        <option key={name} value={name}>
+          {row.colour && row.printersWithColour.includes(name) ? `${name} · ${row.colour} loaded` : name}
+        </option>
+      ))}
+    </NativeSelect>
+  );
+}
+
 export default function SubmissionCard({
   row,
   position,
@@ -52,6 +79,7 @@ export default function SubmissionCard({
 }) {
   const approve = useMutation(api.queue.approve);
   const startPrinting = useMutation(api.queue.startPrinting);
+  const setPrinter = useMutation(api.queue.setPrinter);
   const markDone = useMutation(api.queue.markDone);
   const moveBack = useMutation(api.queue.moveBack);
   const move = useMutation(api.queue.move);
@@ -60,6 +88,7 @@ export default function SubmissionCard({
   const [rejecting, setRejecting] = useState(false);
   const [rejectKind, setRejectKind] = useState<"review" | "print_failed">("review");
   const [busy, setBusy] = useState(false);
+  const [printerChoice, setPrinterChoice] = useState("");
 
   const backup = row.status === "submitted" && !row.printRequested;
 
@@ -112,6 +141,12 @@ export default function SubmissionCard({
               {row.colour ?? "Any colour"}
             </span>
             <span>{row.dimensionsMm ? formatDimensions(row.dimensionsMm) : "Size unknown"}</span>
+            {row.printer ? (
+              <Badge variant="outline">
+                <Printer aria-hidden="true" />
+                {row.printer}
+              </Badge>
+            ) : null}
             {row.oversize ? <Badge variant="destructive">Over size limit</Badge> : null}
             <span className="font-mono uppercase">
               {row.kind} · {formatBytes(row.sizeBytes)}
@@ -144,6 +179,19 @@ export default function SubmissionCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 sm:max-w-64 sm:justify-end">
+          {row.status === "printing" || row.status === "done" ? (
+            <PrinterSelect
+              row={row}
+              value={row.printer ?? ""}
+              disabled={busy}
+              onChange={(event) => {
+                const printer = event.currentTarget.value;
+                void run("printer updated", () =>
+                  setPrinter({ id: row._id, printer: printer || undefined })
+                );
+              }}
+            />
+          ) : null}
           {row.status === "submitted" ? (
             <>
               <Button size="sm" disabled={busy} onClick={() => run("approved", () => approve({ id: row._id }))}>
@@ -166,10 +214,18 @@ export default function SubmissionCard({
           ) : null}
           {row.status === "queued" ? (
             <>
+              <PrinterSelect
+                row={row}
+                value={printerChoice}
+                disabled={busy}
+                onChange={(event) => setPrinterChoice(event.currentTarget.value)}
+              />
               <Button
                 size="sm"
                 disabled={busy}
-                onClick={() => run("printing", () => startPrinting({ id: row._id }))}
+                onClick={() =>
+                  run("printing", () => startPrinting({ id: row._id, printer: printerChoice || undefined }))
+                }
               >
                 <Printer data-icon="inline-start" />
                 Start printing

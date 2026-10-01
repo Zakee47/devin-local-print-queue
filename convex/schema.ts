@@ -67,6 +67,8 @@ export default defineSchema({
     queueOrder: v.optional(v.number()),
     queuedAt: v.optional(v.number()),
     printingAt: v.optional(v.number()),
+    // Name of the printer staff put this job on; optional.
+    printer: v.optional(v.string()),
     doneAt: v.optional(v.number()),
     rejectedAt: v.optional(v.number()),
   })

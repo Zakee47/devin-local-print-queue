@@ -23,7 +23,13 @@ async function addSubmission(
   participantId: Id<"participants">,
   n: number,
   status: Status,
-  extra: { queueOrder?: number; printingAt?: number; doneAt?: number; printRequested?: boolean } = {}
+  extra: {
+    queueOrder?: number;
+    printingAt?: number;
+    doneAt?: number;
+    printRequested?: boolean;
+    printer?: string;
+  } = {}
 ) {
   const storageId = await ctx.storage.store(new Blob(["solid x\nendsolid x\n"]));
   return await ctx.db.insert("submissions", {
@@ -43,6 +49,7 @@ async function addSubmission(
     queueOrder: extra.queueOrder,
     queuedAt: status === "submitted" || status === "rejected" ? undefined : 1000 + n,
     printingAt: extra.printingAt,
+    printer: extra.printer,
     doneAt: extra.doneAt,
   });
 }
@@ -95,7 +102,12 @@ test("queue mode exposes only public-safe fields", async () => {
   const t = convexTest(schema, modules);
   await t.run(async (ctx) => {
     const ada = await addParticipant(ctx, "Ada");
-    await addSubmission(ctx, ada, 1, "printing", { queueOrder: 1, printingAt: 5000 });
+    await addSubmission(ctx, ada, 1, "printing", {
+      queueOrder: 1,
+      printingAt: 5000,
+      printer: "Ultimaker",
+    });
+    await addSubmission(ctx, ada, 6, "printing", { queueOrder: 2, printingAt: 6000 });
     await addSubmission(ctx, ada, 2, "queued", { queueOrder: 2 });
     const grace = await addParticipant(ctx, "Grace");
     await addSubmission(ctx, grace, 3, "done", { queueOrder: 0, doneAt: 4000 });
@@ -106,7 +118,7 @@ test("queue mode exposes only public-safe fields", async () => {
   expectNoPrivateFields(board);
   if (board.mode !== "queue") throw new Error("expected queue mode");
   expect(board.notices).toEqual({ announcement: null, submissionsOpen: true, submissionsDeadline: null });
-  expect(board.counts).toEqual({ submitted: 4, queued: 1, printing: 1, done: 1 });
+  expect(board.counts).toEqual({ submitted: 5, queued: 1, printing: 2, done: 1 });
   expect(board.printing[0]).toMatchObject({
     printCode: "KC-001",
     title: "Design 1",
@@ -114,8 +126,10 @@ test("queue mode exposes only public-safe fields", async () => {
     colour: "Red",
     status: "printing",
     printingAt: 5000,
+    printer: "Ultimaker",
     file: { kind: "stl" },
   });
+  expect(board.printing[1].printer).toBeNull();
   expect(board.printing[0].file?.url).toMatch(/^https?:\/\//);
   expect(JSON.stringify(board)).toContain("ada.code");
   expect(JSON.stringify(board)).not.toContain("Ada Luma Guest");

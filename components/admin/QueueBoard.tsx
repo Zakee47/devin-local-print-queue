@@ -28,6 +28,31 @@ function columns(rows: BoardRow[]): Record<Column, BoardRow[]> {
   };
 }
 
+function printingGroups(rows: BoardRow[], printerOrder: string[]) {
+  const byPrinter = new Map<string, BoardRow[]>();
+  const withoutPrinter: BoardRow[] = [];
+  for (const row of rows) {
+    if (!row.printer) {
+      withoutPrinter.push(row);
+      continue;
+    }
+    const group = byPrinter.get(row.printer) ?? [];
+    group.push(row);
+    byPrinter.set(row.printer, group);
+  }
+
+  const groups: { printer: string | null; rows: BoardRow[] }[] = printerOrder.flatMap((printer) => {
+    const group = byPrinter.get(printer);
+    return group ? [{ printer, rows: group }] : [];
+  });
+  const configured = new Set(printerOrder);
+  for (const [printer, group] of byPrinter) {
+    if (!configured.has(printer)) groups.push({ printer, rows: group });
+  }
+  if (withoutPrinter.length > 0) groups.push({ printer: null, rows: withoutPrinter });
+  return groups;
+}
+
 const TABS: { value: Column; label: string; empty: string }[] = [
   { value: "review", label: "Needs review", empty: "Nothing waiting for review." },
   { value: "queued", label: "Queued", empty: "Approve a submission to queue it." },
@@ -38,10 +63,11 @@ const TABS: { value: Column; label: string; empty: string }[] = [
 
 export default function QueueBoard() {
   const rows = useQuery(api.queue.board);
+  const settings = useQuery(api.settings.get);
   const download = useDownloadSubmission();
   const [downloading, setDownloading] = useState(false);
 
-  if (rows === undefined) {
+  if (rows === undefined || settings === undefined) {
     return (
       <div className="flex flex-col gap-3">
         <Skeleton className="h-8 w-96 rounded-lg" />
@@ -52,6 +78,10 @@ export default function QueueBoard() {
   }
 
   const cols = columns(rows);
+  const printerGroups = printingGroups(
+    cols.printing,
+    settings.printers.map(({ name }) => name)
+  );
 
   async function downloadAllQueued() {
     setDownloading(true);
@@ -103,6 +133,21 @@ export default function QueueBoard() {
                 <EmptyDescription>{tab.empty}</EmptyDescription>
               </EmptyHeader>
             </Empty>
+          ) : tab.value === "printing" ? (
+            <div className="flex flex-col gap-4">
+              {printerGroups.map(({ printer, rows: groupRows }) => (
+                <section key={printer ?? "no-printer"} className="flex flex-col gap-2">
+                  <h3 className="font-mono text-sm text-muted-foreground">
+                    {printer ?? "No printer set"} · {groupRows.length} {groupRows.length === 1 ? "job" : "jobs"}
+                  </h3>
+                  <ul className="flex flex-col gap-3">
+                    {groupRows.map((row) => (
+                      <SubmissionCard key={row._id} row={row} />
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
           ) : (
             <ul className="flex flex-col gap-3">
               {cols[tab.value].map((row, i, list) => (

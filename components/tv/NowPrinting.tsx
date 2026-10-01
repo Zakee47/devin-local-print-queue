@@ -52,7 +52,7 @@ export default function NowPrinting({
         </span>
         {items.length > 1 ? (
           <span className="flex items-center gap-3 font-mono text-lg text-muted-foreground">
-            Printer {index + 1} of {items.length}
+            {index + 1} of {items.length}
             <span className="flex gap-2">
               {items.map((i, n) => (
                 <span
@@ -99,6 +99,13 @@ export default function NowPrinting({
             <div className="min-w-0">
               <p className={cn("font-mono font-medium tracking-[0.12em] text-brand", compact ? "text-lg" : "text-2xl")}>
                 {current.printCode}
+                {current.printer ? (
+                  <span className="ml-2 inline-flex items-center gap-2 align-middle tracking-normal text-foreground">
+                    <span className="text-border-strong">·</span>
+                    <Printer className={compact ? "size-5" : "size-6"} aria-hidden="true" />
+                    {current.printer}
+                  </span>
+                ) : null}
               </p>
               <h2
                 className={cn(

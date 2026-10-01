@@ -29,7 +29,10 @@ export type TvItem = {
   doneAt: number | null;
 };
 
-export type TvPrintingItem = TvItem & { file: { url: string; kind: "stl" | "3mf" } | null };
+export type TvPrintingItem = TvItem & {
+  file: { url: string; kind: "stl" | "3mf" } | null;
+  printer: string | null;
+};
 export type TvLeader = TvItem & { rank: number; votes: number; likes: number };
 export type TvRanked = {
   rank: number;
@@ -204,7 +207,11 @@ export const board = query({
         .sort((a, b) => (a.printingAt ?? a._creationTime) - (b.printingAt ?? b._creationTime))
         .map(async (s): Promise<TvPrintingItem> => {
           const url = await ctx.storage.getUrl(s.storageId);
-          return { ...(await toItem(s, nameOf)), file: url ? { url, kind: s.kind } : null };
+          return {
+            ...(await toItem(s, nameOf)),
+            file: url ? { url, kind: s.kind } : null,
+            printer: s.printer ?? null,
+          };
         })
     );
     const recentDone = await Promise.all(
@@ -285,9 +292,10 @@ const DEMO_ENTRIES: {
   colour: (typeof DEFAULT_COLOURS)[number];
   dimensionsMm: { x: number; y: number; z: number };
   status: Doc<"submissions">["status"];
+  printer?: string;
 }[] = [
-  { name: "Ada Lovelace", username: "ada.codes", title: "Analytical Engine", colour: "Gold", dimensionsMm: { x: 27, y: 51, z: 40 }, status: "printing" },
-  { name: "Grace Hopper", username: "gracebug", title: "First Bug", colour: "Silver", dimensionsMm: { x: 38.5, y: 50, z: 4.5 }, status: "printing" },
+  { name: "Ada Lovelace", username: "ada.codes", title: "Analytical Engine", colour: "Gold", dimensionsMm: { x: 27, y: 51, z: 40 }, status: "printing", printer: "Creality" },
+  { name: "Grace Hopper", username: "gracebug", title: "First Bug", colour: "Silver", dimensionsMm: { x: 38.5, y: 50, z: 4.5 }, status: "printing", printer: "Ultimaker" },
   { name: "Alan Turing", username: "turing_t", title: "Enigma Rotor", colour: "Sea Green", dimensionsMm: { x: 40, y: 40, z: 4 }, status: "queued" },
   { name: "Katherine Johnson", username: "katherinej", title: "Orbit Ring", colour: "Sky Blue", dimensionsMm: { x: 34, y: 48, z: 6 }, status: "queued" },
   { name: "Linus Torvalds", username: "linus.dev", title: "Tux Tag", colour: "Black", dimensionsMm: { x: 42, y: 39, z: 5 }, status: "queued" },
@@ -348,6 +356,7 @@ export const insertDemo = internalMutation({
         queueOrder: e.status === "submitted" ? undefined : i,
         queuedAt: e.status === "submitted" ? undefined : now - minutes,
         printingAt: e.status === "printing" ? now - minutes / 3 : undefined,
+        printer: e.printer,
         doneAt: e.status === "done" ? now - minutes / 4 : undefined,
       });
       submissionIds.push(submissionId);
