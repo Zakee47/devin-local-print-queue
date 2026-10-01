@@ -98,7 +98,7 @@ export default function SubmitPage() {
                 onClick={finishPlaybookStep}
                 disabled={completingPlaybookStep}
               >
-                {completingPlaybookStep ? "Saving..." : "I've added it — continue"}
+                {completingPlaybookStep ? "Saving..." : "I've started — continue"}
               </Button>
               <Button
                 type="button"
