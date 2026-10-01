@@ -466,7 +466,7 @@ describe("deadline", () => {
 });
 
 describe("rejections and the entry", () => {
-  test("a failed print frees the slot and the entry, and shows the kind", async () => {
+  test("a failed print frees the slot and the print request, keeps the design entry, and shows the kind", async () => {
     const { t, asAda } = await setup();
     const a = await uploadOk(t, asAda);
     await setStatus(t, a, { status: "queued", queueOrder: 1 });
@@ -478,7 +478,7 @@ describe("rejections and the entry", () => {
     });
     await t.run(async (ctx) => {
       const participant = await ctx.db.query("participants").first();
-      expect(await entryFor(ctx, participant!._id)).toBeNull();
+      expect(await entryFor(ctx, participant!._id)).toMatchObject({ _id: a });
     });
     const second = await uploadOk(t, asAda);
     const third = await uploadOk(t, asAda);
@@ -524,5 +524,91 @@ describe("rejections and the entry", () => {
     await check();
     const rows = await t.run((ctx) => ctx.db.query("submissions").collect());
     expect(rows.filter((s) => s.printRequested && s.status !== "rejected").map((s) => s._id)).toEqual([a]);
+  });
+});
+
+describe("design entry", () => {
+  const designs = async (user: User) =>
+    (await user.query(api.submissions.mine, {}))!.filter((s) => s.designEntry).map((s) => s._id);
+
+  test("the first upload becomes the design entry, later ones don't", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda);
+    const b = await uploadOk(t, asAda);
+    expect(await designs(asAda)).toEqual([a]);
+    await asAda.mutation(api.submissions.remove, { id: a });
+    expect(await designs(asAda)).toEqual([b]);
+    const c = await uploadOk(t, asAda);
+    expect(await designs(asAda)).toEqual([b]);
+    expect((await asAda.query(api.submissions.mine, {}))!.find((s) => s._id === c)).toMatchObject({
+      designEntry: false,
+    });
+  });
+
+  test("a new upload doesn't take over a design entry whose print was rejected", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda);
+    await setStatus(t, a, { status: "rejected", rejectionKind: "review", printRequested: false });
+    const b = await uploadOk(t, asAda);
+    const mine = (await asAda.query(api.submissions.mine, {}))!;
+    expect(mine.filter((s) => s.designEntry).map((s) => s._id)).toEqual([a]);
+    expect(mine.filter((s) => s.printRequested).map((s) => s._id)).toEqual([b]);
+  });
+
+  test("setDesignEntry keeps one per participant and leaves the print request alone", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda);
+    const b = await uploadOk(t, asAda);
+    await asAda.mutation(api.submissions.setDesignEntry, { submissionId: b });
+    let mine = (await asAda.query(api.submissions.mine, {}))!;
+    expect(mine.filter((s) => s.designEntry).map((s) => s._id)).toEqual([b]);
+    expect(mine.filter((s) => s.printRequested).map((s) => s._id)).toEqual([a]);
+    await t.run(async (ctx) => {
+      expect(await entryFor(ctx, (await ctx.db.get(b))!.participantId)).toMatchObject({ _id: b });
+    });
+    // Not gated on staff review: works after the print request is queued.
+    await setStatus(t, a, { status: "queued", queueOrder: 1 });
+    await asAda.mutation(api.submissions.setDesignEntry, { submissionId: a });
+    mine = (await asAda.query(api.submissions.mine, {}))!;
+    expect(mine.filter((s) => s.designEntry).map((s) => s._id)).toEqual([a]);
+  });
+
+  test("setDesignEntry only accepts your own active uploads", async () => {
+    const { t, asAda, asGrace } = await setup();
+    const a = await uploadOk(t, asAda);
+    const b = await uploadOk(t, asAda);
+    await uploadOk(t, asGrace);
+    await expect(asGrace.mutation(api.submissions.setDesignEntry, { submissionId: a })).rejects.toThrow(/not found/);
+    await setStatus(t, b, { status: "rejected", rejectionKind: "review" });
+    await expect(asAda.mutation(api.submissions.setDesignEntry, { submissionId: b })).rejects.toThrow(/active uploads/);
+    expect(await designs(asAda)).toEqual([a]);
+  });
+
+  test("setDesignEntry refuses when submissions are closed", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda);
+    const b = await uploadOk(t, asAda);
+    await t.run(async (ctx) => {
+      const row = await ctx.db.query("settings").first();
+      await ctx.db.patch(row!._id, { submissionsOpen: false });
+    });
+    await expect(asAda.mutation(api.submissions.setDesignEntry, { submissionId: b })).rejects.toThrow(/closed/);
+    expect(await designs(asAda)).toEqual([a]);
+  });
+
+  test("moving the print request doesn't move a legacy row's design entry", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda);
+    const b = await uploadOk(t, asAda);
+    // Rows created before designEntry existed only have printRequested.
+    await t.run(async (ctx) => {
+      await ctx.db.patch(a, { designEntry: undefined });
+      await ctx.db.patch(b, { designEntry: undefined });
+    });
+    expect(await designs(asAda)).toEqual([a]);
+    await asAda.mutation(api.submissions.setPrintRequested, { id: b });
+    const mine = (await asAda.query(api.submissions.mine, {}))!;
+    expect(mine.filter((s) => s.designEntry).map((s) => s._id)).toEqual([a]);
+    expect(mine.filter((s) => s.printRequested).map((s) => s._id)).toEqual([b]);
   });
 });

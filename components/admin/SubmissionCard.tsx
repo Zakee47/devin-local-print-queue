@@ -9,6 +9,7 @@ import {
   Download,
   Printer,
   TriangleAlert,
+  Trophy,
   Undo2,
   X,
 } from "lucide-react";
@@ -79,6 +80,8 @@ export default function SubmissionCard({
   const startPrinting = useMutation(api.queue.startPrinting);
   const setPrinter = useMutation(api.queue.setPrinter);
   const markDone = useMutation(api.queue.markDone);
+  const removeFromCompetition = useMutation(api.queue.removeFromCompetition);
+  const restoreToCompetition = useMutation(api.queue.restoreToCompetition);
   const moveBack = useMutation(api.queue.moveBack);
   const move = useMutation(api.queue.move);
   const download = useDownloadSubmission();
@@ -118,6 +121,20 @@ export default function SubmissionCard({
             {row.printCode}
           </span>
           {backup ? <Badge variant="outline">Backup file</Badge> : null}
+          <div className="flex flex-wrap gap-x-2 gap-y-1 sm:flex-col">
+            <Badge variant={row.designEntry && !row.designRemoved ? "default" : "outline"}>
+              <Trophy aria-hidden="true" />
+              {row.designRemoved
+                ? "Removed from competition"
+                : row.designEntry
+                  ? "Competition entry"
+                  : "Not in competition"}
+            </Badge>
+            <Badge variant={row.printRequested ? "default" : "outline"}>
+              <Printer aria-hidden="true" />
+              {row.printRequested ? "Print request" : "No print request"}
+            </Badge>
+          </div>
         </div>
 
         <div className="min-w-0 flex-1">
@@ -308,6 +325,27 @@ export default function SubmissionCard({
               Reject
             </Button>
           ) : null}
+          {row.designRemoved ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => run("restored to the competition", () => restoreToCompetition({ id: row._id }))}
+            >
+              <Trophy data-icon="inline-start" />
+              Restore to competition
+            </Button>
+          ) : row.designEntry ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => run("removed from the competition", () => removeFromCompetition({ id: row._id }))}
+            >
+              <Trophy data-icon="inline-start" />
+              Remove from competition
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -342,6 +380,7 @@ export default function SubmissionCard({
         open={rejecting}
         onOpenChange={setRejecting}
         kind={rejectKind}
+        designEntry={row.designEntry && !row.designRemoved}
       />
     </li>
   );

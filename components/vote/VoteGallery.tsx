@@ -200,7 +200,8 @@ export default function VoteGallery() {
         Swipe right to like, left to skip. {votingOpen ? CHANGE_COPY : closedCopy}
       </p>
       <p className="mt-3 hidden max-w-xl text-[15px] leading-relaxed text-muted-foreground sm:block">
-        Every entry is in the running, printed or not. Swipe right to like, left to skip. Likes break
+        Every competition entry is in the running for a 3D printer, printed or not. Swipe right to like, left to
+        skip. Likes break
         ties. When you find a favourite, give it one of your {MAX_VOTES_PER_PARTICIPANT} votes.{" "}
         {votingOpen ? CHANGE_COPY : closedCopy}
       </p>
@@ -281,7 +282,7 @@ export default function VoteGallery() {
               value={[filter]}
               onValueChange={(v) => v[0] && changeFilter(v[0] as DeckFilter)}
               className="flex-wrap gap-1"
-              aria-label="Filter entries"
+              aria-label="Filter competition entries"
             >
               {DECK_FILTERS.map((f) => (
                 <ToggleGroupItem key={f.value} value={f.value} variant="outline" size="sm">
@@ -466,7 +467,7 @@ function DroppedNotice({
       <AlertDescription>
         <p>
           {names.join(", ")} {dropped.length === 1 ? "is" : "are"} no longer in the running (withdrawn, swapped
-          or rejected), so {dropped.length === 1 ? "that vote doesn't" : "those votes don't"} count.
+          or removed from the competition), so {dropped.length === 1 ? "that vote doesn't" : "those votes don't"} count.
           {votingOpen ? ` Spend ${dropped.length === 1 ? "it" : "them"} on another design.` : null}
         </p>
         <Button variant="outline" size="sm" className="mt-2" onClick={onDismiss}>
@@ -524,9 +525,9 @@ function NoEntries() {
         <EmptyMedia variant="icon">
           <Trophy />
         </EmptyMedia>
-        <EmptyTitle>No entries yet</EmptyTitle>
+        <EmptyTitle>No competition entries yet</EmptyTitle>
         <EmptyDescription>
-          Designs show up here as soon as they&apos;re submitted.{" "}
+          Designs show up here as soon as they&apos;re entered in the competition.{" "}
           <Link href="/submit" className={buttonVariants({ variant: "link" })}>
             Submit yours
           </Link>

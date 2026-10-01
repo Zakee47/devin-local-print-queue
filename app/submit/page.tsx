@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogIn, Lock, Star } from "lucide-react";
+import { ChevronDown, LogIn, Lock, Printer, Trophy } from "lucide-react";
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
@@ -63,8 +63,10 @@ export default function SubmitPage() {
     : [];
   const slotsLeft = MAX_SUBMISSIONS_PER_PARTICIPANT - active.length;
   const choiceLocked = active.some((s) => s.status !== "submitted");
-  const hasEntry = active.some((s) => s.printRequested);
-  const needsPick = !hasEntry && active.length > 0 && !choiceLocked;
+  const hasPrintRequest = active.some((s) => s.printRequested);
+  const needsPrintPick = !hasPrintRequest && active.length > 0 && !choiceLocked;
+  const hasDesignEntry = submissions?.some((s) => s.designEntry && !s.designRemoved) ?? false;
+  const needsDesignPick = !hasDesignEntry && open && active.some((s) => !s.designRemoved);
   const canUploadReplacement = submissions?.some((s) => s.canUploadReplacement) ?? false;
   const showPlaybookStep = status?.state === "registered" && !status.playbookStepDone;
 
@@ -115,9 +117,25 @@ export default function SubmitPage() {
             <div className="mb-6 sm:mb-8">
               <h1 className="font-heading text-3xl font-semibold tracking-[-0.02em]">My entries</h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                Upload up to {MAX_SUBMISSIONS_PER_PARTICIPANT} files and pick one as your entry — it&apos;s the one we
-                print and the one people vote on.
+                Upload up to {MAX_SUBMISSIONS_PER_PARTICIPANT} files, then make two separate picks. They can be the
+                same file or different ones.
               </p>
+              <ul className="mt-3 flex flex-col gap-1.5 text-sm">
+                <li className="flex items-start gap-2">
+                  <Trophy className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+                  <span>
+                    <span className="font-medium">Competition entry</span>
+                    <span className="text-muted-foreground"> — voted on to win a 3D printer. Goes live straight away.</span>
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Printer className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span>
+                    <span className="font-medium">Print request</span>
+                    <span className="text-muted-foreground"> — printed for you, needs staff approval.</span>
+                  </span>
+                </li>
+              </ul>
             </div>
 
             {!authReady || (signedIn && (!status || status.state !== "registered")) ? (
@@ -185,17 +203,29 @@ export default function SubmitPage() {
                 {choiceLocked ? (
                   <Alert>
                     <Lock />
-                    <AlertTitle>Your entry is locked in</AlertTitle>
-                    <AlertDescription>An organizer has accepted it into the print queue.</AlertDescription>
+                    <AlertTitle>Your print request is locked in</AlertTitle>
+                    <AlertDescription>
+                      An organizer has accepted it into the print queue. You can still change your competition entry
+                      while submissions are open.
+                    </AlertDescription>
                   </Alert>
                 ) : null}
-                {needsPick ? (
+                {needsDesignPick ? (
                   <Alert>
-                    <Star />
-                    <AlertTitle>Pick your entry</AlertTitle>
+                    <Trophy />
+                    <AlertTitle>Enter a design in the competition</AlertTitle>
                     <AlertDescription>
-                      Your entry was sent back, so you don&apos;t have one right now. Make your other upload your entry
-                      {open ? ", or upload a new design" : ""}.
+                      You don&apos;t have a competition entry right now. Pick one of your uploads to put it in the vote.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                {needsPrintPick ? (
+                  <Alert>
+                    <Printer />
+                    <AlertTitle>Pick your print request</AlertTitle>
+                    <AlertDescription>
+                      Your print request was sent back, so nothing is waiting to print. Request a print of your other
+                      upload{open ? ", or upload a new design" : ""}. Your competition entry stays in the vote.
                     </AlertDescription>
                   </Alert>
                 ) : null}
@@ -205,7 +235,7 @@ export default function SubmitPage() {
                     submission={s}
                     colours={settings.colours}
                     printers={settings.printers}
-                    showEntryChoice={needsPick || (open && active.length > 1)}
+                    showPrintChoice={needsPrintPick || (open && active.length > 1)}
                     submissionsOpen={open}
                   />
                 ))}

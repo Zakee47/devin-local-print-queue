@@ -7,6 +7,7 @@ import { MAX_SUBMISSIONS_PER_PARTICIPANT, type Printer } from "../lib/event";
 import { fitsWithin } from "../lib/dimensions";
 import { readSettings, type Settings } from "./settings";
 import { previewUrlOf } from "./submissions";
+import { isDesignEntry, printRequestPatch } from "./entries";
 
 const PIPELINE: Doc<"submissions">["status"][] = ["queued", "printing", "done"];
 
@@ -82,6 +83,8 @@ export const board = query({
       const matchingPrinters = new Set(printersWithRequestedColour);
       rows.push({
         ...s,
+        designEntry: isDesignEntry(s),
+        designRemoved: s.designRemoved ?? false,
         participantUsername,
         participantName,
         ...(isOwner ? { participantEmail: participant?.email ?? "" } : {}),
@@ -146,11 +149,11 @@ export const approve = mutation({
       throw new Error(`This participant already has ${inPipeline.printCode} ${inPipeline.status}`);
     }
     for (const s of siblings) {
-      if (s._id !== id && s.printRequested) await ctx.db.patch(s._id, { printRequested: false });
+      if (s._id !== id && s.printRequested) await ctx.db.patch(s._id, printRequestPatch(s, false));
     }
     await ctx.db.patch(id, {
       status: "queued",
-      printRequested: true,
+      ...printRequestPatch(submission, true),
       queueOrder: await nextQueueOrder(ctx),
       queuedAt: Date.now(),
       reviewedBy: actor,
@@ -200,13 +203,14 @@ export const reject = mutation({
     const actor = await requireAdmin(ctx);
     const trimmed = reason.trim();
     if (!trimmed) throw new Error("A rejection comment is required");
-    expectStatus(await load(ctx, id), "submitted", "queued");
+    const submission = await load(ctx, id);
+    expectStatus(submission, "submitted", "queued");
     await ctx.db.patch(id, {
       status: "rejected",
       rejectionReason: trimmed,
       rejectedAt: Date.now(),
       reviewedBy: actor,
-      printRequested: false,
+      ...printRequestPatch(submission, false),
       queueOrder: undefined,
       rejectionKind: "review",
     });
@@ -228,7 +232,7 @@ export const printFailed = mutation({
       rejectionReason: trimmed,
       rejectedAt: Date.now(),
       reviewedBy: actor,
-      printRequested: false,
+      ...printRequestPatch(submission, false),
       queueOrder: undefined,
     });
     await audit(ctx, actor, "queue.printFailed", id, trimmed);
@@ -271,7 +275,7 @@ export const moveBack = mutation({
           rejectionReason: undefined,
           rejectionKind: undefined,
           rejectedAt: undefined,
-          printRequested: !active.some((s) => s.printRequested),
+          ...printRequestPatch(submission, !active.some((s) => s.printRequested)),
         });
         break;
       }
@@ -279,6 +283,41 @@ export const moveBack = mutation({
         throw new Error(`${submission.printCode} is already awaiting review`);
     }
     await audit(ctx, actor, "queue.moveBack", id, `from ${submission.status}`);
+  },
+});
+
+// Pulls a design from the competition (vote, leaderboard, TV); its votes stop
+// counting. Printing is unaffected.
+export const removeFromCompetition = mutation({
+  args: { id: v.id("submissions"), reason: v.optional(v.string()) },
+  handler: async (ctx, { id, reason }) => {
+    const actor = await requireAdmin(ctx);
+    const submission = await load(ctx, id);
+    if (!isDesignEntry(submission)) throw new Error(`${submission.printCode} isn't a competition entry`);
+    if (submission.designRemoved) return;
+    const trimmed = reason?.trim() || undefined;
+    await ctx.db.patch(id, {
+      designEntry: true,
+      designRemoved: true,
+      designRemovedReason: trimmed,
+      designRemovedAt: Date.now(),
+    });
+    await audit(ctx, actor, "competition.remove", id, trimmed);
+  },
+});
+
+export const restoreToCompetition = mutation({
+  args: { id: v.id("submissions") },
+  handler: async (ctx, { id }) => {
+    const actor = await requireAdmin(ctx);
+    const submission = await load(ctx, id);
+    if (!submission.designRemoved) return;
+    await ctx.db.patch(id, {
+      designRemoved: undefined,
+      designRemovedReason: undefined,
+      designRemovedAt: undefined,
+    });
+    await audit(ctx, actor, "competition.restore", id);
   },
 });
 
@@ -371,6 +410,8 @@ export const exportRows = query({
         status: s.status,
         printer: s.printer ?? "",
         printRequested: s.printRequested,
+        designEntry: isDesignEntry(s),
+        designRemoved: s.designRemoved ?? false,
         likes,
         votes,
         rejectionReason: s.rejectionReason ?? "",

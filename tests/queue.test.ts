@@ -251,7 +251,7 @@ describe("printer assignments", () => {
 });
 
 describe("printFailed", () => {
-  test("rejects a printing submission, records the reason, and clears the print entry", async () => {
+  test("rejects a printing submission, records the reason, and clears the print request only", async () => {
     const { t, as, participantId, addSubmission, get } = await setup();
     const id = await addSubmission(participantId);
     await as.mutation(api.queue.approve, { id });
@@ -264,8 +264,9 @@ describe("printFailed", () => {
       rejectionKind: "print_failed",
       rejectionReason: "Detached from the bed",
       printRequested: false,
+      designEntry: true,
     });
-    expect(await t.run((ctx) => entryFor(ctx, participantId))).toBeNull();
+    expect(await t.run((ctx) => entryFor(ctx, participantId))).toMatchObject({ _id: id });
     const audit = await t.run(async (ctx) =>
       (await ctx.db.query("auditLog").collect()).find((row) => row.action === "queue.printFailed")
     );

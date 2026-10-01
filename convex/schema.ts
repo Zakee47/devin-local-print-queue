@@ -61,6 +61,13 @@ export default defineSchema({
     colour: v.optional(v.string()),
     // At most one active submission per participant has this set.
     printRequested: v.boolean(),
+    // The participant's competition entry; no staff approval. Read through
+    // isDesignEntry: rows from before this field existed fall back to printRequested.
+    designEntry: v.optional(v.boolean()),
+    // Staff pulled this design from the competition; printing is unaffected.
+    designRemoved: v.optional(v.boolean()),
+    designRemovedReason: v.optional(v.string()),
+    designRemovedAt: v.optional(v.number()),
     status: submissionStatus,
     // Human-friendly sequential code, e.g. "KC-007", assigned on creation.
     printCode: v.string(),
