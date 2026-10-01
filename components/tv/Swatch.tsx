@@ -5,7 +5,7 @@ export default function Swatch({ colour, className }: { colour: string | null; c
   return (
     <span
       aria-hidden
-      className={cn("inline-block size-4 shrink-0 rounded-full ring-1 ring-white/15", className)}
+      className={cn("inline-block size-4 shrink-0 rounded-full ring-1 ring-foreground/15", className)}
       style={{ backgroundColor: swatchFor(colour ?? undefined) }}
     />
   );

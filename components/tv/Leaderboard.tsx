@@ -21,7 +21,7 @@ export default function Leaderboard({ leaders, top }: { leaders: TvLeader[]; top
             >
               <span
                 aria-hidden
-                className="absolute inset-y-0 left-0 bg-white/[0.04] transition-[width] duration-700"
+                className="absolute inset-y-0 left-0 bg-foreground/[0.04] transition-[width] duration-700"
                 style={{ width: `${(l.votes / Math.max(top, 1)) * 100}%` }}
               />
               <span className="relative w-12 font-mono text-3xl font-semibold text-muted-foreground tabular-nums">

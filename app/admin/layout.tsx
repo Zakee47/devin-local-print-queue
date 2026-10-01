@@ -6,6 +6,7 @@ import { BrandWordmark } from "@/components/BrandMark";
 import DevinCredit from "@/components/DevinCredit";
 import HeaderBar from "@/components/HeaderBar";
 import NoticeBanner from "@/components/NoticeBanner";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import RoleBadge from "@/components/admin/team/RoleBadge";
 import { Separator } from "@/components/ui/separator";
 import { getAppName } from "@/lib/app-name";
@@ -37,6 +38,7 @@ export default function AdminLayout({
               orientation="vertical"
               className="hidden !h-5 sm:block"
             />
+            <ThemeToggle />
             <ProfileMenu />
           </div>
         </div>

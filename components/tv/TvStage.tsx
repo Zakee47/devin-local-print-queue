@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useIdle } from "./hooks";
 
 // Highlight for an item that just started printing or just finished.
@@ -17,8 +18,8 @@ const FLASH_CSS = `
 export const STAGE_W = 1920;
 export const STAGE_H = 1080;
 
-// Fixed 1920x1080 canvas scaled to fit the screen (letterboxed), always dark,
-// never scrolls, and hides the cursor when the mouse is idle.
+// Fixed 1920x1080 canvas scaled to fit the screen (letterboxed), never scrolls,
+// and hides the cursor when the mouse is idle.
 export default function TvStage({ children }: { children: React.ReactNode }) {
   const [scale, setScale] = useState(1);
   const idle = useIdle();
@@ -29,23 +30,28 @@ export default function TvStage({ children }: { children: React.ReactNode }) {
     window.addEventListener("resize", fit);
     const root = document.documentElement;
     const prevOverflow = root.style.overflow;
-    const prevScheme = root.style.colorScheme;
     root.style.overflow = "hidden";
-    root.style.colorScheme = "dark";
     return () => {
       window.removeEventListener("resize", fit);
       root.style.overflow = prevOverflow;
-      root.style.colorScheme = prevScheme;
     };
   }, []);
 
   return (
     <div
       className={cn(
-        "dark fixed inset-0 z-40 grid place-items-center overflow-hidden bg-black text-foreground",
+        "fixed inset-0 z-40 grid place-items-center overflow-hidden bg-background text-foreground",
         idle && "cursor-none [&_*]:cursor-none"
       )}
     >
+      <div
+        className={cn(
+          "absolute top-3 right-3 z-10 rounded-full border border-border bg-background/80 p-1 backdrop-blur transition-opacity duration-300",
+          idle ? "pointer-events-none opacity-0" : "opacity-100"
+        )}
+      >
+        <ThemeToggle />
+      </div>
       <div className="shrink-0" style={{ width: STAGE_W * scale, height: STAGE_H * scale }}>
         <div
           className="relative origin-top-left overflow-hidden bg-background"

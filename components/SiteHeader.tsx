@@ -3,6 +3,7 @@ import { BrandWordmark } from "@/components/BrandMark";
 import HeaderAuth from "@/components/HeaderAuth";
 import HeaderBar from "@/components/HeaderBar";
 import NoticeBanner from "@/components/NoticeBanner";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { getAppName } from "@/lib/app-name";
 import { PAGE_WIDTHS, type PageWidth } from "@/lib/page-width";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ export default function SiteHeader({
           <BrandWordmark />
         </Link>
         <nav aria-label="Account" className="flex shrink-0 items-center gap-2">
+          <ThemeToggle />
           <HeaderAuth showSignIn={showSignIn} />
         </nav>
       </div>
