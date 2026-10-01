@@ -30,7 +30,7 @@ function QrCard({ label, hint, url }: { label: string; hint: string; url: string
                   /<wbr />
                 </>
               ) : null}
-              {part}
+              <span className="whitespace-nowrap">{part}</span>
             </Fragment>
           ))}
       </p>
