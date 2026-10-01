@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Copy, Download, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { copyText } from "@/lib/clipboard";
 import {
   DEVIN_PLAYBOOK_CREATE_URL,
@@ -65,9 +72,11 @@ function downloadPlaybook() {
 export default function DevinPlaybookCard({
   variant = "full",
   className,
+  children,
 }: {
   variant?: "full" | "compact";
   className?: string;
+  children?: ReactNode;
 }) {
   const { text, getText } = usePlaybookText();
   const origin = useSyncExternalStore(
@@ -174,6 +183,7 @@ export default function DevinPlaybookCard({
           </p>
         )}
       </CardContent>
+      {children ? <CardFooter className="flex-wrap justify-end gap-2">{children}</CardFooter> : null}
     </Card>
   );
 }

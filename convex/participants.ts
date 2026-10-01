@@ -33,7 +33,12 @@ export type ViewerStatus =
   | { state: "not_on_guest_list"; email: string }
   | { state: "blocked"; email: string }
   | { state: "eligible"; email: string }
-  | { state: "registered"; email: string; displayName: string };
+  | {
+      state: "registered";
+      email: string;
+      displayName: string;
+      playbookStepDone: boolean;
+    };
 
 // Drives the participant landing page: whether the signed-in email is on the
 // checked-in Luma list and whether they've already registered.
@@ -46,7 +51,12 @@ export const viewerStatus = query({
     if (!email) return { state: "unverified" };
     const participant = await viewerParticipant(ctx);
     if (participant) {
-      return { state: "registered", email, displayName: participant.displayName };
+      return {
+        state: "registered",
+        email,
+        displayName: participant.displayName,
+        playbookStepDone: participant.playbookStepDoneAt !== undefined,
+      };
     }
     const blocked = await ctx.db
       .query("blockedEmails")
@@ -98,6 +108,15 @@ export const register = mutation({
       displayName: normalizedUsername,
       usernameKey: key,
     });
+  },
+});
+
+export const completePlaybookStep = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const participant = await requireParticipant(ctx);
+    if (participant.playbookStepDoneAt !== undefined) return;
+    await ctx.db.patch(participant._id, { playbookStepDoneAt: Date.now() });
   },
 });
 

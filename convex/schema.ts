@@ -41,6 +41,7 @@ export default defineSchema({
     // Public, participant-chosen username for the TV and gallery.
     displayName: v.string(),
     usernameKey: v.optional(v.string()),
+    playbookStepDoneAt: v.optional(v.number()),
   })
     .index("by_email", ["email"])
     .index("by_clerkUserId", ["clerkUserId"])
