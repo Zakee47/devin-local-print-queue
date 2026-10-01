@@ -41,9 +41,9 @@ export default function ModelPreview({
   }, []);
 
   return (
-    <div ref={ref} className={cn("relative aspect-square w-full bg-surface", className)}>
+    <div ref={ref} className={cn("relative aspect-square w-full overflow-hidden bg-surface", className)}>
       {show3d && url ? (
-        <ModelViewer url={url} kind={kind} colour={colour} className="absolute inset-0" />
+        <ModelViewer url={url} kind={kind} colour={colour} className="absolute inset-0 aspect-auto h-full" />
       ) : previewUrl ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
