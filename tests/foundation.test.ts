@@ -7,7 +7,12 @@ import schema from "../convex/schema";
 import { DEFAULT_SETTINGS, readSettings } from "../convex/settings";
 import { entryFor, listEntries } from "../convex/entries";
 import { swatchFor } from "../lib/colours";
-import { DEFAULT_MAX_DIMENSIONS_MM, submissionsAreOpen } from "../lib/event";
+import {
+  DEFAULT_MAX_DIMENSIONS_MM,
+  submissionsAreOpen,
+  submissionsNotOpenYet,
+  votingNotOpenYet,
+} from "../lib/event";
 import { fitsWithin, formatDimensions } from "../lib/dimensions";
 import { normalizeUsername, usernameKey, validateUsername } from "../lib/usernames";
 
@@ -61,6 +66,18 @@ describe("submission windows", () => {
     expect(submissionsAreOpen({ submissionsOpen: false }, 100)).toBe(false);
     expect(submissionsAreOpen({ submissionsOpen: true, submissionsDeadline: 101 }, 100)).toBe(true);
     expect(submissionsAreOpen({ submissionsOpen: true, submissionsDeadline: 100 }, 100)).toBe(false);
+  });
+
+  test("distinguishes 'not open yet' from closed", () => {
+    expect(submissionsNotOpenYet({ submissionsOpen: false }, 100)).toBe(true);
+    expect(submissionsNotOpenYet({ submissionsOpen: false, submissionsOpenedAt: 1 }, 100)).toBe(false);
+    expect(
+      submissionsNotOpenYet({ submissionsOpen: false, submissionsDeadline: 50 }, 100)
+    ).toBe(false);
+    expect(submissionsNotOpenYet({ submissionsOpen: true }, 100)).toBe(false);
+    expect(votingNotOpenYet({ votingOpen: false })).toBe(true);
+    expect(votingNotOpenYet({ votingOpen: false, votingOpenedAt: 1 })).toBe(false);
+    expect(votingNotOpenYet({ votingOpen: true })).toBe(false);
   });
 });
 
@@ -167,6 +184,52 @@ describe("admin roles and settings permissions", () => {
     }
   });
 
+  test("first open stamps submissionsOpenedAt and votingOpenedAt, closing keeps them", async () => {
+    process.env.OWNER_EMAIL = "owner@example.com";
+    const t = convexTest(schema, modules);
+    await t.run((ctx) => ctx.db.insert("admins", { email: "staff@example.com" }));
+    const staff = t.withIdentity(identity("staff", "staff@example.com"));
+    const owner = t.withIdentity(identity("owner", "owner@example.com"));
+
+    await staff.mutation(api.settings.update, { submissionsOpen: true });
+    let settings = await staff.query(api.settings.get, {});
+    const openedAt = settings.submissionsOpenedAt;
+    expect(openedAt).toBeTypeOf("number");
+    expect(settings.votingOpenedAt).toBeUndefined();
+
+    await staff.mutation(api.settings.update, { submissionsOpen: false });
+    settings = await staff.query(api.settings.get, {});
+    expect(settings.submissionsOpenedAt).toBe(openedAt);
+
+    await owner.mutation(api.settings.update, { votingOpen: true });
+    settings = await staff.query(api.settings.get, {});
+    expect(settings.votingOpenedAt).toBeTypeOf("number");
+    await owner.mutation(api.settings.update, { votingOpen: false });
+    settings = await staff.query(api.settings.get, {});
+    expect(settings.votingOpenedAt).toBeTypeOf("number");
+  });
+
+  test("a legacy row that is already open gets stamped on the next update", async () => {
+    process.env.OWNER_EMAIL = "owner@example.com";
+    const t = convexTest(schema, modules);
+    await t.run((ctx) => ctx.db.insert("admins", { email: "staff@example.com" }));
+    const staff = t.withIdentity(identity("staff", "staff@example.com"));
+    await t.run((ctx) =>
+      ctx.db.insert("settings", {
+        submissionsOpen: true,
+        votingOpen: true,
+        showResultsOnTv: false,
+        maxFileBytes: 123,
+        colours: [],
+        nextPrintNumber: 1,
+      })
+    );
+    await staff.mutation(api.settings.update, { announcement: "hi" });
+    const settings = await staff.query(api.settings.get, {});
+    expect(settings.submissionsOpenedAt).toBeTypeOf("number");
+    expect(settings.votingOpenedAt).toBeTypeOf("number");
+  });
+
   test("owner email is the only owner and can be absent", async () => {
     delete process.env.OWNER_EMAIL;
     const t = convexTest(schema, modules);
@@ -248,7 +311,9 @@ describe("settings and design entries", () => {
       maxDimensionsMm: DEFAULT_SETTINGS.maxDimensionsMm,
       printers: DEFAULT_SETTINGS.printers,
     });
-    expect(DEFAULT_SETTINGS.votingOpen).toBe(true);
+    expect(DEFAULT_SETTINGS.votingOpen).toBe(false);
+    expect(DEFAULT_SETTINGS.submissionsOpen).toBe(false);
+    expect(DEFAULT_SETTINGS.maxFileBytes).toBe(10 * 1024 * 1024);
     const publicSettings = await t.query(api.settings.get, {});
     expect(publicSettings).toHaveProperty("submissionsAcceptingNow", true);
     expect(publicSettings).not.toHaveProperty("nextPrintNumber");

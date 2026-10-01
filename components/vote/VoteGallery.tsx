@@ -10,7 +10,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { DroppedVote, GalleryEntry } from "@/convex/votes";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
-import { MAX_VOTES_PER_PARTICIPANT, type Reaction } from "@/lib/event";
+import { MAX_VOTES_PER_PARTICIPANT, votingNotOpenYet, type Reaction } from "@/lib/event";
 import { DECK_FILTERS, filterCounts, matchesFilter, type DeckFilter } from "@/lib/deck";
 import VoteButton, { type VoteButtonState } from "@/components/vote/VoteButton";
 import SwipeCard, { type SwipeCardHandle } from "@/components/vote/SwipeCard";
@@ -65,6 +65,8 @@ export default function VoteGallery() {
     !authReady ||
     (signedIn && (ballot === undefined || myReactions === undefined));
   const votingOpen = settings?.votingOpen ?? false;
+  const notOpenYet = settings ? votingNotOpenYet(settings) : false;
+  const closedCopy = notOpenYet ? "Voting hasn't opened yet." : "Voting has closed.";
   const interactive = !!ballot;
   const canReact = interactive && votingOpen;
   // Read-only visitors see every entry; filters only mean something once you react.
@@ -171,7 +173,7 @@ export default function VoteGallery() {
     if (ballot.votedSubmissionIds.includes(id)) {
       return { kind: "voted", canRetract: votingOpen };
     }
-    if (!votingOpen) return { kind: "closed" };
+    if (!votingOpen) return notOpenYet ? { kind: "not_open" } : { kind: "closed" };
     if (ballot.votesLeft === 0) return { kind: "no_votes_left", swapFrom: votedEntries };
     return { kind: "available", votesLeft: ballot.votesLeft };
   };
@@ -195,13 +197,22 @@ export default function VoteGallery() {
         Swipe the designs
       </h1>
       <p className="mt-1 text-sm text-muted-foreground sm:hidden">
-        Swipe right to like, left to skip. {votingOpen ? CHANGE_COPY : "Voting has closed."}
+        Swipe right to like, left to skip. {votingOpen ? CHANGE_COPY : closedCopy}
       </p>
       <p className="mt-3 hidden max-w-xl text-[15px] leading-relaxed text-muted-foreground sm:block">
         Every entry is in the running, printed or not. Swipe right to like, left to skip. Likes break
         ties. When you find a favourite, give it one of your {MAX_VOTES_PER_PARTICIPANT} votes.{" "}
-        {votingOpen ? CHANGE_COPY : "Voting has closed."}
+        {votingOpen ? CHANGE_COPY : closedCopy}
       </p>
+      {notOpenYet ? (
+        <Alert className="mt-4 max-w-xl sm:mt-6">
+          <Lock />
+          <AlertTitle>Voting hasn&apos;t opened yet</AlertTitle>
+          <AlertDescription>
+            Browse the designs now — the organizers will open voting soon.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="mt-4 sm:mt-6">
         {loading ? (
@@ -246,6 +257,7 @@ export default function VoteGallery() {
               max={ballot.maxVotes}
               voted={votedEntries}
               votingOpen={votingOpen}
+              notOpenYet={notOpenYet}
               onOpen={open}
             />
           </div>
@@ -347,7 +359,7 @@ export default function VoteGallery() {
                 </p>
                 {!canReact && current ? (
                   <p className="text-center text-xs text-muted-dim">
-                    {interactive ? `${LOCKED_COPY}. Browsing only.` : votingOpen ? "Browsing only. Sign in to save likes." : "Voting has closed. Browsing only."}
+                    {interactive ? `${LOCKED_COPY}. Browsing only.` : votingOpen ? "Browsing only. Sign in to save likes." : `${closedCopy} Browsing only.`}
                   </p>
                 ) : null}
               </div>
@@ -387,12 +399,14 @@ function BallotSummary({
   max,
   voted,
   votingOpen,
+  notOpenYet,
   onOpen,
 }: {
   used: number;
   max: number;
   voted: GalleryEntry[];
   votingOpen: boolean;
+  notOpenYet?: boolean;
   onOpen: (id: SubmissionId) => void;
 }) {
   return (
@@ -401,14 +415,16 @@ function BallotSummary({
         <p className="font-heading text-lg font-medium tracking-tight">
           {used} of {max} votes used
         </p>
-        {!votingOpen ? (
+        {!votingOpen && !notOpenYet ? (
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <Lock className="size-3.5" aria-hidden />
             Locked
           </span>
         ) : null}
       </div>
-      <p className="text-sm text-muted-foreground">{votingOpen ? CHANGE_COPY : LOCKED_COPY}</p>
+      <p className="text-sm text-muted-foreground">
+        {votingOpen ? CHANGE_COPY : notOpenYet ? "Voting hasn't opened yet." : LOCKED_COPY}
+      </p>
       {voted.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
           {voted.map((e) => (

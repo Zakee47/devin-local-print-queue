@@ -15,12 +15,14 @@ export default defineSchema({
     blockedBy: v.string(),
   }).index("by_email", ["email"]),
 
-  // Eligibility allowlist, replaced wholesale by each Luma CSV upload.
+  // Eligibility allowlist, replaced by each Luma CSV upload, except manual rows.
   guests: defineTable({
     email: v.string(),
     name: v.optional(v.string()),
     checkedIn: v.boolean(),
-    importId: v.id("guestImports"),
+    importId: v.optional(v.id("guestImports")),
+    // Added by hand in the admin UI; survives CSV uploads.
+    manual: v.optional(v.boolean()),
   }).index("by_email", ["email"]),
 
   guestImports: defineTable({
@@ -108,6 +110,9 @@ export default defineSchema({
     submissionsDeadline: v.optional(v.number()),
     announcement: v.optional(v.string()),
     announcementUpdatedAt: v.optional(v.number()),
+    // First time submissions were opened; distinguishes "not open yet" from closed.
+    submissionsOpenedAt: v.optional(v.number()),
+    votingOpenedAt: v.optional(v.number()),
     maxDimensionsMm: v.optional(v.object({ x: v.number(), y: v.number(), z: v.number() })),
     printers: v.optional(v.array(v.object({ name: v.string(), colours: v.array(v.string()) }))),
   }),

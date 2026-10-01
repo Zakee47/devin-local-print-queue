@@ -28,6 +28,14 @@ async function setup() {
     for (const g of [ada, grace]) {
       await ctx.db.insert("guests", { email: g.email, checkedIn: true, importId });
     }
+    await ctx.db.insert("settings", {
+      submissionsOpen: true,
+      votingOpen: true,
+      showResultsOnTv: false,
+      maxFileBytes: 1024 * 1024,
+      colours: ["Black"],
+      nextPrintNumber: 1,
+    });
   });
   const asAda = t.withIdentity(ada);
   const asGrace = t.withIdentity(grace);
@@ -137,16 +145,7 @@ describe("create", () => {
 
   test("rejects files over settings.maxFileBytes and deletes the upload", async () => {
     const { t, asAda } = await setup();
-    await t.run((ctx) =>
-      ctx.db.insert("settings", {
-        submissionsOpen: true,
-        votingOpen: false,
-        showResultsOnTv: false,
-        maxFileBytes: 1024 * 1024,
-        colours: ["Red"],
-        nextPrintNumber: 1,
-      })
-    );
+    await insertSettings(t, { maxFileBytes: 1024 * 1024, colours: ["Red"] });
     const { storageId, result } = await upload(t, asAda, { bytes: 1024 * 1024 + 1 });
     expect(result).toEqual({ ok: false, error: expect.stringMatching(/1 MB or smaller/) });
     expect(await storageExists(t, storageId)).toBe(false);
@@ -163,16 +162,7 @@ describe("create", () => {
 
   test("refuses uploads when submissions are closed", async () => {
     const { t, asAda } = await setup();
-    await t.run((ctx) =>
-      ctx.db.insert("settings", {
-        submissionsOpen: false,
-        votingOpen: false,
-        showResultsOnTv: false,
-        maxFileBytes: 1024 * 1024,
-        colours: [],
-        nextPrintNumber: 1,
-      })
-    );
+    await insertSettings(t, { submissionsOpen: false, colours: [] });
     await expect(asAda.mutation(api.submissions.generateUploadUrl, {})).rejects.toThrow(/closed/);
     const { storageId, result } = await upload(t, asAda);
     expect(result).toEqual({ ok: false, error: "Submissions are closed" });
@@ -366,8 +356,13 @@ describe("access control", () => {
 });
 
 async function insertSettings(t: T, patch: Record<string, unknown> = {}) {
-  await t.run((ctx) =>
-    ctx.db.insert("settings", {
+  await t.run(async (ctx) => {
+    const row = await ctx.db.query("settings").first();
+    if (row) {
+      await ctx.db.patch(row._id, patch);
+      return;
+    }
+    await ctx.db.insert("settings", {
       submissionsOpen: true,
       votingOpen: true,
       showResultsOnTv: false,
@@ -375,8 +370,8 @@ async function insertSettings(t: T, patch: Record<string, unknown> = {}) {
       colours: ["Black"],
       nextPrintNumber: 1,
       ...patch,
-    })
-  );
+    });
+  });
 }
 
 describe("dimensions", () => {

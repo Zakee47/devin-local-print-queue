@@ -304,6 +304,16 @@ export const move = mutation({
   },
 });
 
+function submissionDownloadName(submission: Doc<"submissions">, participantName: string) {
+  return downloadFileName({
+    printCode: submission.printCode,
+    participantName,
+    colour: submission.colour,
+    title: submission.title,
+    kind: submission.kind,
+  });
+}
+
 // Used by the /download HTTP action; throws unless the caller is an admin.
 export const downloadInfo = internalQuery({
   args: { id: v.string() },
@@ -315,13 +325,56 @@ export const downloadInfo = internalQuery({
     const participant = await ctx.db.get(submission.participantId);
     return {
       storageId: submission.storageId,
-      fileName: downloadFileName({
-        printCode: submission.printCode,
-        participantName: participant?.name ?? "unknown",
-        colour: submission.colour,
-        title: submission.title,
-        kind: submission.kind,
-      }),
+      fileName: submissionDownloadName(submission, participant?.name ?? "unknown"),
     };
+  },
+});
+
+// Every submission flattened for the CSV/zip export; staff and owner. No
+// storage ids or URLs — the client fetches files through /download.
+export const exportRows = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const submissions = await ctx.db.query("submissions").collect();
+    submissions.sort((a, b) => a.printCode.localeCompare(b.printCode));
+    const participants = new Map<Id<"participants">, Doc<"participants"> | null>();
+    const rows = [];
+    for (const s of submissions) {
+      if (!participants.has(s.participantId)) {
+        participants.set(s.participantId, await ctx.db.get(s.participantId));
+      }
+      const participant = participants.get(s.participantId);
+      const likes = (
+        await ctx.db
+          .query("likes")
+          .withIndex("by_submission", (q) => q.eq("submissionId", s._id))
+          .collect()
+      ).filter((like) => like.reaction === "like").length;
+      const votes = (
+        await ctx.db
+          .query("votes")
+          .withIndex("by_submission", (q) => q.eq("submissionId", s._id))
+          .collect()
+      ).length;
+      rows.push({
+        id: s._id,
+        downloadName: submissionDownloadName(s, participant?.name ?? "unknown"),
+        printCode: s.printCode,
+        title: s.title,
+        username: participant?.displayName ?? "Unknown",
+        name: participant?.name ?? "Unknown",
+        email: participant?.email ?? "",
+        colour: s.colour ?? "",
+        status: s.status,
+        printer: s.printer ?? "",
+        printRequested: s.printRequested,
+        likes,
+        votes,
+        rejectionReason: s.rejectionReason ?? "",
+        createdAt: s._creationTime,
+      });
+    }
+    return rows;
   },
 });

@@ -15,9 +15,20 @@ function fileNameFrom(res: Response, fallback: string) {
   return match?.[1] ?? fallback;
 }
 
-// Fetches /download with the viewer's Convex token and saves the blob under
-// the server-provided name (a same-origin blob URL honours `download`).
-export function useDownloadSubmission() {
+export function saveBlob(blob: Blob, fileName: string) {
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 10_000);
+}
+
+// Fetches /download with the viewer's Convex token and returns the blob plus
+// the server-provided file name.
+export function useFetchSubmissionFile() {
   const { getToken } = useAuth();
   return useCallback(
     async (id: string, fallbackName: string) => {
@@ -28,15 +39,21 @@ export function useDownloadSubmission() {
       });
       if (!res.ok) throw new Error(`Download failed (${res.status})`);
       const blob = await res.blob();
-      const href = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = href;
-      a.download = fileNameFrom(res, fallbackName);
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(href), 10_000);
+      return { blob, fileName: fileNameFrom(res, fallbackName) };
     },
     [getToken]
+  );
+}
+
+// Saves the blob under the server-provided name (a same-origin blob URL
+// honours `download`).
+export function useDownloadSubmission() {
+  const fetchFile = useFetchSubmissionFile();
+  return useCallback(
+    async (id: string, fallbackName: string) => {
+      const { blob, fileName } = await fetchFile(id, fallbackName);
+      saveBlob(blob, fileName);
+    },
+    [fetchFile]
   );
 }

@@ -101,6 +101,14 @@ async function addSettings(
 test("queue mode exposes only public-safe fields", async () => {
   const t = convexTest(schema, modules);
   await t.run(async (ctx) => {
+    await ctx.db.insert("settings", {
+      submissionsOpen: true,
+      votingOpen: true,
+      showResultsOnTv: false,
+      maxFileBytes: 1,
+      colours: [],
+      nextPrintNumber: 10,
+    });
     const ada = await addParticipant(ctx, "Ada");
     await addSubmission(ctx, ada, 1, "printing", {
       queueOrder: 1,

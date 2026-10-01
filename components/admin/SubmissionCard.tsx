@@ -165,6 +165,22 @@ export default function SubmissionCard({
               </p>
             )
           ) : null}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <Button
+              size="sm"
+              onClick={() =>
+                download(row._id, row.downloadName).catch((err) =>
+                  toast.error(err instanceof Error ? err.message : "Download failed")
+                )
+              }
+            >
+              <Download data-icon="inline-start" />
+              Download
+            </Button>
+            <span className="font-mono text-xs break-all text-muted-foreground">
+              {row.downloadName}
+            </span>
+          </div>
           {row.notes ? (
             <p className="mt-2 rounded-md bg-surface px-2.5 py-1.5 text-sm">{row.notes}</p>
           ) : null}
@@ -269,18 +285,6 @@ export default function SubmissionCard({
               </Button>
             </>
           ) : null}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              download(row._id, row.downloadName).catch((err) =>
-                toast.error(err instanceof Error ? err.message : "Download failed")
-              )
-            }
-          >
-            <Download data-icon="inline-start" />
-            Download
-          </Button>
           {row.status !== "submitted" ? (
             <Button
               size="sm"

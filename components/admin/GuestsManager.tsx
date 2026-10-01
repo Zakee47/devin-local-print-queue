@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { FileUp, Search, TriangleAlert } from "lucide-react";
+import { FileUp, Search, TriangleAlert, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -9,6 +9,7 @@ import { parseGuestCsv } from "@/lib/guest-csv";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -26,9 +27,14 @@ export default function GuestsManager() {
   const latest = useQuery(api.guests.latestImport, role === "owner" ? {} : "skip");
   const guests = useQuery(api.guests.list, role === "owner" ? {} : "skip");
   const importCsv = useMutation(api.guests.importCsv);
+  const addGuest = useMutation(api.guests.addGuest);
+  const removeGuest = useMutation(api.guests.removeGuest);
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestName, setGuestName] = useState("");
+  const [addingGuest, setAddingGuest] = useState(false);
 
   if (role === undefined) return <Skeleton className="h-20 rounded-xl" />;
   if (role !== "owner") {
@@ -69,12 +75,57 @@ export default function GuestsManager() {
     <div className="flex flex-col gap-8">
       <Alert>
         <TriangleAlert />
-        <AlertTitle>Uploading replaces the whole guest list</AlertTitle>
+        <AlertTitle>Uploading replaces the imported guest list</AlertTitle>
         <AlertDescription>
-          Upload the Luma export with name and email columns. Each upload replaces the whole list;
-          people who already registered keep their accounts.
+          Upload the Luma export with name and email columns. Each upload replaces the imported list,
+          but guests you added manually are kept. People who already registered keep their accounts.
         </AlertDescription>
       </Alert>
+
+      <form
+        className="flex flex-wrap items-center gap-2"
+        onSubmit={async (event) => {
+          event.preventDefault();
+          const email = guestEmail.trim();
+          if (!email) return;
+          setAddingGuest(true);
+          try {
+            await addGuest({ email, name: guestName.trim() || undefined });
+            toast.success(`${email.toLowerCase()} added to the guest list`);
+            setGuestEmail("");
+            setGuestName("");
+          } catch (err) {
+            toast.error(
+              err instanceof Error
+                ? err.message.replace(/^.*Uncaught Error: /, "").split("\n")[0]
+                : "Couldn't add guest"
+            );
+          } finally {
+            setAddingGuest(false);
+          }
+        }}
+      >
+        <Input
+          type="email"
+          required
+          value={guestEmail}
+          onChange={(e) => setGuestEmail(e.target.value)}
+          placeholder="guest@example.com"
+          aria-label="Guest email"
+          className="w-64"
+        />
+        <Input
+          value={guestName}
+          onChange={(e) => setGuestName(e.target.value)}
+          placeholder="Name (optional)"
+          aria-label="Guest name"
+          className="w-48"
+        />
+        <Button type="submit" disabled={addingGuest || !guestEmail.trim()}>
+          <UserPlus data-icon="inline-start" />
+          Add guest
+        </Button>
+      </form>
 
       <div className="flex flex-wrap items-center gap-3">
         <input
@@ -133,24 +184,55 @@ export default function GuestsManager() {
                   <th className="px-4 py-2 font-medium">Email</th>
                   <th className="px-4 py-2 font-medium">Checked in</th>
                   <th className="px-4 py-2 font-medium">Registered</th>
+                  <th className="px-4 py-2 font-medium">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {filtered.map((g) => (
                   <tr key={g._id} className="transition-colors hover:bg-surface">
                     <td className="px-4 py-2">{g.name ?? <span className="text-muted-dim">–</span>}</td>
-                    <td className="px-4 py-2 font-mono text-xs">{g.email}</td>
+                    <td className="px-4 py-2 font-mono text-xs">
+                      {g.email}
+                      {g.manual ? (
+                        <Badge variant="secondary" className="ml-2">
+                          Added manually
+                        </Badge>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-2">
                       {g.checkedIn ? <Badge variant="outline">Checked in</Badge> : <span className="text-muted-dim">No</span>}
                     </td>
                     <td className="px-4 py-2">
                       {g.registered ? <Badge variant="outline">Registered</Badge> : <span className="text-muted-dim">No</span>}
                     </td>
+                    <td className="px-4 py-2 text-right">
+                      {g.manual ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            removeGuest({ id: g._id })
+                              .then(() => toast.success(`${g.email} removed`))
+                              .catch((err: unknown) =>
+                                toast.error(
+                                  err instanceof Error
+                                    ? err.message.replace(/^.*Uncaught Error: /, "").split("\n")[0]
+                                    : "Couldn't remove guest"
+                                )
+                              )
+                          }
+                        >
+                          Remove
+                        </Button>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                       {guests.length === 0 ? "No guest list uploaded yet." : "No guests match."}
                     </td>
                   </tr>
