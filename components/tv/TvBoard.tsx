@@ -3,14 +3,12 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { TvBoard as Board } from "@/convex/tv";
-import Collage from "./Collage";
+import Leaderboard from "./Leaderboard";
 import LiveLeaderboard from "@/components/leaderboard/LiveLeaderboard";
-import Notices from "./Notices";
 import NowPrinting from "./NowPrinting";
-import QrRail from "./QrRail";
-import TvHeader from "./TvHeader";
-import TvStage from "./TvStage";
+import TvLayout from "./TvLayout";
 import UpNext from "./UpNext";
+import Winner from "./Winner";
 import { useArrivals, useNow } from "./hooks";
 
 const EMPTY: Extract<Board, { mode: "queue" }> = {
@@ -31,31 +29,17 @@ const EMPTY: Extract<Board, { mode: "queue" }> = {
 export default function TvBoard() {
   const board = useQuery(api.tv.board) ?? EMPTY;
   return (
-    <TvStage>
-      <div className="grid h-full grid-cols-[1fr_340px]">
-        <div className="grid min-h-0 min-w-0 grid-rows-[112px_auto_1fr]">
-          <TvHeader counts={board.counts} />
-          <Notices notices={board.notices} />
-          {board.mode === "results" ? <ResultsView board={board} /> : <QueueView board={board} />}
-        </div>
-        <QrRail />
-      </div>
-    </TvStage>
+    <TvLayout counts={board.counts} notices={board.notices}>
+      {board.mode === "results" ? <ResultsView board={board} /> : <QueueView board={board} />}
+    </TvLayout>
   );
 }
 
 function ResultsView({ board }: { board: Extract<Board, { mode: "results" }> }) {
   return (
-    <div className="row-start-3 grid min-h-0 grid-cols-[720px_minmax(0,1fr)] gap-6 p-8 pt-6">
-      <LiveLeaderboard
-        variant="tv"
-        rows={board.leaderboard}
-        totalVotes={board.totalVotes}
-        totalLikes={board.totalLikes}
-        votingOpen={board.votingOpen}
-        votingNotOpenYet={board.votingNotOpenYet}
-      />
-      <Collage items={board.collage} />
+    <div className="row-start-3 grid min-h-0 grid-cols-[1fr_620px] gap-6 p-8 pt-6">
+      <Winner winner={board.winner} totalVotes={board.totalVotes} />
+      <Leaderboard leaders={board.runnersUp} top={board.winner?.votes ?? 1} />
     </div>
   );
 }

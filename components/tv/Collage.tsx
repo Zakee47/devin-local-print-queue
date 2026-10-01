@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { TvCollageItem } from "@/convex/tv";
 import { cn } from "@/lib/utils";
 import Swatch from "./Swatch";
@@ -27,7 +27,7 @@ const COLLAGE_CSS = `
 `;
 
 export default function Collage({ items }: { items: TvCollageItem[] }) {
-  const bodyRef = useRef<HTMLDivElement>(null);
+  const [body, setBody] = useState<HTMLDivElement | null>(null);
   const [bodySize, setBodySize] = useState({ width: 0, height: 0 });
   const columns = useMemo(() => {
     const groups: TvCollageItem[][] = Array.from({ length: COLUMN_COUNT }, () => []);
@@ -40,17 +40,20 @@ export default function Collage({ items }: { items: TvCollageItem[] }) {
   const fresh = useArrivals(items.map((item) => item.printCode));
 
   useEffect(() => {
-    const body = bodyRef.current;
-    if (!body || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(([entry]) => {
-      const next = { width: entry.contentRect.width, height: entry.contentRect.height };
+    if (!body) return;
+    const updateSize = () => {
+      const rect = body.getBoundingClientRect();
+      const next = { width: rect.width, height: rect.height };
       setBodySize((current) =>
         current.width === next.width && current.height === next.height ? current : next
       );
-    });
+    };
+    updateSize();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(updateSize);
     observer.observe(body);
     return () => observer.disconnect();
-  }, []);
+  }, [body]);
 
   const columnWidth = Math.max(0, (bodySize.width - COLUMN_GAP * (COLUMN_COUNT - 1)) / COLUMN_COUNT);
   const tileStep = columnWidth + TILE_CAPTION_HEIGHT + COLUMN_GAP;
@@ -68,7 +71,7 @@ export default function Collage({ items }: { items: TvCollageItem[] }) {
           <p className="text-2xl text-muted-foreground">Designs appear here as they&apos;re submitted.</p>
         </div>
       ) : (
-        <div ref={bodyRef} className="grid min-h-0 flex-1 grid-cols-3 gap-3 px-5 pb-5">
+        <div ref={setBody} className="grid min-h-0 flex-1 grid-cols-3 gap-3 px-5 pb-5">
           {columns.map((column, columnIndex) => {
             const neededTiles = tileStep > 0 ? Math.ceil((bodySize.height + 1) / tileStep) : column.length;
             const cycles = Math.max(1, Math.ceil(neededTiles / column.length));
