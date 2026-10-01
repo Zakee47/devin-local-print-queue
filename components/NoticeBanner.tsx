@@ -5,7 +5,7 @@ import { Clock, Megaphone } from "lucide-react";
 import { useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
-import { submissionsAreOpen } from "@/lib/event";
+import { submissionsAreOpen, submissionsNotOpenYet } from "@/lib/event";
 import { PAGE_WIDTHS, type PageWidth } from "@/lib/page-width";
 import { cn } from "@/lib/utils";
 
@@ -73,6 +73,7 @@ export default function NoticeBanner({ width = "default" }: { width?: PageWidth 
   const open = submissionsAreOpen(settings, now);
   const counting = open && submissionsDeadline !== undefined;
   const closed = !open;
+  const notOpenYet = submissionsNotOpenYet(settings, now);
   if (!announcement && !counting && !closed) return null;
 
   return (
@@ -119,7 +120,7 @@ export default function NoticeBanner({ width = "default" }: { width?: PageWidth 
             ) : closed ? (
               <p className="flex shrink-0 items-center gap-2 font-medium text-muted-foreground">
                 <Clock className="size-4" aria-hidden="true" />
-                Submissions are closed
+                {notOpenYet ? "Submissions are not open yet" : "Submissions are closed"}
               </p>
             ) : null}
           </div>
