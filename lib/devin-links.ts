@@ -1,4 +1,3 @@
-export const DEVIN_PLAYBOOK_CREATE_URL = "https://app.devin.ai/settings/playbooks/create";
 export const DEVIN_NEW_SESSION_URL = "https://app.devin.ai/";
 export const PLAYBOOK_PATH = "/keychain-playbook.md";
 export const PLAYBOOK_DOWNLOAD_NAME = "keychain-3d-print-playbook.md";

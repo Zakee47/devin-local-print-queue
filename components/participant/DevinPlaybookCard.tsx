@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import Image from "next/image";
 import { Copy, Download, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,6 @@ import {
 } from "@/components/ui/card";
 import { copyText } from "@/lib/clipboard";
 import {
-  DEVIN_PLAYBOOK_CREATE_URL,
   devinStartUrl,
   PLAYBOOK_DOWNLOAD_NAME,
   PLAYBOOK_PATH,
@@ -59,14 +59,7 @@ function usePlaybookText() {
     return text ?? (await requestRef.current);
   }
 
-  return { text, getText };
-}
-
-function downloadPlaybook() {
-  const anchor = document.createElement("a");
-  anchor.href = PLAYBOOK_PATH;
-  anchor.download = PLAYBOOK_DOWNLOAD_NAME;
-  anchor.click();
+  return { getText };
 }
 
 export default function DevinPlaybookCard({
@@ -78,42 +71,13 @@ export default function DevinPlaybookCard({
   className?: string;
   children?: ReactNode;
 }) {
-  const { text, getText } = usePlaybookText();
+  const { getText } = usePlaybookText();
   const origin = useSyncExternalStore(
     subscribeToOrigin,
     getOriginSnapshot,
     getServerOriginSnapshot
   );
   const compact = variant === "compact";
-
-  async function createPlaybook() {
-    let copied = false;
-    if (text) {
-      try {
-        await navigator.clipboard.writeText(text);
-        copied = true;
-      } catch {
-        copied = false;
-      }
-    }
-
-    if (!copied) {
-      const fallbackText = await getText();
-      if (fallbackText) copied = await copyText(fallbackText);
-    }
-
-    if (!copied) {
-      downloadPlaybook();
-      toast.error(
-        "Couldn't copy — downloaded the playbook instead; open it and paste its contents into Devin"
-      );
-    }
-
-    window.open(DEVIN_PLAYBOOK_CREATE_URL, "_blank", "noopener");
-    if (copied) {
-      toast.success("Playbook copied — paste it into the playbook body in Devin and save");
-    }
-  }
 
   async function copyMarkdown() {
     const markdown = await getText();
@@ -133,16 +97,8 @@ export default function DevinPlaybookCard({
       <CardContent className={cn("flex flex-col gap-3", compact && "gap-2.5")}>
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            type="button"
             variant="brand"
             size={compact ? "default" : "lg"}
-            onClick={createPlaybook}
-          >
-            Create playbook in Devin
-            <ExternalLink data-icon="inline-end" />
-          </Button>
-          <Button
-            variant="outline"
             render={
               <a
                 href={origin ? devinStartUrl(origin) : undefined}
@@ -153,6 +109,15 @@ export default function DevinPlaybookCard({
               />
             }
           >
+            <Image
+              src="/devin-white.png"
+              alt=""
+              aria-hidden
+              width={16}
+              height={16}
+              data-icon="inline-start"
+              className="size-4"
+            />
             Start in Devin
             <ExternalLink data-icon="inline-end" />
           </Button>
@@ -171,15 +136,17 @@ export default function DevinPlaybookCard({
           </Button>
         </div>
         {!compact ? (
-          <ol className="list-decimal space-y-1 pl-5 text-xs leading-relaxed text-muted-foreground">
-            <li>Paste (Ctrl/Cmd+V) into the playbook body.</li>
-            <li>Name it &quot;Keychain 3D print&quot;.</li>
-            <li>Save, then start a session with it and describe your keychain idea.</li>
-          </ol>
+          <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>Click Start in Devin — it opens a new Devin session that loads the competition playbook.</li>
+              <li>Type your keychain idea after “My idea:” and send it.</li>
+              <li>Iterate with Devin until you have your STL and 3MF, then upload them here.</li>
+            </ol>
+          </div>
         ) : (
           <p className="text-xs leading-relaxed text-muted-foreground">
-            Paste into the playbook body, name it &quot;Keychain 3D print&quot;, save, then start a session with
-            it and describe your keychain idea.
+            Opens a new Devin session with the competition playbook — type your keychain idea after “My idea:” and
+            send it.
           </p>
         )}
       </CardContent>

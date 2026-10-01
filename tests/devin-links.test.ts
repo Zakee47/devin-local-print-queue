@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
   DEVIN_NEW_SESSION_URL,
-  DEVIN_PLAYBOOK_CREATE_URL,
   devinStartPrompt,
   devinStartUrl,
   PLAYBOOK_PATH,
@@ -24,13 +23,9 @@ describe("Devin links", () => {
     expect(decodeURIComponent(url)).toContain(`${origin}${PLAYBOOK_PATH}`);
   });
 
-  test("uses the generic playbook creation page", () => {
-    expect(DEVIN_PLAYBOOK_CREATE_URL).toBe("https://app.devin.ai/settings/playbooks/create");
-    expect(DEVIN_PLAYBOOK_CREATE_URL).not.toContain("?");
-  });
-
-  test("never embeds the playbook in either link", () => {
-    const urls = [DEVIN_PLAYBOOK_CREATE_URL, devinStartUrl("https://keychains.example.com")];
+  test("never embeds the playbook in a link", () => {
+    const origin = "https://keychains.example.com";
+    const urls = [devinStartUrl(origin)];
     const excerpt = playbook.slice(0, 200);
 
     for (const url of urls) {
