@@ -124,10 +124,7 @@ export default function Home() {
         </div>
       </main>
       <div className="flex-1">
-        <section
-          aria-labelledby="leaderboard-heading"
-          className="mx-auto w-full max-w-3xl px-4 pb-16 sm:px-6"
-        >
+        <div className="mx-auto w-full max-w-3xl px-4 pb-16 sm:px-6">
           {liveLeaderboard === undefined ? (
             <Skeleton className="h-80 rounded-xl" />
           ) : (
@@ -139,7 +136,7 @@ export default function Home() {
               votingOpen={liveLeaderboard.votingOpen}
             />
           )}
-        </section>
+        </div>
       </div>
       <SiteFooter width="wide" />
     </div>
