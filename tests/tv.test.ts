@@ -215,7 +215,7 @@ test("results mode ranks eligible entries across statuses and returns a public-s
   const board = await t.query(api.tv.board);
   expectNoPrivateFields(board);
   if (board.mode !== "results") throw new Error("expected results mode");
-  expect(Object.keys(board).sort()).toEqual(["counts", "mode", "notices", "runnersUp", "totalVotes", "winner"]);
+  expect(Object.keys(board).sort()).toEqual(["counts", "defaultView", "mode", "notices", "runnersUp", "totalVotes", "winner"]);
   expect(board.notices).toEqual({
     announcement: "Pizza is ready",
     submissionsOpen: false,
@@ -531,4 +531,50 @@ test("results mode breaks vote ties by likes", async () => {
     [2, "KC-001", 1, 1],
     [3, "KC-002", 1, 1],
   ]);
+});
+
+test("TV default view is main when unset and exposed publicly", async () => {
+  for (const showResultsOnTv of [true, false]) {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await addSettings(ctx, { showResultsOnTv });
+      const ada = await addParticipant(ctx, "Ada");
+      await addSubmission(ctx, ada, 1, "done", { doneAt: 1, preview: true });
+    });
+    const board = await t.query(api.tv.board);
+    const designs = await t.query(api.tv.designs);
+    expect(board.defaultView).toBe("main");
+    expect(designs.defaultView).toBe("main");
+    expectNoPrivateFields(board);
+    expectNoPrivateFields(designs);
+  }
+});
+
+test("only the owner can set the TV default view, and the TV follows it", async () => {
+  process.env.OWNER_EMAIL = "owner@example.com";
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await addSettings(ctx, { showResultsOnTv: false });
+    await ctx.db.insert("admins", { email: "staff@example.com" });
+  });
+  const owner = t.withIdentity({ subject: "owner", email: "owner@example.com", emailVerified: true });
+  const staff = t.withIdentity({ subject: "staff", email: "staff@example.com", emailVerified: true });
+
+  await expect(staff.mutation(api.settings.update, { tvDefaultView: "projects" })).rejects.toThrow("Owner only");
+  expect((await t.query(api.tv.board)).defaultView).toBe("main");
+
+  await owner.mutation(api.settings.update, { tvDefaultView: "projects" });
+  const board = await t.query(api.tv.board);
+  const designs = await t.query(api.tv.designs);
+  expect(board.defaultView).toBe("projects");
+  expect(designs.defaultView).toBe("projects");
+  expectNoPrivateFields(board);
+  expectNoPrivateFields(designs);
+  const audit = await t.run((ctx) => ctx.db.query("auditLog").collect());
+  expect(audit.map((row) => [row.actor, row.action, row.detail])).toEqual([
+    ["owner@example.com", "settings.update", JSON.stringify({ tvDefaultView: "projects" })],
+  ]);
+
+  await owner.mutation(api.settings.update, { tvDefaultView: "main" });
+  expect((await t.query(api.tv.designs)).defaultView).toBe("main");
 });

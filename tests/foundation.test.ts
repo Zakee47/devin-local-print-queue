@@ -143,6 +143,7 @@ describe("admin roles and settings permissions", () => {
     expect(settings).not.toHaveProperty("nextPrintNumber");
     await expect(staff.mutation(api.settings.update, { votingOpen: false })).rejects.toThrow("Owner only");
     await expect(staff.mutation(api.settings.update, { showResultsOnTv: true })).rejects.toThrow("Owner only");
+    await expect(staff.mutation(api.settings.update, { tvDefaultView: "projects" })).rejects.toThrow("Owner only");
 
     await staff.mutation(api.settings.update, { submissionsDeadline: null, announcement: "" });
     settings = await staff.query(api.settings.get, {});

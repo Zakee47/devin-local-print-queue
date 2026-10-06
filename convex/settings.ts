@@ -18,6 +18,8 @@ export type Settings = Omit<Doc<"settings">, "_id" | "_creationTime" | "maxDimen
   printers: Printer[];
 };
 
+export type TvView = NonNullable<Doc<"settings">["tvDefaultView"]>;
+
 export const DEFAULT_SETTINGS: Settings = {
   submissionsOpen: false,
   votingOpen: false,
@@ -83,11 +85,16 @@ export const update = mutation({
     announcement: v.optional(v.union(v.string(), v.null())),
     maxDimensionsMm: v.optional(v.object({ x: v.number(), y: v.number(), z: v.number() })),
     printers: v.optional(v.array(v.object({ name: v.string(), colours: v.array(v.string()) }))),
+    tvDefaultView: v.optional(v.union(v.literal("main"), v.literal("projects"))),
   },
   handler: async (ctx, patch) => {
     const actor = await requireAdmin(ctx);
     const currentSettings = await readSettings(ctx);
-    if (patch.votingOpen !== undefined || patch.showResultsOnTv !== undefined) {
+    if (
+      patch.votingOpen !== undefined ||
+      patch.showResultsOnTv !== undefined ||
+      patch.tvDefaultView !== undefined
+    ) {
       await requireOwner(ctx);
     }
     const { submissionsDeadline, announcement, ...rest } = patch;

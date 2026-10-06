@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import TvBoard from "@/components/tv/TvBoard";
-import TvDesignsBoard from "@/components/tv/TvDesignsBoard";
+import TvScreen from "@/components/tv/TvScreen";
 
 export const metadata: Metadata = { title: "Live print queue" };
 
@@ -11,5 +10,5 @@ export default async function TvPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { view } = await searchParams;
-  return view === "designs" ? <TvDesignsBoard /> : <TvBoard />;
+  return <TvScreen view={typeof view === "string" ? view : undefined} />;
 }

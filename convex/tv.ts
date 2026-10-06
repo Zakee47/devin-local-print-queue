@@ -2,7 +2,7 @@ import { internalAction, internalMutation, query, type QueryCtx } from "./_gener
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
-import { DEFAULT_SETTINGS, readSettings } from "./settings";
+import { DEFAULT_SETTINGS, readSettings, type TvView } from "./settings";
 import { reactionCounts, type ReactionCounts } from "./likes";
 import { tallyVotes } from "./votes";
 import { listEntries } from "./entries";
@@ -62,6 +62,7 @@ export type TvCollageItem = {
   previewUrl: string;
 };
 export type TvDesigns = {
+  defaultView: TvView;
   counts: TvCounts;
   notices: TvNotices;
   votingOpen: boolean;
@@ -75,6 +76,7 @@ export type TvDesigns = {
 export type TvBoard =
   | {
       mode: "queue";
+      defaultView: TvView;
       counts: TvCounts;
       notices: TvNotices;
       votingOpen: boolean;
@@ -89,6 +91,7 @@ export type TvBoard =
     }
   | {
       mode: "results";
+      defaultView: TvView;
       counts: TvCounts;
       notices: TvNotices;
       totalVotes: number;
@@ -155,7 +158,8 @@ async function loadTvData(ctx: QueryCtx) {
     printing: printing.length,
     done: done.length,
   };
-  return { settings, nameOf, queued, printing, done, entries, reactions, notices, counts };
+  const defaultView: TvView = settings.tvDefaultView ?? "main";
+  return { settings, nameOf, queued, printing, done, entries, reactions, notices, counts, defaultView };
 }
 
 async function liveRanking(
@@ -195,7 +199,7 @@ const queueKey = (s: Doc<"submissions">) => s.queueOrder ?? s.queuedAt ?? s._cre
 export const board = query({
   args: {},
   handler: async (ctx): Promise<TvBoard> => {
-    const { settings, nameOf, queued, printing, done, entries, reactions, notices, counts } =
+    const { settings, nameOf, queued, printing, done, entries, reactions, notices, counts, defaultView } =
       await loadTvData(ctx);
 
     if (settings.showResultsOnTv) {
@@ -228,7 +232,7 @@ export const board = query({
           likes: r.likes,
         }))
       );
-      return { mode: "results", counts, notices, totalVotes, winner, runnersUp };
+      return { mode: "results", defaultView, counts, notices, totalVotes, winner, runnersUp };
     }
 
     const sortedQueue = [...queued].sort((a, b) => queueKey(a) - queueKey(b));
@@ -255,6 +259,7 @@ export const board = query({
     const live = await liveRanking(ctx, entries, reactions, nameOf);
     return {
       mode: "queue",
+      defaultView,
       counts,
       notices,
       votingOpen: settings.votingOpen,
@@ -271,7 +276,7 @@ export const board = query({
 export const designs = query({
   args: {},
   handler: async (ctx): Promise<TvDesigns> => {
-    const { settings, nameOf, entries, reactions, notices, counts } = await loadTvData(ctx);
+    const { settings, nameOf, entries, reactions, notices, counts, defaultView } = await loadTvData(ctx);
     const candidates = [...entries]
       .filter((submission) => submission.previewStorageId)
       .sort((a, b) => b._creationTime - a._creationTime)
@@ -292,6 +297,7 @@ export const designs = query({
       )
     ).filter((item): item is TvCollageItem => item !== null);
     return {
+      defaultView,
       counts,
       notices,
       votingOpen: settings.votingOpen,

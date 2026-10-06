@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
 export default function VoteResults() {
@@ -44,7 +45,11 @@ function OwnerResults() {
   const update = useMutation(api.settings.update);
   const [saving, setSaving] = useState(false);
 
-  const toggle = async (patch: { votingOpen?: boolean; showResultsOnTv?: boolean }) => {
+  const toggle = async (patch: {
+    votingOpen?: boolean;
+    showResultsOnTv?: boolean;
+    tvDefaultView?: "main" | "projects";
+  }) => {
     setSaving(true);
     try {
       await update(patch);
@@ -124,6 +129,26 @@ function OwnerResults() {
             {settings.showResultsOnTv ? <MonitorOff data-icon="inline-start" /> : <Monitor data-icon="inline-start" />}
             {settings.showResultsOnTv ? "Hide results on TV" : "Show results on TV"}
           </Button>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">TV default view</span>
+            <ToggleGroup
+              value={[settings.tvDefaultView ?? "main"]}
+              onValueChange={(value) => {
+                const next = value[0];
+                if (next === "main" || next === "projects") void toggle({ tvDefaultView: next });
+              }}
+              disabled={saving}
+              aria-label="TV default view"
+              className="gap-1"
+            >
+              <ToggleGroupItem value="main" variant="outline">
+                {settings.showResultsOnTv ? "Winner" : "Print queue"}
+              </ToggleGroupItem>
+              <ToggleGroupItem value="projects" variant="outline">
+                Projects
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
         </div>
       </div>
 
