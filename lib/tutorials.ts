@@ -46,7 +46,7 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "help",
       title: "Help is always here",
-      body: "Press the ? button at the top of the page to replay this tour.",
+      body: "Tap the ? button at the top of the page to replay this tour.",
     },
   ],
   staff: [
@@ -58,7 +58,7 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "download",
       title: "Download files",
-      body: "Files are named with the print code, name, colour and title, like KC-007_ada-lovelace_red_rocket.3mf, so they sort in queue order.",
+      body: "Files are named with the print code, name, colour and title, like KC-007_ada-lovelace_red_rocket.3mf, so they sort by print code.",
     },
     {
       art: "review",
