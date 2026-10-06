@@ -12,6 +12,7 @@ import type * as accounts from "../accounts.js";
 import type * as admins from "../admins.js";
 import type * as entries from "../entries.js";
 import type * as guests from "../guests.js";
+import type * as history from "../history.js";
 import type * as http from "../http.js";
 import type * as likes from "../likes.js";
 import type * as participants from "../participants.js";
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   admins: typeof admins;
   entries: typeof entries;
   guests: typeof guests;
+  history: typeof history;
   http: typeof http;
   likes: typeof likes;
   participants: typeof participants;

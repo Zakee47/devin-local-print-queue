@@ -68,6 +68,10 @@ function expectNoPrivateFields(board: unknown) {
     "participantId",
     "storageId",
     "previewStorageId",
+    "submissionVersions",
+    "version",
+    "deleted",
+    "deletedAt",
     "clerkUserId",
     "_id",
   ]);
@@ -233,6 +237,32 @@ test("results mode ranks eligible entries across statuses and returns a public-s
   expect(board.runnersUp.every((l) => !Object.hasOwn(l, "file"))).toBe(true);
   expect(JSON.stringify(board)).toContain("maker.code");
   expect(JSON.stringify(board)).not.toContain("Maker Luma Guest");
+});
+
+test("TV leaderboard ignores votes and likes from older file versions", async () => {
+  const t = convexTest(schema, modules);
+  const submission = await t.run(async (ctx) => {
+    await addSettings(ctx, { showResultsOnTv: false, votingOpen: true });
+    const maker = await addParticipant(ctx, "Maker");
+    const voter = await addParticipant(ctx, "Voter");
+    const id = await addSubmission(ctx, maker, 1, "submitted");
+    await ctx.db.insert("votes", { voterId: voter, submissionId: id });
+    await ctx.db.insert("likes", {
+      participantId: voter,
+      submissionId: id,
+      reaction: "like",
+      updatedAt: 1,
+    });
+    return id;
+  });
+  const before = await t.query(api.tv.leaderboard, {});
+  expect(before.leaderboard).toMatchObject([{ printCode: "KC-001", votes: 1, likes: 1 }]);
+
+  await t.run((ctx) => ctx.db.patch(submission, { version: 2 }));
+  const after = await t.query(api.tv.leaderboard, {});
+  expect(after.leaderboard).toEqual([]);
+  expect(after.totalVotes).toBe(0);
+  expect(after.totalLikes).toBe(0);
 });
 
 test("results mode has default notices and no winner without votes", async () => {

@@ -33,7 +33,7 @@ async function setup({ votingOpen = true }: { votingOpen?: boolean } = {}) {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
     await ctx.db.insert("admins", { email: "staff@example.com" });
-    await ctx.db.insert("settings", { ...DEFAULT_SETTINGS, votingOpen });
+    await ctx.db.insert("settings", { ...DEFAULT_SETTINGS, submissionsOpen: true, votingOpen });
     const storageId = await ctx.storage.store(new Blob(["solid x\nendsolid x\n"]));
     const people: Record<string, Id<"participants">> = {};
     for (const who of ["ada", "grace", "alan", "linus", "zoe"]) {
@@ -86,6 +86,9 @@ describe("votes", () => {
     expect(gallery[0].fileUrl).toBeTruthy();
     expect(JSON.stringify(gallery)).not.toContain("@example.com");
     expect(JSON.stringify(gallery)).not.toContain("Test");
+    for (const privateField of ["storageId", "previewStorageId", "submissionVersions", "version", "deletedAt", "deleted"]) {
+      expect(JSON.stringify(gallery)).not.toContain(privateField);
+    }
   });
 
   it("allows votes on entries that aren't printed yet", async () => {
@@ -194,6 +197,70 @@ describe("votes", () => {
     expect((await zoe.query(api.votes.mine))?.votedSubmissionIds).toEqual([ada]);
     await zoe.mutation(api.votes.dismissDropped, {});
     expect((await zoe.query(api.votes.mine))?.droppedVotes).toEqual([]);
+  });
+
+  it("resets version-scoped votes and likes when a participant replaces a file", async () => {
+    const { t, linus } = await setup();
+    const zoe = as(t, "zoe");
+    await zoe.mutation(api.votes.cast, { submissionId: linus });
+    await zoe.mutation(api.likes.react, { submissionId: linus, reaction: "like" });
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["replacement"])));
+    expect(
+      await as(t, "linus").mutation(api.submissions.replaceFile, {
+        id: linus,
+        storageId,
+        originalFileName: "linus-v2.stl",
+        dimensionsMm: { x: 27, y: 51, z: 40 },
+      })
+    ).toEqual({ ok: true });
+
+    const ballot = await zoe.query(api.votes.mine);
+    expect(ballot?.votedSubmissionIds).toEqual([]);
+    expect(ballot?.votesLeft).toBe(2);
+    expect(ballot?.droppedVotes).toMatchObject([{ replaced: true, printCode: "KC-004" }]);
+    expect(await zoe.query(api.likes.mine)).toEqual([]);
+    const results = await as(t, "owner").query(api.votes.results);
+    expect(results.rows.find((row) => row.submissionId === linus)).toMatchObject({
+      votes: 0,
+      likes: 0,
+    });
+
+    await zoe.mutation(api.votes.cast, { submissionId: linus });
+    expect((await zoe.query(api.votes.mine))?.votedSubmissionIds).toEqual([linus]);
+    expect(await t.run((ctx) => ctx.db.query("votes").collect())).toMatchObject([{ version: 2 }]);
+  });
+
+  it("soft deletion excludes a submission from participant, voting, TV, and admin surfaces", async () => {
+    const { t, grace } = await setup();
+    const participant = as(t, "grace");
+    const voter = as(t, "zoe");
+    const owner = as(t, "owner");
+    const original = await t.run((ctx) => ctx.db.get(grace));
+    await voter.mutation(api.votes.cast, { submissionId: grace });
+    await voter.mutation(api.likes.react, { submissionId: grace, reaction: "like" });
+    expect(await owner.query(api.queue.counts)).toMatchObject({ queued: 1 });
+    await participant.mutation(api.submissions.remove, { id: grace });
+
+    const deleted = await t.run((ctx) => ctx.db.get(grace));
+    expect(deleted).toMatchObject({
+      status: "submitted",
+      deletedAt: expect.any(Number),
+      participantNotice: { kind: "withdrawn" },
+    });
+    expect(await t.run((ctx) => ctx.db.query("auditLog").collect())).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "queue.withdrawn", submissionId: grace, detail: "deleted" }),
+      ])
+    );
+    expect((await participant.query(api.submissions.mine, {}))?.some((row) => row._id === grace)).toBe(false);
+    expect((await t.query(api.votes.gallery)).some((row) => row._id === grace)).toBe(false);
+    expect(JSON.stringify(await t.query(api.tv.board))).not.toContain("KC-002");
+    expect(JSON.stringify(await t.query(api.tv.leaderboard, {}))).not.toContain("KC-002");
+    expect((await owner.query(api.queue.board)).some((row) => row._id === grace)).toBe(false);
+    expect(await owner.query(api.queue.counts)).toMatchObject({ queued: 0 });
+    expect((await voter.query(api.votes.mine))?.droppedVotes).toMatchObject([{ printCode: "KC-002", replaced: false }]);
+    await expect(owner.mutation(api.queue.approve, { id: grace })).rejects.toThrow(/deleted by the participant/);
+    expect(await t.run(async (ctx) => (await ctx.db.system.get("_storage", original!.storageId)) !== null)).toBe(true);
   });
 
   it("shows results to the owner only", async () => {

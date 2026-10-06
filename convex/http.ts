@@ -21,11 +21,15 @@ http.route({
   method: "GET",
   handler: httpAction(async (ctx, request) => {
     const headers = corsHeaders(request);
-    const id = new URL(request.url).searchParams.get("id");
-    if (!id) return new Response("Missing id", { status: 400, headers });
+    const url = new URL(request.url);
+    const id = url.searchParams.get("id");
+    const versionId = url.searchParams.get("version");
+    if (!id && !versionId) return new Response("Missing id", { status: 400, headers });
     let info;
     try {
-      info = await ctx.runQuery(internal.queue.downloadInfo, { id });
+      info = versionId
+        ? await ctx.runQuery(internal.history.versionDownloadInfo, { versionId })
+        : await ctx.runQuery(internal.queue.downloadInfo, { id: id! });
     } catch {
       return new Response("Forbidden", { status: 403, headers });
     }

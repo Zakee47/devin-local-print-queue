@@ -4,7 +4,7 @@ import { v } from "convex/values";
 import { requireOwner } from "./admins";
 import { requireParticipant, viewerParticipant } from "./participants";
 import { readSettings } from "./settings";
-import { entryFor, listEntries } from "./entries";
+import { countsFor, currentVersion, entryFor, listEntries } from "./entries";
 import { reactionCounts } from "./likes";
 import { MAX_VOTES_PER_PARTICIPANT, type SubmissionStatus } from "../lib/event";
 import { compareRanking } from "../lib/ranking";
@@ -40,12 +40,19 @@ async function voterBallot(ctx: QueryCtx | MutationCtx, voterId: Id<"participant
     .collect();
   rows.sort((a, b) => a._creationTime - b._creationTime);
   const counted: Doc<"votes">[] = [];
-  const dropped: { vote: Doc<"votes">; submission: Doc<"submissions"> | null }[] = [];
+  const dropped: {
+    vote: Doc<"votes">;
+    submission: Doc<"submissions"> | null;
+    replaced: boolean;
+  }[] = [];
   const excess: Doc<"votes">[] = [];
   for (const vote of rows) {
     const submission = await ctx.db.get(vote.submissionId);
-    if (!(await isEntry(ctx, submission))) {
-      dropped.push({ vote, submission });
+    const entry = await isEntry(ctx, submission);
+    if (!entry) {
+      dropped.push({ vote, submission, replaced: false });
+    } else if (!submission || !countsFor(vote, submission)) {
+      dropped.push({ vote, submission, replaced: true });
     } else if (counted.length < MAX_VOTES_PER_PARTICIPANT) {
       counted.push(vote);
     } else {
@@ -132,7 +139,12 @@ export const gallery = query({
   },
 });
 
-export type DroppedVote = { voteId: Id<"votes">; title: string | null; printCode: string | null };
+export type DroppedVote = {
+  voteId: Id<"votes">;
+  title: string | null;
+  printCode: string | null;
+  replaced: boolean;
+};
 
 // The viewer's ballot, or null if they aren't a registered participant.
 export const mine = query({
@@ -151,10 +163,11 @@ export const mine = query({
       votesLeft: Math.max(0, MAX_VOTES_PER_PARTICIPANT - counted.length),
       maxVotes: MAX_VOTES_PER_PARTICIPANT,
       droppedVotes: dropped.map(
-        ({ vote, submission }): DroppedVote => ({
+        ({ vote, submission, replaced }): DroppedVote => ({
           voteId: vote._id,
           title: submission?.title ?? null,
           printCode: submission?.printCode ?? null,
+          replaced,
         })
       ),
     };
@@ -166,7 +179,7 @@ export const cast = mutation({
   handler: async (ctx, { submissionId }) => {
     const participant = await requireParticipant(ctx);
     await requireVotingOpen(ctx);
-    await requireVotableEntry(ctx, participant, submissionId);
+    const submission = await requireVotableEntry(ctx, participant, submissionId);
     const ballot = await voterBallot(ctx, participant._id);
     if (ballot.counted.some((vote) => vote.submissionId === submissionId)) {
       throw new Error("You've already voted for this design");
@@ -175,7 +188,11 @@ export const cast = mutation({
       throw new Error(`You've used all ${MAX_VOTES_PER_PARTICIPANT} votes. Remove or swap one to vote again.`);
     }
     await deleteUncounted(ctx, ballot);
-    return await ctx.db.insert("votes", { voterId: participant._id, submissionId });
+    return await ctx.db.insert("votes", {
+      voterId: participant._id,
+      submissionId,
+      version: currentVersion(submission),
+    });
   },
 });
 
@@ -195,7 +212,7 @@ export const swap = mutation({
   handler: async (ctx, { from, to }) => {
     const participant = await requireParticipant(ctx);
     await requireVotingOpen(ctx);
-    await requireVotableEntry(ctx, participant, to);
+    const submission = await requireVotableEntry(ctx, participant, to);
     const ballot = await voterBallot(ctx, participant._id);
     const existing = ballot.counted.find((vote) => vote.submissionId === from);
     if (!existing) throw new Error("You haven't voted for that design");
@@ -204,7 +221,11 @@ export const swap = mutation({
     }
     await deleteUncounted(ctx, ballot);
     await ctx.db.delete(existing._id);
-    return await ctx.db.insert("votes", { voterId: participant._id, submissionId: to });
+    return await ctx.db.insert("votes", {
+      voterId: participant._id,
+      submissionId: to,
+      version: currentVersion(submission),
+    });
   },
 });
 

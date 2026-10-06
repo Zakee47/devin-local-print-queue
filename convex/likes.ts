@@ -1,8 +1,9 @@
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { requireParticipant, viewerParticipant } from "./participants";
 import { isEntry, requireVotingOpen } from "./votes";
+import { countsFor, currentVersion } from "./entries";
 
 export type ReactionCounts = { likes: number; skips: number };
 
@@ -10,9 +11,15 @@ export type ReactionCounts = { likes: number; skips: number };
 export async function reactionCounts(ctx: QueryCtx | MutationCtx) {
   const counts = new Map<Id<"submissions">, ReactionCounts>();
   const exists = new Map<Id<"participants">, boolean>();
+  const submissions = new Map<Id<"submissions">, Doc<"submissions"> | null>();
   for (const row of await ctx.db.query("likes").collect()) {
     if (!exists.has(row.participantId)) exists.set(row.participantId, !!(await ctx.db.get(row.participantId)));
     if (!exists.get(row.participantId)) continue;
+    if (!submissions.has(row.submissionId)) {
+      submissions.set(row.submissionId, await ctx.db.get(row.submissionId));
+    }
+    const submission = submissions.get(row.submissionId);
+    if (!submission || !countsFor(row, submission)) continue;
     const c = counts.get(row.submissionId) ?? { likes: 0, skips: 0 };
     if (row.reaction === "like") c.likes++;
     else c.skips++;
@@ -44,7 +51,14 @@ export const mine = query({
       .query("likes")
       .withIndex("by_participant", (q) => q.eq("participantId", participant._id))
       .collect();
-    return rows.map((r) => ({ submissionId: r.submissionId, reaction: r.reaction }));
+    const current = [];
+    for (const row of rows) {
+      const submission = await ctx.db.get(row.submissionId);
+      if (submission && countsFor(row, submission)) {
+        current.push({ submissionId: row.submissionId, reaction: row.reaction });
+      }
+    }
+    return current;
   },
 });
 
@@ -66,7 +80,7 @@ export const react = mutation({
     const existing = await existingReaction(ctx, participant._id, submissionId);
     const updatedAt = Date.now();
     if (existing) {
-      await ctx.db.patch(existing._id, { reaction, updatedAt });
+      await ctx.db.patch(existing._id, { reaction, updatedAt, version: currentVersion(submission) });
       return existing._id;
     }
     return await ctx.db.insert("likes", {
@@ -74,6 +88,7 @@ export const react = mutation({
       submissionId,
       reaction,
       updatedAt,
+      version: currentVersion(submission),
     });
   },
 });

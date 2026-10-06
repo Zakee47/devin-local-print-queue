@@ -3,6 +3,25 @@ import type { QueryCtx } from "./_generated/server";
 
 type DesignFields = Pick<Doc<"submissions">, "designEntry" | "printRequested">;
 
+export function isDeleted(s: Pick<Doc<"submissions">, "deletedAt">): boolean {
+  return s.deletedAt !== undefined;
+}
+
+export function isActive(s: Doc<"submissions">): boolean {
+  return !isDeleted(s) && (s.status !== "rejected" || isDesignEntry(s));
+}
+
+export function currentVersion(s: Pick<Doc<"submissions">, "version">): number {
+  return s.version ?? 1;
+}
+
+export function countsFor(
+  row: { version?: number },
+  submission: Pick<Doc<"submissions">, "version">
+): boolean {
+  return (row.version ?? 1) === currentVersion(submission);
+}
+
 export function isDesignEntry(s: DesignFields): boolean {
   return s.designEntry ?? s.printRequested;
 }
@@ -14,7 +33,7 @@ export function printRequestPatch(s: DesignFields, printRequested: boolean) {
 }
 
 export function inCompetition(s: Doc<"submissions">): boolean {
-  return isDesignEntry(s) && !s.designRemoved;
+  return !isDeleted(s) && isDesignEntry(s) && !s.designRemoved;
 }
 
 export async function entryFor(

@@ -1,7 +1,8 @@
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { requireOwner } from "./admins";
-import { entryFor } from "./entries";
+import { countsFor, entryFor } from "./entries";
 import { normalizeUsername, usernameKey, validateUsername } from "../lib/usernames";
 
 // Owner-only account administration: staff list, participant details, blocks.
@@ -42,7 +43,7 @@ export const listParticipants = query({
                 .query("votes")
                 .withIndex("by_submission", (q) => q.eq("submissionId", entry._id))
                 .collect()
-            ).length
+            ).filter((vote) => countsFor(vote, entry)).length
           : 0;
         const likesReceived = entry
           ? (
@@ -50,7 +51,7 @@ export const listParticipants = query({
                 .query("likes")
                 .withIndex("by_submission", (q) => q.eq("submissionId", entry._id))
                 .collect()
-            ).filter((like) => like.reaction === "like").length
+            ).filter((like) => like.reaction === "like" && countsFor(like, entry)).length
           : 0;
         return {
           _id: participant._id,
@@ -127,12 +128,29 @@ export const deleteParticipant = mutation({
       if (!doomedSubmissionIds.has(other._id)) {
         referencedElsewhere.add(other.storageId);
         if (other.previewStorageId) referencedElsewhere.add(other.previewStorageId);
+        for (const version of await ctx.db
+          .query("submissionVersions")
+          .withIndex("by_submission", (q) => q.eq("submissionId", other._id))
+          .collect()) {
+          referencedElsewhere.add(version.storageId);
+          if (version.previewStorageId) referencedElsewhere.add(version.previewStorageId);
+        }
       }
     }
-    const removedStorage = new Set<string>();
+    const doomedStorage = new Set<string>();
     const removedVotes = new Set<string>();
     const removedLikes = new Set<string>();
     for (const submission of submissions) {
+      doomedStorage.add(submission.storageId);
+      if (submission.previewStorageId) doomedStorage.add(submission.previewStorageId);
+      for (const version of await ctx.db
+        .query("submissionVersions")
+        .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
+        .collect()) {
+        doomedStorage.add(version.storageId);
+        if (version.previewStorageId) doomedStorage.add(version.previewStorageId);
+        await remove(version._id);
+      }
       for (const vote of await ctx.db
         .query("votes")
         .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
@@ -147,25 +165,15 @@ export const deleteParticipant = mutation({
         await remove(like._id);
         removedLikes.add(like._id);
       }
-      if (
-        !referencedElsewhere.has(submission.storageId) &&
-        !removedStorage.has(submission.storageId) &&
-        (await ctx.db.system.get("_storage", submission.storageId))
-      ) {
-        await ctx.storage.delete(submission.storageId);
-        removedStorage.add(submission.storageId);
-      }
-      if (
-        submission.previewStorageId &&
-        submission.previewStorageId !== submission.storageId &&
-        !referencedElsewhere.has(submission.previewStorageId) &&
-        !removedStorage.has(submission.previewStorageId) &&
-        (await ctx.db.system.get("_storage", submission.previewStorageId))
-      ) {
-        await ctx.storage.delete(submission.previewStorageId);
-        removedStorage.add(submission.previewStorageId);
-      }
       await remove(submission._id);
+    }
+    for (const storageId of doomedStorage) {
+      if (
+        !referencedElsewhere.has(storageId) &&
+        (await ctx.db.system.get("_storage", storageId as Id<"_storage">))
+      ) {
+        await ctx.storage.delete(storageId as Id<"_storage">);
+      }
     }
     for (const vote of await ctx.db
       .query("votes")

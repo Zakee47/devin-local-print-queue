@@ -7,7 +7,7 @@ import { MAX_SUBMISSIONS_PER_PARTICIPANT, type Printer } from "../lib/event";
 import { fitsWithin } from "../lib/dimensions";
 import { readSettings, type Settings } from "./settings";
 import { previewUrlOf } from "./submissions";
-import { isDesignEntry, printRequestPatch } from "./entries";
+import { currentVersion, isActive, isDeleted, isDesignEntry, printRequestPatch } from "./entries";
 
 const PIPELINE: Doc<"submissions">["status"][] = ["queued", "printing", "done"];
 
@@ -32,6 +32,9 @@ function requireKnownPrinter(settings: Settings, name: string | undefined): stri
 async function load(ctx: MutationCtx, id: Id<"submissions">) {
   const submission = await ctx.db.get(id);
   if (!submission) throw new Error("Submission not found");
+  if (isDeleted(submission)) {
+    throw new Error(`${submission.printCode} was deleted by the participant`);
+  }
   return submission;
 }
 
@@ -72,6 +75,7 @@ export const board = query({
     const participants = new Map<Id<"participants">, Doc<"participants"> | null>();
     const rows = [];
     for (const s of submissions) {
+      if (isDeleted(s)) continue;
       if (!participants.has(s.participantId)) {
         participants.set(s.participantId, await ctx.db.get(s.participantId));
       }
@@ -83,6 +87,7 @@ export const board = query({
       const matchingPrinters = new Set(printersWithRequestedColour);
       rows.push({
         ...s,
+        version: currentVersion(s),
         designEntry: isDesignEntry(s),
         designRemoved: s.designRemoved ?? false,
         participantUsername,
@@ -102,6 +107,7 @@ export const board = query({
           colour: s.colour,
           title: s.title,
           kind: s.kind,
+          version: currentVersion(s),
         }),
       });
     }
@@ -119,13 +125,13 @@ export const counts = query({
           .query("submissions")
           .withIndex("by_status", (q) => q.eq("status", status))
           .collect()
-      ).length;
+      ).filter((submission) => !isDeleted(submission)).length;
     const submitted = await ctx.db
       .query("submissions")
       .withIndex("by_status", (q) => q.eq("status", "submitted"))
       .collect();
     return {
-      review: submitted.filter((s) => s.printRequested).length,
+      review: submitted.filter((s) => !isDeleted(s) && s.printRequested).length,
       queued: await count("queued"),
       printing: await count("printing"),
       done: await count("done"),
@@ -133,12 +139,41 @@ export const counts = query({
   },
 });
 
-// submitted → queued. Approving a backup file makes it the participant's print.
+export const recentWithdrawals = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const logs = await ctx.db
+      .query("auditLog")
+      .withIndex("by_action", (q) => q.eq("action", "queue.withdrawn"))
+      .order("desc")
+      .take(8);
+    const rows = [];
+    for (const log of logs) {
+      if (!log.submissionId) continue;
+      const submission = await ctx.db.get(log.submissionId);
+      if (!submission) continue;
+      const participant = await ctx.db.get(submission.participantId);
+      rows.push({
+        _id: log._id,
+        at: log._creationTime,
+        printCode: submission.printCode,
+        title: submission.title,
+        participantUsername: participant?.displayName ?? "Unknown",
+        detail: log.detail ?? "",
+      });
+    }
+    return rows;
+  },
+});
+
+// submitted → queued.
 export const approve = mutation({
   args: { id: v.id("submissions") },
   handler: async (ctx, { id }) => {
     const actor = await requireAdmin(ctx);
     const submission = await load(ctx, id);
+    if (!submission.printRequested) throw new Error(`${submission.printCode} isn't a print request`);
     expectStatus(submission, "submitted");
     const siblings = await ctx.db
       .query("submissions")
@@ -148,17 +183,14 @@ export const approve = mutation({
     if (inPipeline) {
       throw new Error(`This participant already has ${inPipeline.printCode} ${inPipeline.status}`);
     }
-    for (const s of siblings) {
-      if (s._id !== id && s.printRequested) await ctx.db.patch(s._id, printRequestPatch(s, false));
-    }
     await ctx.db.patch(id, {
       status: "queued",
-      ...printRequestPatch(submission, true),
       queueOrder: await nextQueueOrder(ctx),
       queuedAt: Date.now(),
       reviewedBy: actor,
       rejectionReason: undefined,
       rejectionKind: undefined,
+      participantNotice: undefined,
     });
     await audit(ctx, actor, "queue.approve", id);
   },
@@ -213,6 +245,7 @@ export const reject = mutation({
       ...printRequestPatch(submission, false),
       queueOrder: undefined,
       rejectionKind: "review",
+      participantNotice: undefined,
     });
     await audit(ctx, actor, "queue.reject", id, trimmed);
   },
@@ -234,6 +267,7 @@ export const printFailed = mutation({
       reviewedBy: actor,
       ...printRequestPatch(submission, false),
       queueOrder: undefined,
+      participantNotice: undefined,
     });
     await audit(ctx, actor, "queue.printFailed", id, trimmed);
   },
@@ -266,7 +300,7 @@ export const moveBack = mutation({
             .query("submissions")
             .withIndex("by_participant", (q) => q.eq("participantId", submission.participantId))
             .collect()
-        ).filter((s) => s.status !== "rejected");
+        ).filter((s) => s._id !== id && isActive(s));
         if (active.length >= MAX_SUBMISSIONS_PER_PARTICIPANT) {
           throw new Error("This participant already has the maximum active submissions");
         }
@@ -352,6 +386,7 @@ function submissionDownloadName(submission: Doc<"submissions">, participantName:
     colour: submission.colour,
     title: submission.title,
     kind: submission.kind,
+    version: currentVersion(submission),
   });
 }
 
@@ -359,10 +394,11 @@ function submissionDownloadName(submission: Doc<"submissions">, participantName:
 export const downloadInfo = internalQuery({
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
-    await requireAdmin(ctx);
+    const role = await viewerRole(ctx);
+    if (!role) throw new Error("Not an admin");
     const submissionId = ctx.db.normalizeId("submissions", id);
     const submission = submissionId ? await ctx.db.get(submissionId) : null;
-    if (!submission) return null;
+    if (!submission || (isDeleted(submission) && role !== "owner")) return null;
     const participant = await ctx.db.get(submission.participantId);
     return {
       storageId: submission.storageId,
@@ -391,13 +427,13 @@ export const exportRows = query({
           .query("likes")
           .withIndex("by_submission", (q) => q.eq("submissionId", s._id))
           .collect()
-      ).filter((like) => like.reaction === "like").length;
+      ).filter((like) => like.reaction === "like" && (like.version ?? 1) === currentVersion(s)).length;
       const votes = (
         await ctx.db
           .query("votes")
           .withIndex("by_submission", (q) => q.eq("submissionId", s._id))
           .collect()
-      ).length;
+      ).filter((vote) => (vote.version ?? 1) === currentVersion(s)).length;
       rows.push({
         id: s._id,
         downloadName: submissionDownloadName(s, participant?.name ?? "unknown"),
@@ -412,6 +448,8 @@ export const exportRows = query({
         printRequested: s.printRequested,
         designEntry: isDesignEntry(s),
         designRemoved: s.designRemoved ?? false,
+        version: currentVersion(s),
+        deleted: isDeleted(s),
         likes,
         votes,
         rejectionReason: s.rejectionReason ?? "",
