@@ -14,6 +14,8 @@ export type ExportRow = {
   printRequested: boolean;
   designEntry: boolean;
   designRemoved: boolean;
+  version: number;
+  deleted: boolean;
   likes: number;
   votes: number;
   rejectionReason: string;
@@ -32,6 +34,8 @@ export const EXPORT_CSV_HEADERS = [
   "printRequested",
   "designEntry",
   "designRemoved",
+  "version",
+  "deleted",
   "likes",
   "votes",
   "rejectionReason",
@@ -53,6 +57,8 @@ export function exportCsvRows(rows: ExportRow[]): string[][] {
       String(row.printRequested),
       String(row.designEntry),
       String(row.designRemoved),
+      String(row.version),
+      String(row.deleted),
       String(row.likes),
       String(row.votes),
       row.rejectionReason,

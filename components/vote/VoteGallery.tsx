@@ -457,7 +457,10 @@ function DroppedNotice({
   votingOpen: boolean;
   onDismiss: () => void;
 }) {
-  const names = dropped.map((d) => (d.printCode ? `${d.printCode} ${d.title}` : "a removed design"));
+  const names = dropped.map((d) =>
+    `${d.printCode ? `${d.printCode} ${d.title}` : "a removed design"}${d.replaced ? " (new file)" : ""}`
+  );
+  const hasReplacement = dropped.some((vote) => vote.replaced);
   return (
     <Alert>
       <Info />
@@ -466,8 +469,10 @@ function DroppedNotice({
       </AlertTitle>
       <AlertDescription>
         <p>
-          {names.join(", ")} {dropped.length === 1 ? "is" : "are"} no longer in the running (withdrawn, swapped
-          or removed from the competition), so {dropped.length === 1 ? "that vote doesn't" : "those votes don't"} count.
+          {names.join(", ")} {dropped.length === 1 ? "is" : "are"} no longer in the running
+          {hasReplacement ? ` or ${dropped.length === 1 ? "has" : "have"} a new file` : null} (withdrawn, replaced,
+          swapped or removed from the competition), so {dropped.length === 1 ? "that vote doesn't" : "those votes don't"}{" "}
+          count.
           {votingOpen ? ` Spend ${dropped.length === 1 ? "it" : "them"} on another design.` : null}
         </p>
         <Button variant="outline" size="sm" className="mt-2" onClick={onDismiss}>
