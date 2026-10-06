@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogIn, Lock, Printer, Trophy } from "lucide-react";
+import { ChevronDown, LogIn } from "lucide-react";
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
@@ -53,7 +53,15 @@ export default function SubmitPage() {
     if (status && status.state !== "registered" && status.state !== "signed_out") router.replace("/");
   }, [status, router]);
 
-  const active = submissions?.filter((s) => s.status !== "rejected") ?? [];
+  const active = submissions?.filter((s) => s.active) ?? [];
+  const roleFiles = active.map((submission) => ({
+    id: submission._id,
+    printCode: submission.printCode,
+    vote: submission.vote,
+    print: submission.print,
+    status: submission.status,
+    designRemoved: submission.designRemoved,
+  }));
   const sorted = submissions
     ? [...submissions].sort(
         (a, b) =>
@@ -62,11 +70,6 @@ export default function SubmitPage() {
       )
     : [];
   const slotsLeft = MAX_SUBMISSIONS_PER_PARTICIPANT - active.length;
-  const choiceLocked = active.some((s) => s.status !== "submitted");
-  const hasPrintRequest = active.some((s) => s.printRequested);
-  const needsPrintPick = !hasPrintRequest && active.length > 0 && !choiceLocked;
-  const hasDesignEntry = submissions?.some((s) => s.designEntry && !s.designRemoved) ?? false;
-  const needsDesignPick = !hasDesignEntry && open && active.some((s) => !s.designRemoved);
   const canUploadReplacement = submissions?.some((s) => s.canUploadReplacement) ?? false;
   const showPlaybookStep = status?.state === "registered" && !status.playbookStepDone;
 
@@ -117,25 +120,13 @@ export default function SubmitPage() {
             <div className="mb-6 sm:mb-8">
               <h1 className="font-heading text-3xl font-semibold tracking-[-0.02em]">My entries</h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                Upload up to {MAX_SUBMISSIONS_PER_PARTICIPANT} files, then make two separate picks. They can be the
-                same file or different ones.
+                Upload up to {MAX_SUBMISSIONS_PER_PARTICIPANT} files. Each one is for <strong>Vote</strong>,{" "}
+                <strong>Print</strong> or <strong>Both</strong>.
               </p>
-              <ul className="mt-3 flex flex-col gap-1.5 text-sm">
-                <li className="flex items-start gap-2">
-                  <Trophy className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
-                  <span>
-                    <span className="font-medium">Competition entry</span>
-                    <span className="text-muted-foreground"> — voted on to win a 3D printer. Goes live straight away.</span>
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Printer className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                  <span>
-                    <span className="font-medium">Print request</span>
-                    <span className="text-muted-foreground"> — printed for you, needs staff approval.</span>
-                  </span>
-                </li>
-              </ul>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Vote enters it in the design competition to win a 3D printer and goes live straight away. Print means we
+                print it for you once staff approve it.
+              </p>
             </div>
 
             {!authReady || (signedIn && (!status || status.state !== "registered")) ? (
@@ -200,43 +191,16 @@ export default function SubmitPage() {
                     </div>
                   </>
                 ) : null}
-                {choiceLocked ? (
-                  <Alert>
-                    <Lock />
-                    <AlertTitle>Your print request is locked in</AlertTitle>
-                    <AlertDescription>
-                      An organizer has accepted it into the print queue. You can still change your competition entry
-                      while submissions are open.
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
-                {needsDesignPick ? (
-                  <Alert>
-                    <Trophy />
-                    <AlertTitle>Enter a design in the competition</AlertTitle>
-                    <AlertDescription>
-                      You don&apos;t have a competition entry right now. Pick one of your uploads to put it in the vote.
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
-                {needsPrintPick ? (
-                  <Alert>
-                    <Printer />
-                    <AlertTitle>Pick your print request</AlertTitle>
-                    <AlertDescription>
-                      Your print request was sent back, so nothing is waiting to print. Request a print of your other
-                      upload{open ? ", or upload a new design" : ""}. Your competition entry stays in the vote.
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
                 {sorted.map((s) => (
                   <SubmissionCard
                     key={s._id}
                     submission={s}
                     colours={settings.colours}
                     printers={settings.printers}
-                    showPrintChoice={needsPrintPick || (open && active.length > 1)}
+                    active={roleFiles}
                     submissionsOpen={open}
+                    maxFileBytes={settings.maxFileBytes}
+                    maxDimensionsMm={settings.maxDimensionsMm}
                   />
                 ))}
                 {slotsLeft > 0 ? (
@@ -256,6 +220,8 @@ export default function SubmitPage() {
                         maxFileBytes={settings.maxFileBytes}
                         maxDimensionsMm={settings.maxDimensionsMm}
                         slotsLeft={slotsLeft}
+                        active={roleFiles}
+                        printOnly={!open}
                       />
                     </>
                   ) : submissionsNotOpenYet(settings, now) ? (

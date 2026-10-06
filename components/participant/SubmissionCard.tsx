@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Lock, Pencil, Printer as PrinterIcon, Trash2, Trophy } from "lucide-react";
+import { useRef, useState } from "react";
+import { Pencil, Printer as PrinterIcon, Trash2, Trophy } from "lucide-react";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { toast } from "sonner";
@@ -12,6 +12,8 @@ import { renderModelSnapshot, uploadPreview } from "@/components/model-snapshot"
 import StatusStepper from "@/components/participant/StatusStepper";
 import SubmissionFields, { type SubmissionDraft } from "@/components/participant/SubmissionFields";
 import { formatBytes } from "@/components/participant/UploadCard";
+import RoleChoice from "@/components/participant/RoleChoice";
+import { measureUploadFile, uploadModelFile, validateModelFile } from "@/components/participant/upload-file";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,7 +31,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { swatchFor } from "@/lib/colours";
 import { formatDimensions } from "@/lib/dimensions";
 import type { Printer } from "@/lib/event";
+import { type Role, type RoleFile, roleOf } from "@/lib/roles";
+import { ALLOWED_EXTENSIONS, type Dimensions } from "@/lib/event";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 
 export type MySubmission = NonNullable<FunctionReturnType<typeof api.submissions.mine>>[number];
 
@@ -40,56 +45,107 @@ function errorMessage(e: unknown) {
   return match ? match[1] : e.message;
 }
 
-function PickRow({
-  icon,
-  title,
-  description,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
-      <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 text-muted-foreground [&>svg]:size-4" aria-hidden="true">
-          {icon}
-        </span>
-        <div className="min-w-0">
-          <p className="text-sm font-medium">{title}</p>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
-      </div>
-      {children}
-    </div>
-  );
-}
-
 export default function SubmissionCard({
   submission: s,
   colours,
   printers,
-  showPrintChoice,
   submissionsOpen,
+  active,
+  maxFileBytes,
+  maxDimensionsMm,
 }: {
   submission: MySubmission;
   colours: string[];
   printers: Printer[];
-  showPrintChoice: boolean;
   submissionsOpen: boolean;
+  active: RoleFile[];
+  maxFileBytes: number;
+  maxDimensionsMm: Dimensions;
 }) {
-  const setPrintRequested = useMutation(api.submissions.setPrintRequested);
-  const setDesignEntry = useMutation(api.submissions.setDesignEntry);
+  const setRoles = useMutation(api.submissions.setRoles);
   const update = useMutation(api.submissions.update);
   const generatePreviewUploadUrl = useMutation(api.submissions.generatePreviewUploadUrl);
+  const generateUploadUrl = useMutation(api.submissions.generateUploadUrl);
+  const replaceFile = useMutation(api.submissions.replaceFile);
   const remove = useMutation(api.submissions.remove);
   const [editing, setEditing] = useState<SubmissionDraft | null>(null);
   const [busy, setBusy] = useState(false);
+  const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
+  const [replacement, setReplacement] = useState<{ file: File; kind: "stl" | "3mf"; dimensions: Dimensions } | null>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const currentRole = roleOf({ vote: s.vote, print: s.print });
+  const roleKey = `${s._id}:${s.vote}:${s.print}`;
+  const [roleSelection, setRoleSelection] = useState<{ key: string; role: Role | null }>({
+    key: roleKey,
+    role: currentRole,
+  });
+  const selectedRole = roleSelection.key === roleKey ? roleSelection.role : currentRole;
+
+  function selectRole(role: Role | null) {
+    setRoleSelection({ key: roleKey, role });
+  }
+
   const rejected = s.status === "rejected";
-  const liveDesign = s.designEntry && !s.designRemoved;
-  const printing = s.printRequested && !rejected;
+  const liveDesign = s.vote && !s.designRemoved;
+  const printing = s.print;
+
+  function deletePromotion() {
+    const other = active.find((file) => file.id !== s._id);
+    if (!other) return "";
+    const roles = [
+      ...(s.vote && !other.vote && !other.designRemoved ? ["Vote"] : []),
+      ...(s.print && !other.print && other.status === "submitted" ? ["Print"] : []),
+    ];
+    return roles.length ? `${other.printCode} takes over ${roles.join(" and ")}.` : "";
+  }
+
+  async function chooseReplacement(file: File | undefined) {
+    if (!file) return;
+    try {
+      const kind = validateModelFile(file, maxFileBytes);
+      const { dimensions, fits } = await measureUploadFile(file, kind, maxDimensionsMm);
+      if (!fits) {
+        throw new Error(
+          `Your model is ${formatDimensions(dimensions)}; the limit is ${formatDimensions(maxDimensionsMm)}`
+        );
+      }
+      setReplacement({ file, kind, dimensions });
+      setReplaceDialogOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't use that file");
+    } finally {
+      if (replaceInputRef.current) replaceInputRef.current.value = "";
+    }
+  }
+
+  async function submitReplacement() {
+    if (!replacement) return;
+    setBusy(true);
+    try {
+      const uploaded = await uploadModelFile({
+        file: replacement.file,
+        kind: replacement.kind,
+        colour: swatchFor(s.colour),
+        generateUploadUrl: () => generateUploadUrl({ replaceId: s._id }),
+        generatePreviewUploadUrl: () => generatePreviewUploadUrl({}),
+      });
+      const result = await replaceFile({
+        id: s._id,
+        storageId: uploaded.storageId,
+        ...(uploaded.previewStorageId ? { previewStorageId: uploaded.previewStorageId } : {}),
+        originalFileName: replacement.file.name,
+        dimensionsMm: replacement.dimensions,
+      });
+      if (!result.ok) throw new Error(result.error);
+      toast.success(`${s.printCode} replaced with version ${s.version + 1}`);
+      setReplacement(null);
+      setReplaceDialogOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? errorMessage(error) : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function run(action: () => Promise<unknown>, success: string) {
     setBusy(true);
@@ -131,19 +187,20 @@ export default function SubmissionCard({
         )}
         <span className="absolute top-3 left-3 rounded-md bg-background/85 px-2 py-1 font-mono text-xs font-semibold backdrop-blur">
           {s.printCode}
+          {s.version > 1 ? <span className="ml-2">v{s.version}</span> : null}
         </span>
         <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
-          {liveDesign ? (
-            <span className="flex items-center gap-1 rounded-md bg-brand px-2 py-1 text-xs font-medium text-brand-foreground">
-              <Trophy className="size-3" aria-hidden="true" />
-              Competition entry
-            </span>
+          {s.vote || s.designRemoved ? (
+            <Badge variant={s.designRemoved ? "outline" : "default"}>
+              <Trophy data-icon="inline-start" aria-hidden="true" />
+              {s.designRemoved ? "Removed from voting" : "In voting"}
+            </Badge>
           ) : null}
           {printing ? (
-            <span className="flex items-center gap-1 rounded-md bg-background/85 px-2 py-1 text-xs font-medium backdrop-blur">
-              <PrinterIcon className="size-3" aria-hidden="true" />
-              Print request
-            </span>
+            <Badge variant="outline">
+              <PrinterIcon data-icon="inline-start" aria-hidden="true" />
+              Print · {s.status === "queued" ? `Queued #${s.queuePosition ?? "—"}` : s.status === "submitted" ? "Needs approval" : s.status}
+            </Badge>
           ) : null}
         </div>
       </div>
@@ -219,83 +276,96 @@ export default function SubmissionCard({
                   ) : null}
                 </p>
               </div>
-              {!s.editable && !rejected ? (
-                <Badge variant="secondary" className="gap-1">
-                  <Lock aria-hidden="true" />
-                  Locked
-                </Badge>
-              ) : null}
+              {s.version > 1 ? <Badge variant="outline">v{s.version}</Badge> : null}
             </div>
             {s.notes ? <p className="text-sm whitespace-pre-line text-muted-foreground">{s.notes}</p> : null}
-            <PickRow
-              icon={<Trophy />}
-              title="Competition entry"
-              description="Voted on to win a 3D printer. No staff approval needed."
-            >
-              {s.designRemoved ? (
-                <p role="status" className="text-sm text-destructive">
-                  Removed from the competition by the organizers
-                  {s.designRemovedReason ? `: ${s.designRemovedReason}` : ""}.
-                </p>
-              ) : s.designEntry ? (
-                <Badge variant="secondary" className="gap-1 text-brand">
-                  <span className="size-1.5 rounded-full bg-brand" aria-hidden="true" />
-                  Live in voting
-                </Badge>
-              ) : !rejected && submissionsOpen ? (
-                <Button
-                  variant="outline"
-                  className="h-9 w-fit"
-                  disabled={busy}
-                  onClick={() =>
-                    run(() => setDesignEntry({ submissionId: s._id }), `${s.printCode} is now your competition entry`)
-                  }
-                >
-                  <Trophy data-icon="inline-start" />
-                  Enter in competition
-                </Button>
-              ) : (
-                <p className="text-sm text-muted-foreground">Not entered</p>
-              )}
-            </PickRow>
-            <PickRow
-              icon={<PrinterIcon />}
-              title="Print request"
-              description="Printed for you. Needs staff approval."
-            >
-              {s.printRequested || s.status !== "submitted" ? (
+              {s.print || s.status !== "submitted" ? (
                 <StatusStepper
                   status={s.status}
                   rejectionReason={s.rejectionReason}
                   rejectionKind={s.rejectionKind}
                   queuePosition={s.queuePosition}
                 />
-              ) : showPrintChoice && s.canChoose && s.editable ? (
-                <Button
-                  variant="outline"
-                  className="h-9 w-fit"
-                  disabled={busy}
-                  onClick={() => run(() => setPrintRequested({ id: s._id }), `${s.printCode} is now your print request`)}
-                >
-                  <PrinterIcon data-icon="inline-start" />
-                  Request print
-                </Button>
+            ) : null}
+            {s.designRemoved && s.designRemovedReason ? (
+              <p className="text-sm text-destructive">Removed from voting: {s.designRemovedReason}</p>
+            ) : null}
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <p className="text-sm font-medium">Use this file for</p>
+              {s.changeable && s.active ? (
+                <>
+                  <RoleChoice
+                    active={active}
+                    targetId={s._id}
+                    value={selectedRole}
+                    onChange={selectRole}
+                    disabled={busy}
+                  />
+                  {selectedRole !== currentRole ? (
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="brand"
+                        size="sm"
+                        disabled={busy || !selectedRole}
+                        onClick={() => selectedRole && run(() => setRoles({ id: s._id, role: selectedRole }), "Role updated")}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => selectRole(currentRole)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
               ) : (
-                <p className="text-sm text-muted-foreground">Not requested</p>
+                <p className="text-sm text-muted-foreground">
+                  {currentRole === "both" ? "Vote and Print" : currentRole ?? "No role"}
+                  {s.lockedReason ? ` · ${s.lockedReason}` : ""}
+                </p>
               )}
-            </PickRow>
-            {s.editable ? (
+            </div>
+            {s.changeable ? (
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="h-10"
-                  disabled={busy || !submissionsOpen}
-                  onClick={() => setEditing({ title: s.title, notes: s.notes ?? "", colour: s.colour ?? "" })}
-                >
-                  <Pencil data-icon="inline-start" />
-                  Edit
-                </Button>
+                {s.editable ? (
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="h-10"
+                    disabled={busy || !submissionsOpen}
+                    onClick={() => setEditing({ title: s.title, notes: s.notes ?? "", colour: s.colour ?? "" })}
+                  >
+                    <Pencil data-icon="inline-start" />
+                    Edit
+                  </Button>
+                ) : null}
+                {s.active ? (
+                  <>
+                    <input
+                      ref={replaceInputRef}
+                      type="file"
+                      accept={ALLOWED_EXTENSIONS.map((extension) => `.${extension}`).join(",")}
+                      className="sr-only"
+                      onChange={(event) => void chooseReplacement(event.target.files?.[0])}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="lg"
+                      className="h-10"
+                      disabled={busy}
+                      onClick={() => replaceInputRef.current?.click()}
+                    >
+                      Replace file
+                    </Button>
+                  </>
+                ) : null}
                 <AlertDialog>
                   <AlertDialogTrigger
                     render={<Button variant="ghost" size="lg" className="h-10 text-muted-foreground" disabled={busy} />}
@@ -305,9 +375,12 @@ export default function SubmissionCard({
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete {s.title}?</AlertDialogTitle>
+                      <AlertDialogTitle>Delete {s.printCode}?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This removes {s.printCode} and its file. You can upload another design afterwards.
+                        <span className="block">You can upload another design afterwards.</span>
+                        {s.vote ? <span className="block">Its votes stop counting.</span> : null}
+                        {s.print && s.status === "queued" ? <span className="block">It leaves the print queue.</span> : null}
+                        {deletePromotion() ? <span className="block">{deletePromotion()}</span> : null}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -318,6 +391,33 @@ export default function SubmissionCard({
                 </AlertDialog>
               </div>
             ) : null}
+            <AlertDialog open={replaceDialogOpen} onOpenChange={(open) => !busy && setReplaceDialogOpen(open)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Replace {s.printCode}&apos;s file?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <span className="block">
+                      Keeps {s.printCode} and its title. {replacement?.file.name} becomes version {s.version + 1}.
+                    </span>
+                    {s.vote ? (
+                      <span className="block">Its votes and likes reset to 0 and voters get their votes back.</span>
+                    ) : null}
+                    {s.print && s.status === "queued" ? (
+                      <span className="block">It leaves the print queue and needs staff approval again.</span>
+                    ) : s.print ? (
+                      <span className="block">Staff will review the new file.</span>
+                    ) : null}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={(event) => { event.preventDefault(); void submitReplacement(); }} disabled={busy || !replacement}>
+                    {busy ? <Spinner data-icon="inline-start" /> : null}
+                    Replace file
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </>
         )}
       </CardContent>
