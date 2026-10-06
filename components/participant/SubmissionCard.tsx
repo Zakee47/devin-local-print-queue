@@ -276,7 +276,6 @@ export default function SubmissionCard({
                   ) : null}
                 </p>
               </div>
-              {s.version > 1 ? <Badge variant="outline">v{s.version}</Badge> : null}
             </div>
             {s.notes ? <p className="text-sm whitespace-pre-line text-muted-foreground">{s.notes}</p> : null}
               {s.print || s.status !== "submitted" ? (

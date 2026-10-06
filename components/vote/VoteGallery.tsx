@@ -457,10 +457,13 @@ function DroppedNotice({
   votingOpen: boolean;
   onDismiss: () => void;
 }) {
-  const names = dropped.map((d) =>
-    `${d.printCode ? `${d.printCode} ${d.title}` : "a removed design"}${d.replaced ? " (new file)" : ""}`
-  );
-  const hasReplacement = dropped.some((vote) => vote.replaced);
+  const label = (d: DroppedVote) => (d.printCode ? `${d.printCode} ${d.title}` : "a removed design");
+  const gone = dropped.filter((d) => !d.replaced);
+  const replaced = dropped.filter((d) => d.replaced);
+  const parts = [
+    gone.length ? `${gone.map(label).join(", ")} ${gone.length === 1 ? "is" : "are"} no longer in the running` : null,
+    replaced.length ? `${replaced.map(label).join(", ")} ${replaced.length === 1 ? "has" : "have"} a new file` : null,
+  ].filter(Boolean);
   return (
     <Alert>
       <Info />
@@ -469,10 +472,7 @@ function DroppedNotice({
       </AlertTitle>
       <AlertDescription>
         <p>
-          {names.join(", ")} {dropped.length === 1 ? "is" : "are"} no longer in the running
-          {hasReplacement ? ` or ${dropped.length === 1 ? "has" : "have"} a new file` : null} (withdrawn, replaced,
-          swapped or removed from the competition), so {dropped.length === 1 ? "that vote doesn't" : "those votes don't"}{" "}
-          count.
+          {parts.join(" and ")}, so {dropped.length === 1 ? "that vote doesn't" : "those votes don't"} count.
           {votingOpen ? ` Spend ${dropped.length === 1 ? "it" : "them"} on another design.` : null}
         </p>
         <Button variant="outline" size="sm" className="mt-2" onClick={onDismiss}>
