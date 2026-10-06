@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,6 +21,7 @@ export default function TutorialDialog({
   onClose: () => void;
 }) {
   const [step, setStep] = useState(0);
+  const primaryRef = useRef<HTMLButtonElement>(null);
   const slides = TOURS[tour];
   const slide = slides[step];
   const last = step === slides.length - 1;
@@ -48,6 +49,7 @@ export default function TutorialDialog({
     >
       <DialogContent
         showCloseButton={false}
+        initialFocus={primaryRef}
         className="gap-0 overflow-hidden p-0 sm:max-w-md"
         onKeyDown={onKeyDown}
       >
@@ -94,6 +96,7 @@ export default function TutorialDialog({
               Back
             </Button>
             <Button
+              ref={primaryRef}
               size="sm"
               onClick={last ? onClose : () => setStep((current) => Math.min(slides.length - 1, current + 1))}
             >

@@ -78,7 +78,7 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "tv",
       title: "TV mode and help",
-      body: "Open TV from the nav for the big screen. Press ? any time to replay this tour.",
+      body: "Open TV from the nav for the big screen. Tap the ? button at the top any time to replay this tour.",
     },
   ],
 };

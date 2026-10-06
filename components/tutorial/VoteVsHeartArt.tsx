@@ -19,7 +19,10 @@ export default function VoteVsHeartArt() {
       <div className="flex flex-col items-center gap-2">
         <Heart aria-hidden className="tour-heart size-6 text-muted-foreground" />
         <span className="text-xs font-semibold text-foreground">Heart</span>
-        <span className="h-8" aria-hidden="true" />
+        <span className="flex h-8 items-center gap-1 rounded-full border border-border bg-card px-2.5 font-mono text-[10px] text-muted-foreground">
+          <Heart aria-hidden className="size-3 fill-current" />
+          12 likes
+        </span>
         <span className="text-[10px] text-muted-foreground">Breaks ties</span>
       </div>
     </div>

@@ -100,9 +100,9 @@ function ChangesArt() {
         </div>
         <div className="mt-3 flex items-center justify-between border-t border-border pt-3 text-xs">
           <span className="text-muted-foreground">Votes reset</span>
-          <span className="relative h-4 font-mono font-medium text-foreground">
-            <span className="tour-votes-before absolute inset-0">3 votes</span>
-            <span className="tour-votes-after absolute inset-0">0 votes</span>
+          <span className="relative h-4 w-16 font-mono font-medium whitespace-nowrap text-foreground">
+            <span className="tour-votes-before absolute inset-0 text-right">3 votes</span>
+            <span className="tour-votes-after absolute inset-0 text-right">0 votes</span>
           </span>
         </div>
       </div>
@@ -144,9 +144,8 @@ function QueueArt() {
           ))}
         </div>
         <div className="relative mt-4 h-16 overflow-hidden rounded-lg bg-muted/60 p-2">
-          <div className="tour-queue-card absolute top-2 left-2 flex h-12 w-[calc(25%-1rem)] min-w-14 items-center gap-1.5 rounded-md border border-border bg-card px-2 shadow-sm">
-            <Printer aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate font-mono text-[10px]">KC-007</span>
+          <div className="tour-queue-card absolute top-2 left-2 flex h-12 w-[calc(25%-1rem)] min-w-14 items-center rounded-md border border-border bg-card px-1 shadow-sm">
+            <span className="w-full text-center font-mono text-[10px]">KC-007</span>
           </div>
         </div>
       </div>
