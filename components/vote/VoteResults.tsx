@@ -141,10 +141,10 @@ function OwnerResults() {
               aria-label="TV default view"
               className="gap-1"
             >
-              <ToggleGroupItem value="main" variant="outline">
+              <ToggleGroupItem value="main" variant="outline" className="aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background hover:aria-pressed:bg-foreground hover:aria-pressed:text-background">
                 {settings.showResultsOnTv ? "Winner" : "Print queue"}
               </ToggleGroupItem>
-              <ToggleGroupItem value="projects" variant="outline">
+              <ToggleGroupItem value="projects" variant="outline" className="aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background hover:aria-pressed:bg-foreground hover:aria-pressed:text-background">
                 Projects
               </ToggleGroupItem>
             </ToggleGroup>
