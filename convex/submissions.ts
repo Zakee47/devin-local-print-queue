@@ -295,12 +295,15 @@ async function applyOtherRoles(
       ...(isDesignEntry(current) && !other.vote ? ["Vote"] : []),
       ...(current.printRequested && !other.print ? ["Print"] : []),
     ];
+    const detail = other.swapped
+      ? `${roleLabel(roles)} (swapped with ${targetPrintCode})`
+      : `${roleLabel(roles)}${relinquished.length ? ` (moved ${relinquished.join(" and ")} to ${targetPrintCode})` : ""}`;
     await auditParticipant(
       ctx,
       participant,
       "participant.roles",
       id,
-      `${roleLabel(roles)}${relinquished.length ? ` (moved ${relinquished.join(" and ")} to ${targetPrintCode})` : ""}`
+      detail
     );
   }
 }
@@ -524,12 +527,16 @@ export const setRoles = mutation({
         ? [`Print from ${other.printCode}`]
         : []),
     ]);
+    const swappedWith = plan.others.filter((other) => other.swapped).map((other) => other.printCode);
+    const detail = swappedWith.length
+      ? `${roleLabel({ vote: plan.vote, print: plan.print })} (swapped with ${swappedWith.join(", ")})`
+      : `${roleLabel({ vote: plan.vote, print: plan.print })}${moved.length ? ` (moved ${moved.join(" and ")})` : ""}`;
     await auditParticipant(
       ctx,
       participant,
       "participant.roles",
       id,
-      `${roleLabel({ vote: plan.vote, print: plan.print })}${moved.length ? ` (moved ${moved.join(" and ")})` : ""}`
+      detail
     );
   },
 });

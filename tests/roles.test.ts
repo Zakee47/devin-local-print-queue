@@ -37,7 +37,7 @@ describe("roles", () => {
       vote: true,
       print: false,
       withdrawsPrint: false,
-      others: [{ id: "011", printCode: "KC-011", vote: false, print: true, withdrawsPrint: false }],
+      others: [{ id: "011", printCode: "KC-011", vote: false, print: true, swapped: false, withdrawsPrint: false }],
       notes: ["Moves Vote from KC-011"],
     });
   });
@@ -56,6 +56,62 @@ describe("roles", () => {
     expect(planRoles(active, "012", "both")).toEqual({
       ok: false,
       reason: "KC-011 must keep Vote or Print",
+    });
+  });
+
+  test("swaps Vote and Print between two files", () => {
+    expect(planRoles([file("A", "vote"), file("B", "print")], "A", "print")).toEqual({
+      ok: true,
+      vote: false,
+      print: true,
+      withdrawsPrint: false,
+      others: [{ id: "B", printCode: "KC-B", vote: true, print: false, swapped: true, withdrawsPrint: false }],
+      notes: ["Swaps with KC-B: KC-B becomes Vote"],
+    });
+  });
+
+  test("withdraws a queued Print file during a role swap", () => {
+    expect(
+      planRoles([file("A", "vote"), file("B", "print", { status: "queued" })], "A", "print")
+    ).toMatchObject({
+      ok: true,
+      others: [{ id: "B", vote: true, print: false, swapped: true, withdrawsPrint: true }],
+      notes: ["Swaps with KC-B: KC-B becomes Vote and takes it out of the print queue"],
+    });
+  });
+
+  test.each(["printing", "done"] as const)("does not swap a %s file", (status) => {
+    expect(
+      planRoles([file("A", "vote"), file("B", "print", { status })], "A", "print")
+    ).toEqual({
+      ok: false,
+      reason:
+        status === "printing"
+          ? "Print is on KC-B, which is printing"
+          : "Print is on KC-B, which has been printed",
+    });
+  });
+
+  test("still refuses Both when the other file would lose its only role", () => {
+    expect(planRoles([file("A", "vote"), file("B", "print")], "A", "both")).toEqual({
+      ok: false,
+      reason: "KC-B must keep Vote or Print",
+    });
+  });
+
+  test("does not swap Vote onto a design removed by the organizers", () => {
+    expect(
+      planRoles([file("A", "vote"), file("B", "print", { designRemoved: true })], "A", "print")
+    ).toEqual({
+      ok: false,
+      reason: "Can't swap: the organizers removed KC-B from the competition",
+    });
+  });
+
+  test("does not swap roles while creating a new upload", () => {
+    expect(planRoles([file("A", "vote"), file("B", "print")], null, "vote")).toEqual({
+      ok: false,
+      reason: "KC-A must keep Vote or Print",
     });
   });
 

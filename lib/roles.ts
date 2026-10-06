@@ -16,7 +16,14 @@ export type RolePlan =
       vote: boolean;
       print: boolean;
       withdrawsPrint: boolean;
-      others: { id: string; printCode: string; vote: boolean; print: boolean; withdrawsPrint: boolean }[];
+      others: {
+        id: string;
+        printCode: string;
+        vote: boolean;
+        print: boolean;
+        swapped: boolean;
+        withdrawsPrint: boolean;
+      }[];
       notes: string[];
     }
   | { ok: false; reason: string };
@@ -34,6 +41,11 @@ export function roleOf(roles: { vote: boolean; print: boolean }): Role | null {
 
 function roleName(role: "vote" | "print") {
   return role === "vote" ? "Vote" : "Print";
+}
+
+function roleDescription(roles: { vote: boolean; print: boolean }) {
+  const role = roleOf(roles);
+  return role === "both" ? "Vote and Print" : role ? roleName(role) : "No role";
 }
 
 function lockedStatus(status: SubmissionStatus) {
@@ -68,26 +80,46 @@ export function planRoles(active: RoleFile[], targetId: string | null, role: Rol
   const notes: string[] = [];
   for (const other of active) {
     if (other.id === targetId) continue;
-    const next = { vote: other.vote && !desired.vote, print: other.print && !desired.print };
+    let next = { vote: other.vote && !desired.vote, print: other.print && !desired.print };
     if (next.vote === other.vote && next.print === other.print) continue;
     if (lockedStatus(other.status)) {
       const conflictingRole = other.vote && desired.vote ? "vote" : "print";
       const status = other.status === "printing" ? "which is printing" : "which has been printed";
       return { ok: false, reason: `${roleName(conflictingRole)} is on ${other.printCode}, ${status}` };
     }
+    let swapped = false;
     if (!next.vote && !next.print) {
-      return { ok: false, reason: `${other.printCode} must keep Vote or Print` };
+      const gives = { vote: target.vote && !desired.vote, print: target.print && !desired.print };
+      if (!gives.vote && !gives.print) {
+        return { ok: false, reason: `${other.printCode} must keep Vote or Print` };
+      }
+      if (gives.vote && other.designRemoved) {
+        return { ok: false, reason: `Can't swap: the organizers removed ${other.printCode} from the competition` };
+      }
+      if (gives.print && other.status !== "submitted") {
+        return { ok: false, reason: `Can't swap: ${other.printCode}'s print was rejected` };
+      }
+      next = gives;
+      swapped = true;
     }
     const withdrawsPrint = other.print && !next.print && other.status === "queued";
-    others.push({ id: other.id, printCode: other.printCode, ...next, withdrawsPrint });
-    const lost = [
-      ...(other.vote && !next.vote ? ["Vote"] : []),
-      ...(other.print && !next.print ? ["Print"] : []),
-    ];
-    for (const moved of lost) {
+    others.push({ id: other.id, printCode: other.printCode, ...next, swapped, withdrawsPrint });
+    if (swapped) {
       notes.push(
-        `Moves ${moved} from ${other.printCode}${moved === "Print" && withdrawsPrint ? " and takes it out of the print queue" : ""}`
+        `Swaps with ${other.printCode}: ${other.printCode} becomes ${roleDescription(next)}${
+          withdrawsPrint ? " and takes it out of the print queue" : ""
+        }`
       );
+    } else {
+      const lost = [
+        ...(other.vote && !next.vote ? ["Vote"] : []),
+        ...(other.print && !next.print ? ["Print"] : []),
+      ];
+      for (const moved of lost) {
+        notes.push(
+          `Moves ${moved} from ${other.printCode}${moved === "Print" && withdrawsPrint ? " and takes it out of the print queue" : ""}`
+        );
+      }
     }
   }
 

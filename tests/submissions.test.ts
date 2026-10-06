@@ -600,6 +600,82 @@ describe("roles", () => {
     expect((await asAda.query(api.submissions.mine, {}))![0]).toMatchObject({ vote: false, print: true });
   });
 
+  test("swaps roles between files and audits both submissions", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda, { role: "vote" });
+    const b = await uploadOk(t, asAda, { role: "print" });
+
+    await asAda.mutation(api.submissions.setRoles, { id: a, role: "print" });
+
+    expect(await t.run((ctx) => ctx.db.get(a))).toMatchObject({
+      designEntry: false,
+      printRequested: true,
+      status: "submitted",
+    });
+    expect(await t.run((ctx) => ctx.db.get(b))).toMatchObject({
+      designEntry: true,
+      printRequested: false,
+      status: "submitted",
+    });
+    const roleAudits = await t.run((ctx) =>
+      ctx.db.query("auditLog").collect().then((rows) => rows.filter((row) => row.action === "participant.roles"))
+    );
+    expect(roleAudits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ submissionId: a, detail: expect.stringContaining("swapped with") }),
+        expect.objectContaining({ submissionId: b, detail: expect.stringContaining("swapped with") }),
+      ])
+    );
+  });
+
+  test("withdraws a queued Print file when swapping roles", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda, { role: "vote" });
+    const b = await uploadOk(t, asAda, { role: "print" });
+    await t.run((ctx) => ctx.db.insert("admins", { email: "staff@example.com", role: "staff" }));
+    const staff = t.withIdentity({ subject: "staff-user", email: "staff@example.com", emailVerified: true });
+    await staff.mutation(api.queue.approve, { id: b });
+
+    await asAda.mutation(api.submissions.setRoles, { id: a, role: "print" });
+
+    expect(await t.run((ctx) => ctx.db.get(a))).toMatchObject({
+      status: "submitted",
+      designEntry: false,
+      printRequested: true,
+    });
+    expect(await t.run((ctx) => ctx.db.get(b))).toMatchObject({
+      status: "submitted",
+      designEntry: true,
+      printRequested: false,
+      participantNotice: { kind: "withdrawn" },
+    });
+    const withdrawn = await t.run((ctx) => ctx.db.get(b));
+    expect(withdrawn?.queueOrder).toBeUndefined();
+    expect(withdrawn?.queuedAt).toBeUndefined();
+    expect(await t.run((ctx) => ctx.db.query("auditLog").collect())).toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: "queue.withdrawn", submissionId: b })])
+    );
+  });
+
+  test("cannot swap Print off a file while it is printing", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda, { role: "vote" });
+    const b = await uploadOk(t, asAda, { role: "print" });
+    await setStatus(t, b, { status: "printing" });
+
+    await expect(asAda.mutation(api.submissions.setRoles, { id: a, role: "print" })).rejects.toThrow(/printing/);
+  });
+
+  test("cannot select Both when it would remove both roles from the other file", async () => {
+    const { t, asAda } = await setup();
+    const a = await uploadOk(t, asAda, { role: "vote" });
+    await uploadOk(t, asAda, { role: "print" });
+
+    await expect(asAda.mutation(api.submissions.setRoles, { id: a, role: "both" })).rejects.toThrow(
+      /must keep Vote or Print/
+    );
+  });
+
   test("soft deleting a role promotes it to the remaining active file", async () => {
     const { t, asAda } = await setup();
     const a = await uploadOk(t, asAda, { role: "print" });

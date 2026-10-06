@@ -63,6 +63,16 @@ export default function RoleChoice({
       {selectedPlan?.ok && selectedPlan.notes.length ? (
         <p className="text-xs text-muted-foreground">{selectedPlan.notes.join(". ")}</p>
       ) : null}
+      {targetId !== null
+        ? shown.map(({ value: role, label }) => {
+            const plan = plans.get(role);
+            return role !== value && plan?.ok && plan.notes.length ? (
+              <p key={`notes-${role}`} className="text-xs text-muted-foreground">
+                {label}: {plan.notes.join(". ")}
+              </p>
+            ) : null;
+          })
+        : null}
     </div>
   );
 }
