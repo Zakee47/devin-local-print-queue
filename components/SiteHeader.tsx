@@ -5,6 +5,7 @@ import HeaderAuth from "@/components/HeaderAuth";
 import HeaderBar from "@/components/HeaderBar";
 import NoticeBanner from "@/components/NoticeBanner";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import HelpTour from "@/components/tutorial/HelpTour";
 import { getAppName } from "@/lib/app-name";
 import { PAGE_WIDTHS, type PageWidth } from "@/lib/page-width";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,7 @@ export default function SiteHeader({
           >
             <Tv aria-hidden className="size-4.5" />
           </Link>
+          <HelpTour tour="participant" autoOpenPath="/submit" />
           <ThemeToggle />
           <HeaderAuth showSignIn={showSignIn} />
         </nav>

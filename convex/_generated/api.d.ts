@@ -20,6 +20,7 @@ import type * as queue from "../queue.js";
 import type * as seed from "../seed.js";
 import type * as settings from "../settings.js";
 import type * as submissions from "../submissions.js";
+import type * as tutorials from "../tutorials.js";
 import type * as tv from "../tv.js";
 import type * as validators from "../validators.js";
 import type * as votes from "../votes.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   seed: typeof seed;
   settings: typeof settings;
   submissions: typeof submissions;
+  tutorials: typeof tutorials;
   tv: typeof tv;
   validators: typeof validators;
   votes: typeof votes;

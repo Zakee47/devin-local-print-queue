@@ -163,4 +163,10 @@ export default defineSchema({
     .index("by_submission", ["submissionId"])
     .index("by_storageId", ["storageId"])
     .index("by_previewStorageId", ["previewStorageId"]),
+
+  tutorialViews: defineTable({
+    email: v.string(),
+    tour: v.union(v.literal("participant"), v.literal("staff")),
+    seenAt: v.number(),
+  }).index("by_email_tour", ["email", "tour"]),
 });
