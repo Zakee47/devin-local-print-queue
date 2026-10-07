@@ -12,11 +12,11 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const assetsDir = join(repoRoot, "public", "hero");
 const modelsDir = join(repoRoot, "public", "models");
 const variants = ["mascot", "cognition-light", "cognition-dark"];
-const fps = Number(process.env.HERO_FPS ?? 12);
+const fps = Number(process.env.HERO_FPS ?? 10);
 const durationSeconds = Number(process.env.HERO_DURATION ?? 12);
-const frameSize = Number(process.env.HERO_SIZE ?? 288);
-const quality = Number(process.env.HERO_Q ?? 15);
-const stillQuality = Number(process.env.HERO_STILL_Q ?? 60);
+const frameSize = Number(process.env.HERO_SIZE ?? 384);
+const quality = Number(process.env.HERO_Q ?? 45);
+const stillQuality = Number(process.env.HERO_STILL_Q ?? 80);
 const frameCount = Math.round(fps * durationSeconds);
 const chromePath = process.env.CHROME_PATH ?? "/usr/bin/google-chrome";
 
@@ -164,6 +164,8 @@ async function renderVariant(page, baseUrl, variant, frameDir) {
     "picture",
     "-q:v",
     String(quality),
+    "-compression_level",
+    "6",
     "-pix_fmt",
     "yuva420p",
     "-loop",
@@ -182,6 +184,8 @@ async function renderVariant(page, baseUrl, variant, frameDir) {
     "0",
     "-q:v",
     String(stillQuality),
+    "-compression_level",
+    "6",
     "-pix_fmt",
     "yuva420p",
     stillPath,
@@ -239,8 +243,8 @@ async function main() {
   ];
   for (const [theme, total] of themePairs) {
     console.log(`${theme} loop pair: ${total} bytes`);
-    if (total > 400_000) {
-      throw new Error(`${theme} loop pair exceeds the 400 KB budget`);
+    if (total > 650_000) {
+      throw new Error(`${theme} loop pair exceeds the 650 KB budget`);
     }
   }
 }
