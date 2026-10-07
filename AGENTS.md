@@ -1,12 +1,26 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # This is NOT the Next.js you know
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
 <!-- END:nextjs-agent-rules -->
 
 # Keychain Print Queue
 
-Webapp for the Devin Local: London 3D-printing keychain competition. Stack and
+Webapp for the Devin Local: London 3D-printing keychain competition.
+
+## Site structure
+
+- `/` is the public Devin Local landing page (`components/landing/**`, assets in
+  `public/landing/**`). It has its own nav/footer and `dl-`prefixed CSS; it
+  does not use Convex or Clerk.
+- `/london-01` is the London event app (registration, uploads, leaderboard);
+  link to it via `EVENT_HOME` in `lib/event.ts`. `/submit`, `/vote`, `/tv` and
+  `/admin` are unchanged.
+ Stack and
 visual language come from https://github.com/dabit3/vending-machine (Next.js App
 Router + Convex + Clerk + shadcn/Tailwind, monochrome dark theme). Reuse the
 components in `components/ui` and the existing page chrome (`SiteHeader`,

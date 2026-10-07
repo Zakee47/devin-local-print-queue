@@ -11,6 +11,7 @@ import RoleBadge from "@/components/admin/team/RoleBadge";
 import HelpTour from "@/components/tutorial/HelpTour";
 import { Separator } from "@/components/ui/separator";
 import { getAppName } from "@/lib/app-name";
+import { EVENT_HOME } from "@/lib/event";
 
 export default function AdminLayout({
   children,
@@ -23,7 +24,7 @@ export default function AdminLayout({
         <div className="mx-auto flex min-h-14 max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:h-14 sm:flex-nowrap sm:px-6 sm:py-0">
           <div className="flex min-w-0 items-center gap-3">
             <Link
-              href="/"
+              href={EVENT_HOME}
               aria-label={`${getAppName()} home`}
               className="group flex min-w-0 items-center gap-2.5 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
             >

@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  EVENT_HOME,
   MAX_SUBMISSIONS_PER_PARTICIPANT,
   submissionsAreOpen,
   submissionsNotOpenYet,
@@ -87,7 +88,7 @@ export default function SubmitPage() {
   const open = settings ? submissionsAreOpen(settings, now) : false;
 
   useEffect(() => {
-    if (status && status.state !== "registered" && status.state !== "signed_out") router.replace("/");
+    if (status && status.state !== "registered" && status.state !== "signed_out") router.replace(EVENT_HOME);
   }, [status, router]);
 
   const active = submissions?.filter((s) => s.active) ?? [];
@@ -205,7 +206,7 @@ export default function SubmitPage() {
               <Alert variant="destructive">
                 <AlertTitle>You&apos;re not registered yet</AlertTitle>
                 <AlertDescription>
-                  <Link href="/" className="underline">
+                  <Link href={EVENT_HOME} className="underline">
                     Create your entrant account
                   </Link>{" "}
                   first.
