@@ -15,6 +15,7 @@ import { DECK_FILTERS, filterCounts, matchesFilter, type DeckFilter } from "@/li
 import VoteButton, { type VoteButtonState } from "@/components/vote/VoteButton";
 import SwipeCard, { type SwipeCardHandle } from "@/components/vote/SwipeCard";
 import VoteCard from "@/components/vote/VoteCard";
+import { voteAnnouncement, type VoteEvent } from "@/components/vote/announce";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -57,6 +58,7 @@ export default function VoteGallery() {
   const [cursor, setCursor] = useState<SubmissionId | typeof END | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [pending, setPending] = useState<SubmissionId | null>(null);
+  const [announcement, setAnnouncement] = useState("");
   const cardRef = useRef<SwipeCardHandle>(null);
 
   const loading =
@@ -156,10 +158,12 @@ export default function VoteGallery() {
     return () => window.removeEventListener("keydown", onKey);
   }, [view, undo]);
 
-  const vote = async (id: SubmissionId, action: () => Promise<unknown>) => {
+  const vote = async (id: SubmissionId, action: () => Promise<unknown>, event: VoteEvent) => {
     setPending(id);
+    setAnnouncement("");
     try {
       await action();
+      setAnnouncement(voteAnnouncement(event));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't update your vote");
     } finally {
@@ -175,34 +179,57 @@ export default function VoteGallery() {
     }
     if (!votingOpen) return notOpenYet ? { kind: "not_open" } : { kind: "closed" };
     if (ballot.votesLeft === 0) return { kind: "no_votes_left", swapFrom: votedEntries };
-    return { kind: "available", votesLeft: ballot.votesLeft };
+    return { kind: "available", votesLeft: ballot.votesLeft, maxVotes: ballot.maxVotes };
   };
 
   const voteControl = (entry: GalleryEntry) => (
     <VoteButton
       entry={entry}
       state={voteState(entry._id)}
-      prominent={reactions.get(entry._id) === "like"}
       pending={pending === entry._id}
-      onVote={() => vote(entry._id, () => cast({ submissionId: entry._id }))}
-      onRetract={() => vote(entry._id, () => retract({ submissionId: entry._id }))}
-      onSwap={(from) => vote(entry._id, () => swap({ from, to: entry._id }))}
+      onVote={() =>
+        vote(entry._id, () => cast({ submissionId: entry._id }), {
+          kind: "cast",
+          title: entry.title,
+          votesLeft: (ballot?.votesLeft ?? 0) - 1,
+        })
+      }
+      onRetract={() =>
+        vote(entry._id, () => retract({ submissionId: entry._id }), {
+          kind: "retract",
+          title: entry.title,
+          votesLeft: (ballot?.votesLeft ?? 0) + 1,
+        })
+      }
+      onSwap={(from) => {
+        const source = votedEntries.find((e) => e._id === from);
+        if (!source) return;
+        void vote(entry._id, () => swap({ from, to: entry._id }), {
+          kind: "swap",
+          from: source.title,
+          to: entry.title,
+        });
+      }}
     />
   );
 
   return (
     <>
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
       <p className="eyebrow text-muted-foreground">People&apos;s choice</p>
       <h1 className="mt-2 font-heading text-2xl font-semibold sm:mt-3 tracking-[-0.03em] sm:text-5xl">
         Swipe the designs
       </h1>
       <p className="mt-1 text-sm text-muted-foreground sm:hidden">
-        Swipe right to like, left to skip. {votingOpen ? CHANGE_COPY : closedCopy}
+        You have {MAX_VOTES_PER_PARTICIPANT} votes — they pick the 3D printer winner. Likes are just a shortlist and
+        only break ties. {votingOpen ? CHANGE_COPY : closedCopy}
       </p>
       <p className="mt-3 hidden max-w-xl text-[15px] leading-relaxed text-muted-foreground sm:block">
-        Every competition entry is in the running for a 3D printer, printed or not. Swipe right to like, left to
-        skip. Likes break
-        ties. When you find a favourite, give it one of your {MAX_VOTES_PER_PARTICIPANT} votes.{" "}
+        Every competition entry is in the running for a 3D printer, printed or not. You have{" "}
+        {MAX_VOTES_PER_PARTICIPANT} votes: tap Cast vote on your favourites. Swipe right to like or left to skip —
+        likes are only a shortlist and break ties, they are not votes.{" "}
         {votingOpen ? CHANGE_COPY : closedCopy}
       </p>
       {notOpenYet ? (
@@ -223,7 +250,7 @@ export default function VoteGallery() {
             <SignInButton mode="modal">
               <Button variant="brand">
                 <LogIn data-icon="inline-start" />
-                Sign in to like and vote
+                Sign in to vote
               </Button>
             </SignInButton>
             <span className="text-sm text-muted-dim">Anyone can browse. Every registered guest can vote.</span>
@@ -231,7 +258,7 @@ export default function VoteGallery() {
         ) : !ballot ? (
           <Alert variant="destructive" className="max-w-xl">
             <ShieldAlert />
-            <AlertTitle>Only registered guests can like and vote</AlertTitle>
+            <AlertTitle>Only registered guests can vote</AlertTitle>
             <AlertDescription>
               Pick your username on the{" "}
               <Link href="/" className="underline">
@@ -253,13 +280,23 @@ export default function VoteGallery() {
                 }
               />
             ) : null}
-            <BallotSummary
-              used={ballot.votedSubmissionIds.length}
+            <BallotTray
+              votesLeft={ballot.votesLeft}
               max={ballot.maxVotes}
               voted={votedEntries}
               votingOpen={votingOpen}
               notOpenYet={notOpenYet}
+              pending={pending}
               onOpen={open}
+              onRetract={(id) => {
+                const entry = votedEntries.find((e) => e._id === id);
+                if (!entry) return;
+                void vote(id, () => retract({ submissionId: id }), {
+                  kind: "retract",
+                  title: entry.title,
+                  votesLeft: ballot.votesLeft + 1,
+                });
+              }}
             />
           </div>
         )}
@@ -311,6 +348,7 @@ export default function VoteGallery() {
                       entry={current}
                       reaction={reactions.get(current._id)}
                       voted={votedIds.includes(current._id)}
+                      voteNumber={votedIds.indexOf(current._id) + 1 || undefined}
                       onSwipe={(direction) => commitSwipe(current, direction)}
                       footer={voteControl(current)}
                     />
@@ -323,17 +361,20 @@ export default function VoteGallery() {
                     onShowAll={() => changeFilter("all")}
                   />
                 )}
-                <div className="flex items-center justify-center gap-4">
-                  <Button
-                    variant="outline"
-                    size="icon-lg"
-                    className="size-14 rounded-full"
-                    disabled={!current}
-                    onClick={() => cardRef.current?.fling("skip")}
-                    aria-label={canReact ? "Skip" : "Next"}
-                  >
-                    <X className="size-6" />
-                  </Button>
+                <div className="flex items-start justify-center gap-4">
+                  <div className="flex flex-col items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon-lg"
+                      className="size-14 rounded-full"
+                      disabled={!current}
+                      onClick={() => cardRef.current?.fling("skip")}
+                      aria-label={canReact ? "Skip" : "Next"}
+                    >
+                      <X className="size-6" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground">Skip</span>
+                  </div>
                   <Button
                     variant="ghost"
                     size="icon-lg"
@@ -344,19 +385,22 @@ export default function VoteGallery() {
                   >
                     <Undo2 className="size-5" />
                   </Button>
-                  <Button
-                    variant="brand"
-                    size="icon-lg"
-                    className="size-14 rounded-full"
-                    disabled={!current}
-                    onClick={() => cardRef.current?.fling("like")}
-                    aria-label={canReact ? "Like" : "Next"}
-                  >
-                    <Heart className="size-6" />
-                  </Button>
+                  <div className="flex flex-col items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="icon-lg"
+                      className="size-14 rounded-full"
+                      disabled={!current}
+                      onClick={() => cardRef.current?.fling("like")}
+                      aria-label={canReact ? "Like (tie-breaker only, not a vote)" : "Next"}
+                    >
+                      <Heart className="size-6" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground">Like · tie-breaker</span>
+                  </div>
                 </div>
                 <p className="hidden text-center text-xs text-muted-dim sm:block">
-                  Keyboard: ← skip · → like · Backspace undo
+                  Keyboard: ← skip · → like · Backspace undo · Likes aren&apos;t votes
                 </p>
                 {!canReact && current ? (
                   <p className="text-center text-xs text-muted-dim">
@@ -381,6 +425,17 @@ export default function VoteGallery() {
                       entry={entry}
                       reaction={reactions.get(entry._id)}
                       voted={votedIds.includes(entry._id)}
+                      voteNumber={votedIds.indexOf(entry._id) + 1 || undefined}
+                      canReact={canReact}
+                      onToggleLike={() => {
+                        const update =
+                          reactions.get(entry._id) === "like"
+                            ? clearReaction({ submissionId: entry._id })
+                            : react({ submissionId: entry._id, reaction: "like" });
+                        update.catch((e: unknown) =>
+                          toast.error(e instanceof Error ? e.message : "Couldn't save that")
+                        );
+                      }}
                       voteControl={voteControl(entry)}
                       onOpen={() => open(entry._id)}
                     />
@@ -395,56 +450,91 @@ export default function VoteGallery() {
   );
 }
 
-function BallotSummary({
-  used,
+function BallotTray({
+  votesLeft,
   max,
   voted,
   votingOpen,
   notOpenYet,
+  pending,
   onOpen,
+  onRetract,
 }: {
-  used: number;
+  votesLeft: number;
   max: number;
   voted: GalleryEntry[];
   votingOpen: boolean;
   notOpenYet?: boolean;
+  pending: SubmissionId | null;
   onOpen: (id: SubmissionId) => void;
+  onRetract: (id: SubmissionId) => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-xl bg-card p-3 ring-1 sm:p-4 ring-foreground/10" aria-live="polite">
+    <section
+      aria-label="Your ballot"
+      className="flex flex-col gap-2 rounded-xl bg-card p-3 ring-1 ring-foreground/10 sm:p-4"
+    >
       <div className="flex items-center justify-between gap-3">
-        <p className="font-heading text-lg font-medium tracking-tight">
-          {used} of {max} votes used
-        </p>
-        {!votingOpen && !notOpenYet ? (
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <p className="font-heading text-lg font-medium tracking-tight">Your ballot</p>
+        {votingOpen ? (
+          <span className="shrink-0 font-mono text-sm tabular-nums">
+            {votesLeft} of {max} votes left
+          </span>
+        ) : !notOpenYet ? (
+          <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
             <Lock className="size-3.5" aria-hidden />
             Locked
           </span>
         ) : null}
       </div>
+      <div className="grid grid-cols-2 gap-2">
+        {Array.from({ length: max }, (_, index) => {
+          const entry = voted[index];
+          if (!entry) {
+            return (
+              <div
+                key={`empty-${index}`}
+                className="min-w-0 rounded-lg border border-dashed border-border-strong px-3 py-2"
+              >
+                <span className="block text-[10px] font-mono text-muted-foreground">Vote {index + 1}</span>
+                <span className="block truncate text-sm text-muted-foreground">
+                  {votingOpen ? "Empty" : "Not used"}
+                </span>
+              </div>
+            );
+          }
+          return (
+            <div key={entry._id} className="relative min-w-0">
+              <button
+                type="button"
+                onClick={() => onOpen(entry._id)}
+                className="w-full min-w-0 rounded-lg bg-brand/15 px-3 py-2 pr-9 text-left ring-1 ring-brand/40 hover:bg-brand/25"
+              >
+                <span className="block text-[10px] font-mono text-muted-foreground">Vote {index + 1}</span>
+                <span className="mt-1 block truncate font-mono text-xs text-muted-foreground">{entry.printCode}</span>
+                <span className="block truncate text-sm font-medium">{entry.title}</span>
+              </button>
+              {votingOpen ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="absolute top-1 right-1 text-muted-foreground"
+                  aria-label={`Remove your vote for ${entry.title}`}
+                  disabled={pending !== null}
+                  onClick={() => onRetract(entry._id)}
+                >
+                  <X />
+                </Button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
       <p className="text-sm text-muted-foreground">
         {votingOpen ? CHANGE_COPY : notOpenYet ? "Voting hasn't opened yet." : LOCKED_COPY}
       </p>
-      {voted.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">
-          {voted.map((e) => (
-            <li key={e._id}>
-              <button
-                type="button"
-                onClick={() => onOpen(e._id)}
-                className="flex items-center gap-1.5 rounded-full bg-brand/15 px-3 py-1 text-xs font-medium text-foreground ring-1 ring-brand/40 hover:bg-brand/25"
-              >
-                <span className="font-mono text-muted-foreground">{e.printCode}</span>
-                {e.title}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : votingOpen ? (
-        <p className="text-sm text-muted-dim">Like the ones you love, then vote for your favourites.</p>
-      ) : null}
-    </div>
+    </section>
   );
 }
 
@@ -503,7 +593,7 @@ function DeckEnd({
         </EmptyMedia>
         <EmptyTitle>{empty ? `No cards in “${label}”` : "You've reached the end"}</EmptyTitle>
         <EmptyDescription>
-          {filter === "unseen" ? "You've seen every entry. Revisit your likes to pick your votes." : "Go round again or pick another filter."}
+          {filter === "unseen" ? "You've seen every entry. Check your likes, then cast your votes." : "Go round again or pick another filter."}
         </EmptyDescription>
       </EmptyHeader>
       <EmptyContent className="flex-row justify-center">

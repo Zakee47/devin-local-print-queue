@@ -6,6 +6,7 @@ import type { GalleryEntry } from "@/convex/votes";
 import type { Reaction } from "@/lib/event";
 import ModelPreview from "@/components/ModelPreview";
 import StageChip from "@/components/vote/StageChip";
+import VoteStamp from "@/components/vote/VoteStamp";
 import { Button } from "@/components/ui/button";
 import { swatchFor } from "@/lib/colours";
 import { cn } from "@/lib/utils";
@@ -14,12 +15,18 @@ export default function VoteCard({
   entry,
   reaction,
   voted,
+  voteNumber,
+  canReact,
+  onToggleLike,
   voteControl,
   onOpen,
 }: {
   entry: GalleryEntry;
   reaction?: Reaction;
   voted: boolean;
+  voteNumber?: number;
+  canReact: boolean;
+  onToggleLike: () => void;
   voteControl: ReactNode;
   onOpen: () => void;
 }) {
@@ -31,7 +38,7 @@ export default function VoteCard({
         voted && "ring-2 ring-brand"
       )}
     >
-      <div className="relative">
+      <div className="relative" data-stamp-host>
         <ModelPreview
           url={entry.fileUrl}
           previewUrl={entry.previewUrl}
@@ -40,6 +47,7 @@ export default function VoteCard({
           alt={entry.title}
         />
         <StageChip stage={entry.stage} className="pointer-events-none absolute top-3 left-3" />
+        <VoteStamp voted={voted} voteNumber={voteNumber} />
       </div>
       <div className="flex flex-1 flex-col gap-3 border-t border-border p-4">
         <div className="flex items-start justify-between gap-3">
@@ -58,19 +66,32 @@ export default function VoteCard({
             />
             {entry.colour ?? "Any colour"}
           </span>
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
-            {reaction === "like" ? (
-              <>
-                <Heart className="size-3.5 text-brand" aria-hidden />
-                Liked
-              </>
-            ) : reaction === "skip" ? (
-              <>
-                <X className="size-3.5" aria-hidden />
-                Skipped
-              </>
-            ) : null}
-          </span>
+          {canReact ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={onToggleLike}
+              aria-pressed={reaction === "like"}
+              className="text-muted-foreground"
+            >
+              <Heart className={cn("size-3.5", reaction === "like" && "fill-current")} aria-hidden />
+              {reaction === "like" ? "Liked · tie-breaker" : "Like · tie-breaker"}
+            </Button>
+          ) : (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              {reaction === "like" ? (
+                <>
+                  <Heart className="size-3.5" aria-hidden />
+                  Liked
+                </>
+              ) : reaction === "skip" ? (
+                <>
+                  <X className="size-3.5" aria-hidden />
+                  Skipped
+                </>
+              ) : null}
+            </span>
+          )}
         </div>
         <div className="mt-auto flex flex-col gap-2">
           {voteControl}
