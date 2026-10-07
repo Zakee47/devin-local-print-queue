@@ -11,7 +11,7 @@ import { build } from "esbuild";
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const assetsDir = join(repoRoot, "public", "hero");
 const modelsDir = join(repoRoot, "public", "models");
-const variants = ["mascot", "cognition-light", "cognition-dark"];
+const variants = ["mascot", "cognition"];
 const fps = Number(process.env.HERO_FPS ?? 10);
 const durationSeconds = Number(process.env.HERO_DURATION ?? 12);
 const frameSize = Number(process.env.HERO_SIZE ?? 384);
@@ -237,9 +237,10 @@ async function main() {
     console.log(`${variant}: ${loopSize} bytes loop, ${stillSize} bytes still`);
   }
 
+  const themePairSize = sizes.mascot + sizes.cognition;
   const themePairs = [
-    ["light", sizes.mascot + sizes["cognition-light"]],
-    ["dark", sizes.mascot + sizes["cognition-dark"]],
+    ["light", themePairSize],
+    ["dark", themePairSize],
   ];
   for (const [theme, total] of themePairs) {
     console.log(`${theme} loop pair: ${total} bytes`);
