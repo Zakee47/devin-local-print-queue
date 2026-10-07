@@ -29,10 +29,11 @@ async function addSubmission(
     doneAt?: number;
     printRequested?: boolean;
     printer?: string;
+    preview?: boolean;
   } = {}
 ) {
   const storageId = await ctx.storage.store(new Blob(["solid x\nendsolid x\n"]));
-  return await ctx.db.insert("submissions", {
+  const submissionId = await ctx.db.insert("submissions", {
     participantId,
     storageId,
     originalFileName: `private-file-${n}.stl`,
@@ -52,6 +53,11 @@ async function addSubmission(
     printer: extra.printer,
     doneAt: extra.doneAt,
   });
+  if (extra.preview) {
+    const previewStorageId = await ctx.storage.store(new Blob(["preview"], { type: "image/png" }));
+    await ctx.db.patch(submissionId, { previewStorageId });
+  }
+  return submissionId;
 }
 
 function expectNoPrivateFields(board: unknown) {
@@ -213,7 +219,7 @@ test("results mode ranks eligible entries across statuses and returns a public-s
   const board = await t.query(api.tv.board);
   expectNoPrivateFields(board);
   if (board.mode !== "results") throw new Error("expected results mode");
-  expect(Object.keys(board).sort()).toEqual(["counts", "mode", "notices", "runnersUp", "totalVotes", "winner"]);
+  expect(Object.keys(board).sort()).toEqual(["counts", "defaultView", "mode", "notices", "runnersUp", "totalVotes", "winner"]);
   expect(board.notices).toEqual({
     announcement: "Pizza is ready",
     submissionsOpen: false,
@@ -279,6 +285,68 @@ test("results mode has default notices and no winner without votes", async () =>
   expect(board.totalVotes).toBe(0);
   expect(board.winner).toBeNull();
   expect(board.runnersUp).toEqual([]);
+});
+
+test("results board does not include the independent designs collage", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await addSettings(ctx, { showResultsOnTv: true });
+  });
+  const board = await t.query(api.tv.board);
+  if (board.mode !== "results") throw new Error("expected results mode");
+  expect(Object.hasOwn(board, "collage")).toBe(false);
+});
+
+test("designs exposes the live ranking regardless of the TV results setting", async () => {
+  for (const showResultsOnTv of [true, false]) {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await addSettings(ctx, { showResultsOnTv });
+      const voter = await addParticipant(ctx, "Voter");
+      const maker = await addParticipant(ctx, "Maker");
+      const submission = await addSubmission(ctx, maker, 1, "done", { doneAt: 1 });
+      await ctx.db.insert("votes", { voterId: voter, submissionId: submission });
+    });
+    const designs = await t.query(api.tv.designs);
+    expectNoPrivateFields(designs);
+    expect(designs.leaderboard).toMatchObject([
+      { rank: 1, printCode: "KC-001", votes: 1, likes: 0 },
+    ]);
+    expect(designs.totalVotes).toBe(1);
+  }
+});
+
+test("designs collage includes newest public previews and caps at 60", async () => {
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await addSettings(ctx);
+    const maker = await addParticipant(ctx, "Maker");
+    for (let n = 1; n <= 63; n++) {
+      await addSubmission(ctx, maker, n, "done", { doneAt: n, preview: true });
+    }
+    await addSubmission(ctx, maker, 64, "rejected", { preview: true });
+    await addSubmission(ctx, maker, 65, "done", { doneAt: 65, printRequested: false, preview: true });
+    await addSubmission(ctx, maker, 66, "done", { doneAt: 66 });
+  });
+
+  const designs = await t.query(api.tv.designs);
+  expectNoPrivateFields(designs);
+  expect(designs.collage).toHaveLength(60);
+  expect(designs.collage[0].printCode).toBe("KC-063");
+  expect(designs.collage.at(-1)?.printCode).toBe("KC-004");
+  expect(designs.collage.map((item) => item.printCode)).not.toContain("KC-064");
+  expect(designs.collage.map((item) => item.printCode)).not.toContain("KC-065");
+  expect(designs.collage.map((item) => item.printCode)).not.toContain("KC-066");
+  expect(designs.collage.every((item) => item.previewUrl.startsWith("http"))).toBe(true);
+  for (const item of designs.collage) {
+    expect(Object.keys(item).sort()).toEqual([
+      "colour",
+      "displayName",
+      "previewUrl",
+      "printCode",
+      "title",
+    ]);
+  }
 });
 
 test("results mode excludes votes on designs that are no longer entries", async () => {
@@ -493,4 +561,50 @@ test("results mode breaks vote ties by likes", async () => {
     [2, "KC-001", 1, 1],
     [3, "KC-002", 1, 1],
   ]);
+});
+
+test("TV default view is main when unset and exposed publicly", async () => {
+  for (const showResultsOnTv of [true, false]) {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await addSettings(ctx, { showResultsOnTv });
+      const ada = await addParticipant(ctx, "Ada");
+      await addSubmission(ctx, ada, 1, "done", { doneAt: 1, preview: true });
+    });
+    const board = await t.query(api.tv.board);
+    const designs = await t.query(api.tv.designs);
+    expect(board.defaultView).toBe("main");
+    expect(designs.defaultView).toBe("main");
+    expectNoPrivateFields(board);
+    expectNoPrivateFields(designs);
+  }
+});
+
+test("only the owner can set the TV default view, and the TV follows it", async () => {
+  process.env.OWNER_EMAIL = "owner@example.com";
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    await addSettings(ctx, { showResultsOnTv: false });
+    await ctx.db.insert("admins", { email: "staff@example.com" });
+  });
+  const owner = t.withIdentity({ subject: "owner", email: "owner@example.com", emailVerified: true });
+  const staff = t.withIdentity({ subject: "staff", email: "staff@example.com", emailVerified: true });
+
+  await expect(staff.mutation(api.settings.update, { tvDefaultView: "projects" })).rejects.toThrow("Owner only");
+  expect((await t.query(api.tv.board)).defaultView).toBe("main");
+
+  await owner.mutation(api.settings.update, { tvDefaultView: "projects" });
+  const board = await t.query(api.tv.board);
+  const designs = await t.query(api.tv.designs);
+  expect(board.defaultView).toBe("projects");
+  expect(designs.defaultView).toBe("projects");
+  expectNoPrivateFields(board);
+  expectNoPrivateFields(designs);
+  const audit = await t.run((ctx) => ctx.db.query("auditLog").collect());
+  expect(audit.map((row) => [row.actor, row.action, row.detail])).toEqual([
+    ["owner@example.com", "settings.update", JSON.stringify({ tvDefaultView: "projects" })],
+  ]);
+
+  await owner.mutation(api.settings.update, { tvDefaultView: "main" });
+  expect((await t.query(api.tv.designs)).defaultView).toBe("main");
 });

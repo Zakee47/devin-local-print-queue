@@ -2,7 +2,7 @@ import { internalAction, internalMutation, query, type QueryCtx } from "./_gener
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
-import { DEFAULT_SETTINGS, readSettings } from "./settings";
+import { DEFAULT_SETTINGS, readSettings, type TvView } from "./settings";
 import { reactionCounts, type ReactionCounts } from "./likes";
 import { tallyVotes } from "./votes";
 import { listEntries } from "./entries";
@@ -15,6 +15,7 @@ import { previewUrlOf } from "./submissions";
 export const UP_NEXT_LIMIT = 8;
 export const RECENT_DONE_LIMIT = 3;
 export const LEADERBOARD_LIMIT = 10;
+export const COLLAGE_LIMIT = 60;
 
 // Everything the public TV may show about a submission. Never add emails,
 // notes, file names, rejection reasons or reviewer details here.
@@ -53,10 +54,29 @@ export type TvWinner = TvLeader & {
   file: { url: string; kind: "stl" | "3mf" } | null;
   previewUrl: string | null;
 };
+export type TvCollageItem = {
+  printCode: string;
+  title: string;
+  displayName: string;
+  colour: string | null;
+  previewUrl: string;
+};
+export type TvDesigns = {
+  defaultView: TvView;
+  counts: TvCounts;
+  notices: TvNotices;
+  votingOpen: boolean;
+  votingNotOpenYet: boolean;
+  leaderboard: TvRanked[];
+  totalVotes: number;
+  totalLikes: number;
+  collage: TvCollageItem[];
+};
 
 export type TvBoard =
   | {
       mode: "queue";
+      defaultView: TvView;
       counts: TvCounts;
       notices: TvNotices;
       votingOpen: boolean;
@@ -71,6 +91,7 @@ export type TvBoard =
     }
   | {
       mode: "results";
+      defaultView: TvView;
       counts: TvCounts;
       notices: TvNotices;
       totalVotes: number;
@@ -116,6 +137,33 @@ async function toItem(
   };
 }
 
+async function loadTvData(ctx: QueryCtx) {
+  const settings = await readSettings(ctx);
+  const nameOf = makeNamer(ctx);
+  const [submitted, queued, printing, done, entries, reactions] = await Promise.all([
+    byStatus(ctx, "submitted"),
+    byStatus(ctx, "queued"),
+    byStatus(ctx, "printing"),
+    byStatus(ctx, "done"),
+    listEntries(ctx),
+    reactionCounts(ctx),
+  ]);
+  const notices: TvNotices = {
+    announcement: settings.announcement ?? null,
+    submissionsOpen: settings.submissionsOpen,
+    submissionsDeadline: settings.submissionsDeadline ?? null,
+  };
+  const counts: TvCounts = {
+    // Every entry received that hasn't been rejected.
+    submitted: submitted.length + queued.length + printing.length + done.length,
+    queued: queued.length,
+    printing: printing.length,
+    done: done.length,
+  };
+  const defaultView: TvView = settings.tvDefaultView ?? "main";
+  return { settings, nameOf, queued, printing, done, entries, reactions, notices, counts, defaultView };
+}
+
 async function liveRanking(
   ctx: QueryCtx,
   entries: Doc<"submissions">[],
@@ -153,32 +201,11 @@ const queueKey = (s: Doc<"submissions">) => s.queueOrder ?? s.queuedAt ?? s._cre
 export const board = query({
   args: {},
   handler: async (ctx): Promise<TvBoard> => {
-    const settings = await readSettings(ctx);
-    const nameOf = makeNamer(ctx);
-    const [submitted, queued, printing, done, entries, reactions] = await Promise.all([
-      byStatus(ctx, "submitted"),
-      byStatus(ctx, "queued"),
-      byStatus(ctx, "printing"),
-      byStatus(ctx, "done"),
-      listEntries(ctx),
-      reactionCounts(ctx),
-    ]);
-    const notices: TvNotices = {
-      announcement: settings.announcement ?? null,
-      submissionsOpen: settings.submissionsOpen,
-      submissionsDeadline: settings.submissionsDeadline ?? null,
-    };
-    const counts: TvCounts = {
-      // Every entry received that hasn't been rejected.
-      submitted: submitted.length + queued.length + printing.length + done.length,
-      queued: queued.length,
-      printing: printing.length,
-      done: done.length,
-    };
-
-    const likesOf = (s: Doc<"submissions">) => reactions.get(s._id)?.likes ?? 0;
+    const { settings, nameOf, queued, printing, done, entries, reactions, notices, counts, defaultView } =
+      await loadTvData(ctx);
 
     if (settings.showResultsOnTv) {
+      const likesOf = (s: Doc<"submissions">) => reactions.get(s._id)?.likes ?? 0;
       const { tally } = await tallyVotes(ctx);
       const totalVotes = [...tally.values()].reduce((total, votes) => total + votes, 0);
       const ranked = entries
@@ -207,7 +234,7 @@ export const board = query({
           likes: r.likes,
         }))
       );
-      return { mode: "results", counts, notices, totalVotes, winner, runnersUp };
+      return { mode: "results", defaultView, counts, notices, totalVotes, winner, runnersUp };
     }
 
     const sortedQueue = [...queued].sort((a, b) => queueKey(a) - queueKey(b));
@@ -234,6 +261,7 @@ export const board = query({
     const live = await liveRanking(ctx, entries, reactions, nameOf);
     return {
       mode: "queue",
+      defaultView,
       counts,
       notices,
       votingOpen: settings.votingOpen,
@@ -243,6 +271,41 @@ export const board = query({
       moreQueued: Math.max(0, sortedQueue.length - UP_NEXT_LIMIT),
       recentDone,
       ...live,
+    };
+  },
+});
+
+export const designs = query({
+  args: {},
+  handler: async (ctx): Promise<TvDesigns> => {
+    const { settings, nameOf, entries, reactions, notices, counts, defaultView } = await loadTvData(ctx);
+    const candidates = [...entries]
+      .filter((submission) => submission.previewStorageId)
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .slice(0, COLLAGE_LIMIT);
+    const collage = (
+      await Promise.all(
+        candidates.map(async (submission): Promise<TvCollageItem | null> => {
+          const previewUrl = await previewUrlOf(ctx, submission);
+          if (!previewUrl) return null;
+          return {
+            printCode: submission.printCode,
+            title: submission.title,
+            displayName: await nameOf(submission.participantId),
+            colour: submission.colour ?? null,
+            previewUrl,
+          };
+        })
+      )
+    ).filter((item): item is TvCollageItem => item !== null);
+    return {
+      defaultView,
+      counts,
+      notices,
+      votingOpen: settings.votingOpen,
+      votingNotOpenYet: votingNotOpenYet(settings),
+      ...(await liveRanking(ctx, entries, reactions, nameOf)),
+      collage,
     };
   },
 });
