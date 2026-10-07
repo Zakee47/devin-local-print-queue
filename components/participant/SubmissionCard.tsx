@@ -45,6 +45,7 @@ export default function SubmissionCard({
   printers,
   submissionsOpen,
   votingOpen,
+  keepVotesOnReplace,
   votingNotOpenYet,
   onCompetitionEntry,
   active,
@@ -56,6 +57,7 @@ export default function SubmissionCard({
   printers: Printer[];
   submissionsOpen: boolean;
   votingOpen: boolean;
+  keepVotesOnReplace: boolean;
   votingNotOpenYet: boolean;
   onCompetitionEntry: (printCode: string) => boolean;
   active: RoleFile[];
@@ -418,7 +420,11 @@ export default function SubmissionCard({
                       Keeps {s.printCode} and its title. {replacement?.file.name} becomes version {s.version + 1}.
                     </span>
                     {s.vote ? (
-                      <span className="block">Its votes and likes reset to 0 and voters get their votes back.</span>
+                      <span className="block">
+                        {keepVotesOnReplace
+                          ? "Voting is closed, so its votes and likes are kept."
+                          : "Its votes and likes reset to 0 and voters get their votes back."}
+                      </span>
                     ) : null}
                     {s.print && s.status === "queued" ? (
                       <span className="block">It leaves the print queue and needs staff approval again.</span>

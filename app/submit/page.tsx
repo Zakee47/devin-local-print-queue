@@ -253,6 +253,7 @@ export default function SubmitPage() {
                     active={roleFiles}
                     submissionsOpen={open}
                     votingOpen={settings.votingOpen}
+                    keepVotesOnReplace={!settings.votingOpen && settings.keepVotesOnReplace}
                     votingNotOpenYet={votingNotOpenYet(settings)}
                     onCompetitionEntry={announceCompetitionEntry}
                     maxFileBytes={settings.maxFileBytes}

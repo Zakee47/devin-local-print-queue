@@ -275,6 +275,76 @@ describe("votes", () => {
     expect(await t.run((ctx) => ctx.db.query("votes").collect())).toMatchObject([{ version: 2 }]);
   });
 
+  it("keeps votes and likes after a replacement when closed voting retention is enabled", async () => {
+    const { t, linus } = await setup();
+    const zoe = as(t, "zoe");
+    const ada = as(t, "ada");
+    const owner = as(t, "owner");
+    await zoe.mutation(api.votes.cast, { submissionId: linus });
+    await ada.mutation(api.votes.cast, { submissionId: linus });
+    await zoe.mutation(api.likes.react, { submissionId: linus, reaction: "like" });
+    await t.run(async (ctx) => {
+      const settings = (await ctx.db.query("settings").first())!;
+      await ctx.db.patch(settings._id, { keepVotesOnReplace: true });
+    });
+    await owner.mutation(api.settings.update, { votingOpen: false });
+
+    const before = await owner.query(api.votes.results);
+    expect(before.rows.find((row) => row.submissionId === linus)).toMatchObject({ votes: 2, likes: 1 });
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["replacement"])));
+    expect(
+      await as(t, "linus").mutation(api.submissions.replaceFile, {
+        id: linus,
+        storageId,
+        originalFileName: "linus-v2.stl",
+        dimensionsMm: { x: 27, y: 51, z: 40 },
+      })
+    ).toEqual({ ok: true });
+
+    const after = await owner.query(api.votes.results);
+    expect(after.rows.find((row) => row.submissionId === linus)).toMatchObject({ votes: 2, likes: 1 });
+    for (const voter of [zoe, ada]) {
+      expect(await voter.query(api.votes.mine)).toMatchObject({
+        votesLeft: 1,
+        votedSubmissionIds: [linus],
+        droppedVotes: [],
+      });
+    }
+    expect(await zoe.query(api.likes.mine)).toEqual([{ submissionId: linus, reaction: "like" }]);
+  });
+
+  it("still resets votes and likes after closed voting when retention is unset", async () => {
+    const { t, linus } = await setup();
+    const zoe = as(t, "zoe");
+    const owner = as(t, "owner");
+    await zoe.mutation(api.votes.cast, { submissionId: linus });
+    await zoe.mutation(api.likes.react, { submissionId: linus, reaction: "like" });
+    await owner.mutation(api.settings.update, { votingOpen: false });
+    await t.run(async (ctx) => {
+      const settings = (await ctx.db.query("settings").first())!;
+      await ctx.db.patch(settings._id, { keepVotesOnReplace: undefined });
+    });
+    expect((await t.query(api.settings.get)).keepVotesOnReplace).toBe(false);
+
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["replacement"])));
+    await as(t, "linus").mutation(api.submissions.replaceFile, {
+      id: linus,
+      storageId,
+      originalFileName: "linus-v2.stl",
+      dimensionsMm: { x: 27, y: 51, z: 40 },
+    });
+
+    const ballot = await zoe.query(api.votes.mine);
+    expect(ballot?.votedSubmissionIds).toEqual([]);
+    expect(ballot?.votesLeft).toBe(2);
+    expect(ballot?.droppedVotes).toMatchObject([{ replaced: true, printCode: "KC-004" }]);
+    expect(await zoe.query(api.likes.mine)).toEqual([]);
+    expect((await owner.query(api.votes.results)).rows.find((row) => row.submissionId === linus)).toMatchObject({
+      votes: 0,
+      likes: 0,
+    });
+  });
+
   it("soft deletion excludes a submission from participant, voting, TV, and admin surfaces", async () => {
     const { t, grace } = await setup();
     const participant = as(t, "grace");

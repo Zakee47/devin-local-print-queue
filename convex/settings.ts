@@ -13,9 +13,13 @@ import {
   type Printer,
 } from "../lib/event";
 
-export type Settings = Omit<Doc<"settings">, "_id" | "_creationTime" | "maxDimensionsMm" | "printers"> & {
+export type Settings = Omit<
+  Doc<"settings">,
+  "_id" | "_creationTime" | "maxDimensionsMm" | "printers" | "keepVotesOnReplace"
+> & {
   maxDimensionsMm: Dimensions;
   printers: Printer[];
+  keepVotesOnReplace: boolean;
 };
 
 export type TvView = NonNullable<Doc<"settings">["tvDefaultView"]>;
@@ -23,6 +27,7 @@ export type TvView = NonNullable<Doc<"settings">["tvDefaultView"]>;
 export const DEFAULT_SETTINGS: Settings = {
   submissionsOpen: false,
   votingOpen: false,
+  keepVotesOnReplace: false,
   showResultsOnTv: false,
   maxFileBytes: DEFAULT_MAX_FILE_BYTES,
   colours: DEFAULT_COLOURS,
@@ -37,7 +42,7 @@ export async function readSettings(ctx: QueryCtx | MutationCtx): Promise<Setting
   const { _id, _creationTime, ...rest } = row;
   void _id;
   void _creationTime;
-  return { ...DEFAULT_SETTINGS, ...rest };
+  return { ...DEFAULT_SETTINGS, ...rest, keepVotesOnReplace: rest.keepVotesOnReplace ?? false };
 }
 
 async function writeSettings(ctx: MutationCtx, patch: Partial<Settings>) {

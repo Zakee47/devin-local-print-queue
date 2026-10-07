@@ -682,6 +682,7 @@ export const replaceFile = mutation({
       return { ok: false, error: error instanceof Error ? error.message : "Upload failed" };
     }
 
+    const oldVersion = currentVersion(submission);
     const result = await applyFile(
       ctx,
       submission,
@@ -695,6 +696,26 @@ export const replaceFile = mutation({
       },
       "replaced"
     );
+    if (!settings.votingOpen && settings.keepVotesOnReplace) {
+      const votes = await ctx.db
+        .query("votes")
+        .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
+        .collect();
+      for (const vote of votes) {
+        if ((vote.version ?? 1) === oldVersion) {
+          await ctx.db.patch(vote._id, { version: result.version });
+        }
+      }
+      const likes = await ctx.db
+        .query("likes")
+        .withIndex("by_submission", (q) => q.eq("submissionId", submission._id))
+        .collect();
+      for (const like of likes) {
+        if ((like.version ?? 1) === oldVersion) {
+          await ctx.db.patch(like._id, { version: result.version });
+        }
+      }
+    }
     if (args.previewStorageId && args.previewStorageId !== args.storageId) {
       await stagePreview(ctx, submission._id, args.previewStorageId, result.version);
     }
