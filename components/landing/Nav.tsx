@@ -15,6 +15,7 @@ export default function Nav() {
   const [open, setOpen] = useState(false);
   const menuBtn = useRef<HTMLButtonElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const zones = () =>
@@ -58,7 +59,28 @@ export default function Nav() {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") set(false);
+      if (e.key === "Escape") {
+        set(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusable = panel.querySelectorAll<HTMLElement>("a[href], button:not([disabled])");
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (!panel.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
@@ -93,7 +115,7 @@ export default function Nav() {
       </header>
       <div className={`dl-drawer${open ? " open" : ""}`} id="drawer" aria-hidden={!open} inert={!open}>
         <div className="scrim" onClick={() => set(false)} />
-        <aside className="panel" role="dialog" aria-modal="true" aria-label="Menu">
+        <aside ref={panelRef} className="panel" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="phead">
             <span className="dl-brand">
               <CognitionLogo className="dl-logo" />

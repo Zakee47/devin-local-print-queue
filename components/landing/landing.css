@@ -270,7 +270,10 @@ html:has(.dl) {
   background: var(--ink);
   color: var(--cream);
   transform: translateX(100%);
-  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  visibility: hidden;
+  transition:
+    transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s linear 0.4s;
   display: flex;
   flex-direction: column;
   padding: 16px 36px 36px;
@@ -285,6 +288,10 @@ html:has(.dl) {
 }
 .dl-drawer.open .panel {
   transform: none;
+  visibility: visible;
+  transition:
+    transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
 }
 .dl-drawer .phead {
   display: flex;
