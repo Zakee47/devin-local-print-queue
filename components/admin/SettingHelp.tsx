@@ -26,7 +26,7 @@ export default function SettingHelp({
       <PopoverTrigger
         aria-label={`What does ${title} do?`}
         className={cn(
-          "inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full align-middle text-muted-foreground transition-colors hover:text-foreground outline-none focus-visible:bg-muted focus-visible:text-foreground data-popup-open:text-foreground",
+          "inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full align-middle text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring data-popup-open:text-foreground",
           className
         )}
       >

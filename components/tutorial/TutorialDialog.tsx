@@ -50,6 +50,7 @@ export default function TutorialDialog({
       <DialogContent
         showCloseButton={false}
         initialFocus={primaryRef}
+        finalFocus={(closeType) => closeType === "keyboard"}
         className="gap-0 overflow-hidden p-0 sm:max-w-md"
         onKeyDown={onKeyDown}
       >

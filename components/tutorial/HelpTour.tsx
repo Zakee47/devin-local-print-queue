@@ -40,7 +40,7 @@ export default function HelpTour({
         aria-label="Replay tutorial"
         title="Replay tutorial"
         onClick={() => setManualOpen(true)}
-        className="flex size-8 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground outline-none focus-visible:bg-muted focus-visible:text-foreground"
+        className="flex size-8 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         <Info aria-hidden className="size-4.5" />
       </button>
