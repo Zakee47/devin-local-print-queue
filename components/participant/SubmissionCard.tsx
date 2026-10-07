@@ -50,6 +50,9 @@ export default function SubmissionCard({
   colours,
   printers,
   submissionsOpen,
+  votingOpen,
+  votingNotOpenYet,
+  onCompetitionEntry,
   active,
   maxFileBytes,
   maxDimensionsMm,
@@ -58,6 +61,9 @@ export default function SubmissionCard({
   colours: string[];
   printers: Printer[];
   submissionsOpen: boolean;
+  votingOpen: boolean;
+  votingNotOpenYet: boolean;
+  onCompetitionEntry: (printCode: string) => boolean;
   active: RoleFile[];
   maxFileBytes: number;
   maxDimensionsMm: Dimensions;
@@ -147,11 +153,12 @@ export default function SubmissionCard({
     }
   }
 
-  async function run(action: () => Promise<unknown>, success: string) {
+  async function run(action: () => Promise<unknown>, success: string, afterSuccess?: () => void) {
     setBusy(true);
     try {
       await action();
-      toast.success(success);
+      if (afterSuccess) afterSuccess();
+      else toast.success(success);
       return true;
     } catch (e) {
       toast.error(errorMessage(e));
@@ -193,7 +200,13 @@ export default function SubmissionCard({
           {s.vote || s.designRemoved ? (
             <Badge variant={s.designRemoved ? "outline" : "default"}>
               <Trophy data-icon="inline-start" aria-hidden="true" />
-              {s.designRemoved ? "Removed from voting" : "In voting"}
+              {s.designRemoved
+                ? "Removed from voting"
+                : votingOpen
+                  ? "Live in voting"
+                  : votingNotOpenYet
+                    ? "In voting · opens soon"
+                    : "Voting closed"}
             </Badge>
           ) : null}
           {printing ? (
@@ -307,7 +320,19 @@ export default function SubmissionCard({
                         variant="brand"
                         size="sm"
                         disabled={busy || !selectedRole}
-                        onClick={() => selectedRole && run(() => setRoles({ id: s._id, role: selectedRole }), "Role updated")}
+                        onClick={() => {
+                          if (!selectedRole) return;
+                          const addsVote = !s.vote && selectedRole !== "print";
+                          void run(
+                            () => setRoles({ id: s._id, role: selectedRole }),
+                            "Role updated",
+                            addsVote
+                              ? () => {
+                                  if (!onCompetitionEntry(s.printCode)) toast.success("Role updated");
+                                }
+                              : undefined
+                          );
+                        }}
                       >
                         Save
                       </Button>

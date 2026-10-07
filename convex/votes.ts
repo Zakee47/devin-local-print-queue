@@ -6,8 +6,8 @@ import { requireParticipant, viewerParticipant } from "./participants";
 import { readSettings } from "./settings";
 import { countsFor, currentVersion, entryFor, listEntries } from "./entries";
 import { reactionCounts } from "./likes";
-import { MAX_VOTES_PER_PARTICIPANT, type SubmissionStatus } from "../lib/event";
-import { compareRanking } from "../lib/ranking";
+import { MAX_VOTES_PER_PARTICIPANT, votingNotOpenYet, type SubmissionStatus } from "../lib/event";
+import { compareRanking, rankRows } from "../lib/ranking";
 import { previewUrlOf } from "./submissions";
 
 export const VOTING_CLOSED_MESSAGE = "Voting has closed — your votes are locked in";
@@ -115,6 +115,21 @@ export type GalleryEntry = {
   previewUrl: string | null;
 };
 
+export type MyStanding = {
+  votingOpen: boolean;
+  votingNotOpenYet: boolean;
+  totalEntries: number;
+  entries: {
+    submissionId: Id<"submissions">;
+    printCode: string;
+    title: string;
+    previewUrl: string | null;
+    rank: number;
+    votes: number;
+    likes: number;
+  }[];
+} | null;
+
 // Public: every current entry, whatever its print status. Usernames only.
 export const gallery = query({
   args: {},
@@ -136,6 +151,48 @@ export const gallery = query({
       });
     }
     return entries;
+  },
+});
+
+export const myStanding = query({
+  args: {},
+  handler: async (ctx): Promise<MyStanding> => {
+    const participant = await viewerParticipant(ctx);
+    if (!participant) return null;
+
+    const entries = await listEntries(ctx);
+    const [settings, { tally }, reactions] = await Promise.all([
+      readSettings(ctx),
+      tallyVotes(ctx),
+      reactionCounts(ctx),
+    ]);
+    const ranked = rankRows(
+      entries.map((submission) => ({
+        submission,
+        printCode: submission.printCode,
+        votes: tally.get(submission._id) ?? 0,
+        likes: reactions.get(submission._id)?.likes ?? 0,
+      }))
+    );
+
+    return {
+      votingOpen: settings.votingOpen,
+      votingNotOpenYet: votingNotOpenYet(settings),
+      totalEntries: entries.length,
+      entries: await Promise.all(
+        ranked
+          .filter(({ submission }) => submission.participantId === participant._id)
+          .map(async ({ submission, rank, votes, likes }) => ({
+            submissionId: submission._id,
+            printCode: submission.printCode,
+            title: submission.title,
+            previewUrl: await previewUrlOf(ctx, submission),
+            rank,
+            votes,
+            likes,
+          }))
+      ),
+    };
   },
 });
 

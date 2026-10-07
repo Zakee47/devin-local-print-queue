@@ -46,6 +46,7 @@ export default function UploadCard({
   maxDimensionsMm,
   slotsLeft,
   active,
+  onCompetitionEntry,
   printOnly = false,
 }: {
   colours: string[];
@@ -54,6 +55,7 @@ export default function UploadCard({
   maxDimensionsMm: Dimensions;
   slotsLeft: number;
   active: RoleFile[];
+  onCompetitionEntry: (printCode: string) => boolean;
   printOnly?: boolean;
 }) {
   const generateUploadUrl = useMutation(api.submissions.generateUploadUrl);
@@ -133,7 +135,11 @@ export default function UploadCard({
         role,
       });
       if (!result.ok) throw new Error(result.error);
-      toast.success("Uploaded! The organizers will review it shortly.");
+      if (role === "print") {
+        toast.success("Uploaded! The organizers will review it shortly.");
+      } else if (!onCompetitionEntry(result.printCode)) {
+        toast.success("Uploaded successfully");
+      }
       reset();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");

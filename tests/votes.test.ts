@@ -91,6 +91,48 @@ describe("votes", () => {
     }
   });
 
+  it("returns no standing for signed-out and non-participant viewers", async () => {
+    const { t } = await setup();
+    expect(await t.query(api.votes.myStanding)).toBeNull();
+    expect(await as(t, "stranger").query(api.votes.myStanding)).toBeNull();
+  });
+
+  it("ranks zero-vote entries together across all current entries", async () => {
+    const { t, grace, ada, alan, linusSpare } = await setup();
+    await t.run(async (ctx) => {
+      await ctx.db.patch(ada, { printRequested: false });
+      await ctx.db.patch(alan, { printRequested: false });
+      await ctx.db.patch(linusSpare, { designEntry: true });
+    });
+    await as(t, "ada").mutation(api.votes.cast, { submissionId: grace });
+    await as(t, "alan").mutation(api.votes.cast, { submissionId: grace });
+
+    const standing = await as(t, "linus").query(api.votes.myStanding);
+    expect(standing).toMatchObject({
+      votingOpen: true,
+      votingNotOpenYet: false,
+      totalEntries: 3,
+      entries: [
+        { printCode: "KC-004", rank: 2, votes: 0, likes: 0 },
+        { printCode: "KC-005", rank: 2, votes: 0, likes: 0 },
+      ],
+    });
+  });
+
+  it("excludes print-only and removed designs from the viewer's standing", async () => {
+    const { t, linus } = await setup();
+    expect((await as(t, "linus").query(api.votes.myStanding))?.entries.map((entry) => entry.printCode)).toEqual([
+      "KC-004",
+    ]);
+
+    await t.run(async (ctx) => {
+      await ctx.db.patch(linus, { designRemoved: true });
+    });
+    const standing = await as(t, "linus").query(api.votes.myStanding);
+    expect(standing?.entries).toEqual([]);
+    expect(standing?.totalEntries).toBe(3);
+  });
+
   it("allows votes on entries that aren't printed yet", async () => {
     const { t, grace, linus } = await setup();
     await as(t, "ada").mutation(api.votes.cast, { submissionId: grace });
@@ -224,6 +266,9 @@ describe("votes", () => {
       votes: 0,
       likes: 0,
     });
+    expect((await as(t, "linus").query(api.votes.myStanding))?.entries).toMatchObject([
+      { submissionId: linus, votes: 0, likes: 0 },
+    ]);
 
     await zoe.mutation(api.votes.cast, { submissionId: linus });
     expect((await zoe.query(api.votes.mine))?.votedSubmissionIds).toEqual([linus]);

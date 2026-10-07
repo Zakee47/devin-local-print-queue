@@ -326,7 +326,9 @@ export const generateUploadUrl = mutation({
   },
 });
 
-export type CreateResult = { ok: true; id: Id<"submissions"> } | { ok: false; error: string };
+export type CreateResult =
+  | { ok: true; id: Id<"submissions">; printCode: string }
+  | { ok: false; error: string };
 
 // Validation failures return an error instead of throwing so the uploaded
 // blob's deletion commits rather than rolling back with the transaction.
@@ -424,7 +426,7 @@ export const create = mutation({
     if (args.previewStorageId && args.previewStorageId !== args.storageId) {
       await stagePreview(ctx, id, args.previewStorageId, 1);
     }
-    return { ok: true, id };
+    return { ok: true, id, printCode };
   },
 });
 

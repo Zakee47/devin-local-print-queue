@@ -30,6 +30,7 @@ export default function Home() {
   const { authReady, signedIn, canQuery } = useViewerAuth();
   const status = useQuery(api.participants.viewerStatus, canQuery ? {} : "skip");
   const liveLeaderboard = useQuery(api.tv.leaderboard);
+  const myStanding = useQuery(api.votes.myStanding, canQuery ? {} : "skip");
   const register = useMutation(api.participants.register);
   const usernameError = username ? validateUsername(username) : null;
 
@@ -152,6 +153,7 @@ export default function Home() {
               rows={liveLeaderboard.leaderboard}
               totalVotes={liveLeaderboard.totalVotes}
               totalLikes={liveLeaderboard.totalLikes}
+              mine={myStanding}
               votingOpen={liveLeaderboard.votingOpen}
               votingNotOpenYet={liveLeaderboard.votingNotOpenYet}
             />

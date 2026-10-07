@@ -8,7 +8,7 @@ import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import type { DroppedVote, GalleryEntry } from "@/convex/votes";
+import type { DroppedVote, GalleryEntry, MyStanding } from "@/convex/votes";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
 import { MAX_VOTES_PER_PARTICIPANT, votingNotOpenYet, type Reaction } from "@/lib/event";
 import { DECK_FILTERS, filterCounts, matchesFilter, type DeckFilter } from "@/lib/deck";
@@ -29,8 +29,17 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type SubmissionId = Id<"submissions">;
+type StandingEntry = NonNullable<MyStanding>["entries"][number];
+type OwnEntry = { entry: GalleryEntry; standing: StandingEntry };
 // `previous` is the reaction before the swipe; `saved` is false for read-only
 // (signed-out) swipes that only moved through the deck.
 type HistoryItem = { id: SubmissionId; previous: Reaction | undefined; saved: boolean };
@@ -45,6 +54,7 @@ export default function VoteGallery() {
   const entries = useQuery(api.votes.gallery);
   const settings = useQuery(api.settings.get);
   const ballot = useQuery(api.votes.mine, canQuery ? {} : "skip");
+  const myStanding = useQuery(api.votes.myStanding, canQuery ? {} : "skip");
   const myReactions = useQuery(api.likes.mine, canQuery ? {} : "skip");
   const cast = useMutation(api.votes.cast);
   const retract = useMutation(api.votes.retract);
@@ -59,13 +69,14 @@ export default function VoteGallery() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [pending, setPending] = useState<SubmissionId | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [ownEntryDetail, setOwnEntryDetail] = useState<OwnEntry | null>(null);
   const cardRef = useRef<SwipeCardHandle>(null);
 
   const loading =
     entries === undefined ||
     settings === undefined ||
     !authReady ||
-    (signedIn && (ballot === undefined || myReactions === undefined));
+    (signedIn && (ballot === undefined || myStanding === undefined || myReactions === undefined));
   const votingOpen = settings?.votingOpen ?? false;
   const notOpenYet = settings ? votingNotOpenYet(settings) : false;
   const closedCopy = notOpenYet ? "Voting hasn't opened yet." : "Voting has closed.";
@@ -82,6 +93,13 @@ export default function VoteGallery() {
     () => (entries ?? []).filter((e) => !ballot?.ownSubmissionIds.includes(e._id)),
     [entries, ballot]
   );
+  const ownEntries = useMemo<OwnEntry[]>(() => {
+    if (!signedIn || !entries || !myStanding) return [];
+    return myStanding.entries.flatMap((standing) => {
+      const entry = entries.find((candidate) => candidate._id === standing.submissionId);
+      return entry ? [{ entry, standing }] : [];
+    });
+  }, [entries, myStanding, signedIn]);
   const counts = useMemo(() => filterCounts(deck.map((e) => reactions.get(e._id))), [deck, reactions]);
   const list = useMemo(
     () => deck.filter((e) => matchesFilter(reactions.get(e._id), activeFilter)),
@@ -218,6 +236,32 @@ export default function VoteGallery() {
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
+      <Dialog open={ownEntryDetail !== null} onOpenChange={(open) => !open && setOwnEntryDetail(null)}>
+        {ownEntryDetail ? (
+          <DialogContent className="p-2 sm:max-w-md">
+            <DialogHeader className="px-2 pt-2">
+              <DialogTitle>{ownEntryDetail.entry.title}</DialogTitle>
+              <DialogDescription>
+                {ownEntryDetail.entry.printCode} · your competition entry
+              </DialogDescription>
+            </DialogHeader>
+            <ul className="list-none p-0">
+              <VoteCard
+                entry={ownEntryDetail.entry}
+                voted={false}
+                canReact={false}
+                onToggleLike={() => {}}
+                voteControl={null}
+                ownStanding={{
+                  rank: ownEntryDetail.standing.rank,
+                  totalEntries: myStanding?.totalEntries ?? 0,
+                  votes: ownEntryDetail.standing.votes,
+                }}
+              />
+            </ul>
+          </DialogContent>
+        ) : null}
+      </Dialog>
       <p className="eyebrow text-muted-foreground">People&apos;s choice</p>
       <h1 className="mt-2 font-heading text-2xl font-semibold sm:mt-3 tracking-[-0.03em] sm:text-5xl">
         Swipe the designs
@@ -339,6 +383,46 @@ export default function VoteGallery() {
           <>
             <TabsContent value="swipe" className="mt-4">
               <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+                {ownEntries.map(({ entry, standing }) => (
+                  <section
+                    key={entry._id}
+                    aria-label="Your entry is live"
+                    className="flex min-w-0 items-center gap-3 rounded-xl border border-brand/30 bg-brand/5 p-3 ring-1 ring-brand/20"
+                  >
+                    {standing.previewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={standing.previewUrl}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        className="size-12 shrink-0 rounded-lg bg-surface object-contain"
+                      />
+                    ) : (
+                      <div className="grid size-12 shrink-0 place-items-center rounded-lg bg-surface text-brand">
+                        <Trophy className="size-5" aria-hidden="true" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground">Your entry is live</p>
+                      <p className="truncate text-sm font-medium">
+                        {entry.printCode} · {entry.title}
+                      </p>
+                      <p className="font-mono text-xs text-muted-foreground">
+                        #{standing.rank} of {myStanding?.totalEntries ?? 0} · {standing.votes}{" "}
+                        {standing.votes === 1 ? "vote" : "votes"}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => setOwnEntryDetail({ entry, standing })}
+                    >
+                      View
+                    </Button>
+                  </section>
+                ))}
                 {current ? (
                   <div className="relative">
                     <div aria-hidden className="absolute inset-x-3 -bottom-2 top-2 rounded-2xl bg-card/60 ring-1 ring-foreground/5" />
@@ -410,6 +494,31 @@ export default function VoteGallery() {
               </div>
             </TabsContent>
             <TabsContent value="list" className="mt-4">
+              {ownEntries.length ? (
+                <section aria-labelledby="your-entry-heading" className="mb-6">
+                  <h2 id="your-entry-heading" className="mb-3 font-heading text-lg font-semibold">
+                    Your entry
+                  </h2>
+                  <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {ownEntries.map(({ entry, standing }) => (
+                      <VoteCard
+                        key={entry._id}
+                        entry={entry}
+                        voted={false}
+                        canReact={false}
+                        onToggleLike={() => {}}
+                        voteControl={null}
+                        ownStanding={{
+                          rank: standing.rank,
+                          totalEntries: myStanding?.totalEntries ?? 0,
+                          votes: standing.votes,
+                        }}
+                        onOpen={() => setOwnEntryDetail({ entry, standing })}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
               {list.length === 0 ? (
                 <Empty className="border border-dashed border-border-strong py-16">
                   <EmptyHeader>
