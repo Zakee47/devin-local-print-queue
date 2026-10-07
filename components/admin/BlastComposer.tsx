@@ -17,6 +17,8 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { errorMessage } from "@/lib/errors";
+import { SETTINGS_HELP } from "@/lib/settings-help";
+import SettingHelp from "@/components/admin/SettingHelp";
 
 function formatTime(timestamp: number) {
   const date = new Date(timestamp);
@@ -56,7 +58,10 @@ export default function BlastComposer() {
     <Card>
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="grid gap-1">
-          <CardTitle>Blast message</CardTitle>
+          <div className="flex items-center gap-1">
+            <CardTitle>Blast message</CardTitle>
+            <SettingHelp {...SETTINGS_HELP.blast} />
+          </div>
           <CardDescription>This message appears at the top of every page.</CardDescription>
         </div>
         <p className="shrink-0 text-xs font-medium text-muted-foreground">{liveStatus}</p>

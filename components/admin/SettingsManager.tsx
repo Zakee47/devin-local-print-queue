@@ -36,20 +36,27 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { submissionsStatusText } from "@/components/admin/countdown";
 import { useNow } from "@/components/admin/use-now";
 import { errorMessage } from "@/lib/errors";
+import { SETTINGS_HELP, type SettingHelpCopy } from "@/lib/settings-help";
+import SettingHelp from "@/components/admin/SettingHelp";
 
 function Section({
   title,
   description,
+  help,
   children,
 }: {
   title: string;
   description: string;
+  help?: SettingHelpCopy;
   children: React.ReactNode;
 }) {
   return (
     <section className="grid gap-4 sm:grid-cols-[14rem_1fr] sm:gap-8">
       <div>
-        <h2 className="font-heading text-base font-medium tracking-tight">{title}</h2>
+        <div className="flex items-center gap-1">
+          <h2 className="font-heading text-base font-medium tracking-tight">{title}</h2>
+          {help ? <SettingHelp {...help} /> : null}
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
       <div className="min-w-0">{children}</div>
@@ -148,7 +155,10 @@ export default function SettingsManager() {
       <Section title="Submissions" description="Manage the submission window, deadline and blast message.">
         <FieldGroup>
           <Field>
-            <FieldLabel>Submission intake</FieldLabel>
+            <div className="flex items-center gap-1">
+              <FieldLabel>Submission intake</FieldLabel>
+              <SettingHelp {...SETTINGS_HELP.submissionIntake} />
+            </div>
             <ToggleGroup
               value={[settings.submissionsOpen ? "open" : "closed"]}
               onValueChange={(value) => {
@@ -178,7 +188,10 @@ export default function SettingsManager() {
             }}
           >
             <Field className="w-full max-w-sm">
-              <FieldLabel htmlFor="submissions-deadline">Deadline</FieldLabel>
+              <div className="flex items-center gap-1">
+                <FieldLabel htmlFor="submissions-deadline">Deadline</FieldLabel>
+                <SettingHelp {...SETTINGS_HELP.deadline} />
+              </div>
               <Input
                 id="submissions-deadline"
                 type="datetime-local"
@@ -225,7 +238,10 @@ export default function SettingsManager() {
             }}
           >
             <Field className="w-full">
-              <FieldLabel htmlFor="announcement">Blast message</FieldLabel>
+              <div className="flex items-center gap-1">
+                <FieldLabel htmlFor="announcement">Blast message</FieldLabel>
+                <SettingHelp {...SETTINGS_HELP.blast} />
+              </div>
               <Textarea
                 id="announcement"
                 rows={3}
@@ -241,7 +257,7 @@ export default function SettingsManager() {
       </Section>
       <Separator />
 
-      <Section title="Printers" description={COLOUR_DISCLAIMER}>
+      <Section title="Printers" description={COLOUR_DISCLAIMER} help={SETTINGS_HELP.printers}>
         <div className="flex flex-col gap-4">
           <ul className="divide-y divide-border border-y border-border">
             {currentPrinters.map((printer, index) => (
@@ -285,7 +301,10 @@ export default function SettingsManager() {
                 </div>
                 {colours.length > 0 ? (
                   <FieldSet>
-                    <FieldLegend variant="label">Loaded colours</FieldLegend>
+                    <FieldLegend variant="label" className="flex items-center gap-1">
+                      Loaded colours
+                      <SettingHelp {...SETTINGS_HELP.loadedColours} />
+                    </FieldLegend>
                     <div className="flex flex-wrap gap-x-5 gap-y-2">
                       {colours.map((colour) => {
                         const checked = printer.colours.some(
@@ -365,7 +384,9 @@ export default function SettingsManager() {
       </Section>
       <Separator />
 
-      <Section title="Max dimensions" description="Maximum model dimensions, in millimetres, in any orientation.">
+      <Section title="Max dimensions" description="Maximum model dimensions, in millimetres, in any orientation."
+        help={SETTINGS_HELP.maxDimensions}
+      >
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={(event) => {
@@ -407,7 +428,7 @@ export default function SettingsManager() {
       </Section>
       <Separator />
 
-      <Section title="Max file size" description="Uploads above this are refused.">
+      <Section title="Max file size" description="Uploads above this are refused." help={SETTINGS_HELP.maxFileSize}>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -439,7 +460,9 @@ export default function SettingsManager() {
       </Section>
       <Separator />
 
-      <Section title="Colour palette" description="Participants pick a requested colour. Requests are not guaranteed.">
+      <Section title="Colour palette" description="Participants pick a requested colour. Requests are not guaranteed."
+        help={SETTINGS_HELP.colourPalette}
+      >
         <ul className="mb-4 divide-y divide-border border-y border-border">
           {colours.map((colour, index) => (
             <li key={colour} className="flex min-h-11 items-center gap-3 px-1 py-1.5">

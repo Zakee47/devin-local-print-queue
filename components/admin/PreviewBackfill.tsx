@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { swatchFor } from "@/lib/colours";
+import { SETTINGS_HELP } from "@/lib/settings-help";
+import SettingHelp from "@/components/admin/SettingHelp";
 
 export default function PreviewBackfill() {
   const missing = useQuery(api.submissions.missingPreviews);
@@ -82,7 +84,10 @@ export default function PreviewBackfill() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Previews</CardTitle>
+        <div className="flex items-center gap-1">
+          <CardTitle>Previews</CardTitle>
+          <SettingHelp {...SETTINGS_HELP.previews} />
+        </div>
         <CardDescription>
           Snapshot images let voters browse without downloading every model.
         </CardDescription>
