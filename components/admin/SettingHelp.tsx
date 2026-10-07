@@ -11,8 +11,8 @@ import {
 import type { SettingHelpCopy } from "@/lib/settings-help";
 import { cn } from "@/lib/utils";
 
-// "?" button that explains a setting. Hover opens it with a mouse; tap, click
-// or Enter opens it everywhere; Escape closes it.
+// "?" button that explains a setting. Click, tap or Enter opens it; Escape or
+// clicking outside closes it.
 export default function SettingHelp({
   title,
   what,
@@ -24,9 +24,6 @@ export default function SettingHelp({
   return (
     <Popover>
       <PopoverTrigger
-        openOnHover
-        delay={200}
-        closeDelay={150}
         aria-label={`What does ${title} do?`}
         className={cn(
           "inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full align-middle text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring data-popup-open:text-foreground",
