@@ -6,6 +6,7 @@ import type { GalleryEntry } from "@/convex/votes";
 import type { Reaction } from "@/lib/event";
 import ModelPreview from "@/components/ModelPreview";
 import StageChip from "@/components/vote/StageChip";
+import VoteStamp from "@/components/vote/VoteStamp";
 import { swatchFor } from "@/lib/colours";
 import { cn } from "@/lib/utils";
 
@@ -24,10 +25,11 @@ const SwipeCard = forwardRef<
     entry: GalleryEntry;
     reaction?: Reaction;
     voted: boolean;
+    voteNumber?: number;
     onSwipe: (direction: Reaction) => void;
     footer: ReactNode;
   }
->(function SwipeCard({ entry, reaction, voted, onSwipe, footer }, ref) {
+>(function SwipeCard({ entry, reaction, voted, voteNumber, onSwipe, footer }, ref) {
   const cardRef = useRef<HTMLDivElement>(null);
   const likeRef = useRef<HTMLSpanElement>(null);
   const skipRef = useRef<HTMLSpanElement>(null);
@@ -92,7 +94,7 @@ const SwipeCard = forwardRef<
         paint(0, true);
       }}
     >
-      <div className="pointer-events-none relative">
+      <div className="pointer-events-none relative" data-stamp-host>
         <ModelPreview
           url={entry.fileUrl}
           previewUrl={entry.previewUrl}
@@ -104,7 +106,7 @@ const SwipeCard = forwardRef<
         <span
           ref={likeRef}
           aria-hidden
-          className="absolute top-5 left-5 -rotate-12 rounded-lg border-4 border-brand px-3 py-1 font-heading text-3xl font-bold tracking-wide text-brand uppercase opacity-0"
+          className="absolute top-5 left-5 -rotate-12 rounded-lg border-4 border-foreground/60 px-3 py-1 font-heading text-3xl font-bold tracking-wide text-foreground/70 uppercase opacity-0"
         >
           Like
         </span>
@@ -115,6 +117,7 @@ const SwipeCard = forwardRef<
         >
           Skip
         </span>
+        <VoteStamp voted={voted} voteNumber={voteNumber} />
         <div className="absolute top-3 left-1/2 flex -translate-x-1/2 gap-1.5">
           <StageChip stage={entry.stage} />
           {voted ? <Pill className="bg-brand text-brand-foreground">Your vote</Pill> : null}
@@ -161,7 +164,7 @@ function Pill({ className, children }: { className?: string; children: ReactNode
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full bg-background/80 px-2.5 py-1 text-xs font-medium ring-1 ring-foreground/10 backdrop-blur",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-background/80 px-2.5 py-1 text-xs font-medium ring-1 ring-foreground/10 backdrop-blur",
         className
       )}
     >
