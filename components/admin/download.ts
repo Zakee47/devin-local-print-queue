@@ -43,11 +43,39 @@ export function useFetchSubmissionFile() {
   );
 }
 
+export function useFetchSubmissionVersion() {
+  const { getToken } = useAuth();
+  return useCallback(
+    async (versionId: string, fallbackName?: string) => {
+      const token = await getToken({ template: "convex" });
+      if (!token) throw new Error("Not signed in");
+      const res = await fetch(`${convexSiteUrl()}/download?version=${encodeURIComponent(versionId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const fileName = fileNameFrom(res) ?? fallbackName;
+      return { blob: await res.blob(), fileName };
+    },
+    [getToken]
+  );
+}
+
 export function useDownloadSubmission() {
   const fetchFile = useFetchSubmissionFile();
   return useCallback(
     async (id: string, fallbackName: string) => {
       const { blob, fileName } = await fetchFile(id, fallbackName);
+      saveBlob(blob, fileName ?? fallbackName);
+    },
+    [fetchFile]
+  );
+}
+
+export function useDownloadSubmissionVersion() {
+  const fetchFile = useFetchSubmissionVersion();
+  return useCallback(
+    async (versionId: string, fallbackName: string) => {
+      const { blob, fileName } = await fetchFile(versionId, fallbackName);
       saveBlob(blob, fileName ?? fallbackName);
     },
     [fetchFile]

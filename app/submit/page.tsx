@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, LogIn, Lock, Star } from "lucide-react";
+import { ChevronDown, LogIn } from "lucide-react";
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import type { MyStanding } from "@/convex/votes";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
@@ -20,7 +21,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen, submissionsNotOpenYet } from "@/lib/event";
+import {
+  MAX_SUBMISSIONS_PER_PARTICIPANT,
+  submissionsAreOpen,
+  submissionsNotOpenYet,
+  votingNotOpenYet,
+} from "@/lib/event";
+import { errorMessage } from "@/lib/errors";
 
 function EntriesSkeleton() {
   return (
@@ -36,10 +43,40 @@ function EntriesSkeleton() {
   );
 }
 
+function StandingBanner({ standing }: { standing: NonNullable<MyStanding> }) {
+  const entry = standing.entries[0];
+  if (!entry) return null;
+  const voteLabel = entry.votes === 1 ? "vote" : "votes";
+
+  return (
+    <div
+      aria-live="polite"
+      className="mb-6 flex flex-col gap-2 rounded-xl bg-brand/10 px-4 py-3 ring-2 ring-brand/40 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p className="min-w-0 break-words text-sm leading-5">
+        {standing.votingNotOpenYet
+          ? "Your design is in. It goes public when voting opens."
+          : standing.votingOpen
+            ? `Your design ${entry.printCode} '${entry.title}' is public and open for voting · #${entry.rank} of ${standing.totalEntries} · ${entry.votes} ${voteLabel}`
+            : `Voting has closed · final #${entry.rank} · ${entry.votes} ${voteLabel}`}
+      </p>
+      {standing.votingOpen ? (
+        <Link
+          href="/vote"
+          className="shrink-0 text-sm font-medium text-link underline underline-offset-4"
+        >
+          See it in voting
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
 export default function SubmitPage() {
   const router = useRouter();
   const { authReady, signedIn, canQuery } = useViewerAuth();
   const status = useQuery(api.participants.viewerStatus, canQuery ? {} : "skip");
+  const myStanding = useQuery(api.votes.myStanding, canQuery ? {} : "skip");
   const registered = status?.state === "registered";
   const submissions = useQuery(api.submissions.mine, registered ? {} : "skip");
   const settings = useQuery(api.settings.get);
@@ -53,7 +90,15 @@ export default function SubmitPage() {
     if (status && status.state !== "registered" && status.state !== "signed_out") router.replace("/");
   }, [status, router]);
 
-  const active = submissions?.filter((s) => s.status !== "rejected") ?? [];
+  const active = submissions?.filter((s) => s.active) ?? [];
+  const roleFiles = active.map((submission) => ({
+    id: submission._id,
+    printCode: submission.printCode,
+    vote: submission.vote,
+    print: submission.print,
+    status: submission.status,
+    designRemoved: submission.designRemoved,
+  }));
   const sorted = submissions
     ? [...submissions].sort(
         (a, b) =>
@@ -62,9 +107,6 @@ export default function SubmitPage() {
       )
     : [];
   const slotsLeft = MAX_SUBMISSIONS_PER_PARTICIPANT - active.length;
-  const choiceLocked = active.some((s) => s.status !== "submitted");
-  const hasEntry = active.some((s) => s.printRequested);
-  const needsPick = !hasEntry && active.length > 0 && !choiceLocked;
   const canUploadReplacement = submissions?.some((s) => s.canUploadReplacement) ?? false;
   const showPlaybookStep = status?.state === "registered" && !status.playbookStepDone;
 
@@ -73,16 +115,32 @@ export default function SubmitPage() {
     try {
       await completePlaybookStep({});
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Couldn't update your playbook step");
+      toast.error(errorMessage(error, "Couldn't update your playbook step"));
     } finally {
       setCompletingPlaybookStep(false);
     }
+  }
+
+  function announceCompetitionEntry(printCode: string) {
+    if (!settings) return false;
+    if (settings.votingOpen) {
+      toast.success(`${printCode} is live in voting`, {
+        action: { label: "See it", onClick: () => router.push("/vote") },
+      });
+      return true;
+    }
+    if (votingNotOpenYet(settings)) {
+      toast.success(`${printCode} will go public when voting opens`);
+      return true;
+    }
+    return false;
   }
 
   return (
     <div className="flex min-h-screen flex-col">
       <SiteHeader />
       <main id="main-content" className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
+        {myStanding?.entries.length ? <StandingBanner standing={myStanding} /> : null}
         {showPlaybookStep ? (
           <section aria-labelledby="playbook-step-heading" className="mx-auto max-w-2xl">
             <h2
@@ -115,8 +173,12 @@ export default function SubmitPage() {
             <div className="mb-6 sm:mb-8">
               <h1 className="font-heading text-3xl font-semibold tracking-[-0.02em]">My entries</h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                Upload up to {MAX_SUBMISSIONS_PER_PARTICIPANT} files and pick one as your entry — it&apos;s the one we
-                print and the one people vote on.
+                Upload up to {MAX_SUBMISSIONS_PER_PARTICIPANT} files. Each one is for <strong>Vote</strong>,{" "}
+                <strong>Print</strong> or <strong>Both</strong>.
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Vote enters it in the design competition to win a 3D printer and goes live straight away. Print means we
+                print it for you once staff approve it.
               </p>
             </div>
 
@@ -182,31 +244,19 @@ export default function SubmitPage() {
                     </div>
                   </>
                 ) : null}
-                {choiceLocked ? (
-                  <Alert>
-                    <Lock />
-                    <AlertTitle>Your entry is locked in</AlertTitle>
-                    <AlertDescription>An organizer has accepted it into the print queue.</AlertDescription>
-                  </Alert>
-                ) : null}
-                {needsPick ? (
-                  <Alert>
-                    <Star />
-                    <AlertTitle>Pick your entry</AlertTitle>
-                    <AlertDescription>
-                      Your entry was sent back, so you don&apos;t have one right now. Make your other upload your entry
-                      {open ? ", or upload a new design" : ""}.
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
                 {sorted.map((s) => (
                   <SubmissionCard
                     key={s._id}
                     submission={s}
                     colours={settings.colours}
                     printers={settings.printers}
-                    showEntryChoice={needsPick || (open && active.length > 1)}
+                    active={roleFiles}
                     submissionsOpen={open}
+                    votingOpen={settings.votingOpen}
+                    votingNotOpenYet={votingNotOpenYet(settings)}
+                    onCompetitionEntry={announceCompetitionEntry}
+                    maxFileBytes={settings.maxFileBytes}
+                    maxDimensionsMm={settings.maxDimensionsMm}
                   />
                 ))}
                 {slotsLeft > 0 ? (
@@ -226,6 +276,9 @@ export default function SubmitPage() {
                         maxFileBytes={settings.maxFileBytes}
                         maxDimensionsMm={settings.maxDimensionsMm}
                         slotsLeft={slotsLeft}
+                        active={roleFiles}
+                        onCompetitionEntry={announceCompetitionEntry}
+                        printOnly={!open}
                       />
                     </>
                   ) : submissionsNotOpenYet(settings, now) ? (

@@ -5,19 +5,20 @@ import { FileUp, Ruler, Upload, X } from "lucide-react";
 import { useMutation } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import ModelViewer from "@/components/ModelViewer";
-import { renderModelSnapshot, uploadPreview } from "@/components/model-snapshot";
 import SubmissionFields, { type SubmissionDraft } from "@/components/participant/SubmissionFields";
+import RoleChoice from "@/components/participant/RoleChoice";
+import { measureUploadFile, uploadModelFile, validateModelFile, formatUploadBytes } from "@/components/participant/upload-file";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { swatchFor } from "@/lib/colours";
-import { fitsWithin, formatDimensions } from "@/lib/dimensions";
+import { formatDimensions } from "@/lib/dimensions";
 import { ALLOWED_EXTENSIONS, MAX_SUBMISSIONS_PER_PARTICIPANT, type Dimensions, type Printer } from "@/lib/event";
-import { fileKindFromName, type FileKind } from "@/lib/files";
-import { measureModel } from "@/lib/model-dimensions";
+import type { Role, RoleFile } from "@/lib/roles";
+import type { FileKind } from "@/lib/files";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/errors";
 
 const EMPTY_DRAFT: SubmissionDraft = { title: "", notes: "", colour: "" };
 
@@ -28,8 +29,7 @@ type Measurement =
   | { state: "error" };
 
 export function formatBytes(bytes: number) {
-  if (bytes >= 1024 * 1024) return `${Number((bytes / (1024 * 1024)).toFixed(1))} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return formatUploadBytes(bytes);
 }
 
 function titleFromFileName(name: string) {
@@ -46,12 +46,18 @@ export default function UploadCard({
   maxFileBytes,
   maxDimensionsMm,
   slotsLeft,
+  active,
+  onCompetitionEntry,
+  printOnly = false,
 }: {
   colours: string[];
   printers: Printer[];
   maxFileBytes: number;
   maxDimensionsMm: Dimensions;
   slotsLeft: number;
+  active: RoleFile[];
+  onCompetitionEntry: (printCode: string) => boolean;
+  printOnly?: boolean;
 }) {
   const generateUploadUrl = useMutation(api.submissions.generateUploadUrl);
   const generatePreviewUploadUrl = useMutation(api.submissions.generatePreviewUploadUrl);
@@ -60,6 +66,7 @@ export default function UploadCard({
   const [file, setFile] = useState<{ file: File; kind: FileKind; url: string } | null>(null);
   const [draft, setDraft] = useState<SubmissionDraft>(EMPTY_DRAFT);
   const [busy, setBusy] = useState(false);
+  const [role, setRole] = useState<Role | null>(null);
   const [measurement, setMeasurement] = useState<Measurement | null>(null);
   const pickId = useRef(0);
 
@@ -71,24 +78,23 @@ export default function UploadCard({
     pickId.current += 1;
     setFile(null);
     setMeasurement(null);
+    setRole(null);
     setDraft(EMPTY_DRAFT);
     if (inputRef.current) inputRef.current.value = "";
   }
 
   function pick(picked: File | undefined) {
     if (!picked) return;
-    const kind = fileKindFromName(picked.name);
-    if (!kind) {
-      toast.error("Only STL or 3MF files are accepted");
-      if (inputRef.current) inputRef.current.value = "";
-      return;
-    }
-    if (picked.size > maxFileBytes) {
-      toast.error(`That file is ${formatBytes(picked.size)}. The limit is ${formatBytes(maxFileBytes)}.`);
+    let kind: FileKind;
+    try {
+      kind = validateModelFile(picked, maxFileBytes);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Couldn't use that file");
       if (inputRef.current) inputRef.current.value = "";
       return;
     }
     setFile({ file: picked, kind, url: URL.createObjectURL(picked) });
+    setRole(null);
     setDraft((d) => (d.title ? d : { ...d, title: titleFromFileName(picked.name) }));
     void measure(picked, kind);
   }
@@ -98,8 +104,8 @@ export default function UploadCard({
     setMeasurement({ state: "measuring" });
     let next: Measurement;
     try {
-      const dimensions = await measureModel(await picked.arrayBuffer(), kind);
-      next = { state: fitsWithin(dimensions, maxDimensionsMm) ? "ok" : "too_big", dimensions };
+      const { dimensions, fits } = await measureUploadFile(picked, kind, maxDimensionsMm);
+      next = { state: fits ? "ok" : "too_big", dimensions };
     } catch {
       next = { state: "error" };
     }
@@ -108,40 +114,36 @@ export default function UploadCard({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || !draft.title.trim() || measurement?.state !== "ok") return;
+    if (!file || !role || !draft.title.trim() || measurement?.state !== "ok") return;
     const { dimensions } = measurement;
     setBusy(true);
     try {
-      const snapshot = renderModelSnapshot(
-        file.file,
-        file.kind,
-        swatchFor(draft.colour)
-      )
-        .then((blob) => uploadPreview(() => generatePreviewUploadUrl({}), blob))
-        .catch(() => undefined);
-      const uploadUrl = await generateUploadUrl({});
-      const res = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.file.type || "application/octet-stream" },
-        body: file.file,
+      const uploaded = await uploadModelFile({
+        file: file.file,
+        kind: file.kind,
+        colour: swatchFor(draft.colour),
+        generateUploadUrl: () => generateUploadUrl({}),
+        generatePreviewUploadUrl: () => generatePreviewUploadUrl({}),
       });
-      if (!res.ok) throw new Error("Upload failed, try again");
-      const { storageId } = (await res.json()) as { storageId: Id<"_storage"> };
-      const previewStorageId = await snapshot;
       const result = await create({
-        storageId,
-        ...(previewStorageId ? { previewStorageId } : {}),
+        storageId: uploaded.storageId,
+        ...(uploaded.previewStorageId ? { previewStorageId: uploaded.previewStorageId } : {}),
         title: draft.title,
         notes: draft.notes || undefined,
         colour: draft.colour || undefined,
         originalFileName: file.file.name,
         dimensionsMm: dimensions,
+        role,
       });
       if (!result.ok) throw new Error(result.error);
-      toast.success("Uploaded! The organizers will review it shortly.");
+      if (role === "print") {
+        toast.success("Uploaded! The organizers will review it shortly.");
+      } else if (!onCompetitionEntry(result.printCode)) {
+        toast.success("Uploaded successfully");
+      }
       reset();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
+      toast.error(errorMessage(err, "Upload failed"));
     } finally {
       setBusy(false);
     }
@@ -221,12 +223,23 @@ export default function UploadCard({
           {file ? (
             <>
               <SubmissionFields value={draft} onChange={setDraft} colours={colours} printers={printers} disabled={busy} />
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium">Use this file for</p>
+                <RoleChoice
+                  active={active}
+                  targetId={null}
+                  value={role}
+                  onChange={setRole}
+                  disabled={busy}
+                  printOnly={printOnly}
+                />
+              </div>
               <Button
                 type="submit"
                 variant="brand"
                 size="lg"
                 className="h-11 w-full text-[15px]"
-                disabled={busy || !draft.title.trim() || measurement?.state !== "ok"}
+                disabled={busy || !role || !draft.title.trim() || measurement?.state !== "ok"}
               >
                 {busy ? <Spinner data-icon="inline-start" /> : <Upload data-icon="inline-start" />}
                 {busy ? "Uploading…" : "Submit design"}

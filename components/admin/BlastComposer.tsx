@@ -16,10 +16,7 @@ import {
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-
-function errorMessage(err: unknown) {
-  return err instanceof Error ? err.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : "Failed";
-}
+import { errorMessage } from "@/lib/errors";
 
 function formatTime(timestamp: number) {
   const date = new Date(timestamp);

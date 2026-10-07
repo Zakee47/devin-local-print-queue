@@ -29,6 +29,7 @@ export function downloadFileName(input: {
   colour?: string;
   title: string;
   kind: FileKind;
+  version?: number;
 }) {
   const parts = [
     input.printCode,
@@ -36,7 +37,8 @@ export function downloadFileName(input: {
     input.colour ? slugPart(input.colour, 12) : "any-colour",
     slugPart(input.title, 32),
   ];
-  return `${parts.join("_")}.${input.kind}`;
+  const version = input.version && input.version > 1 ? `_v${input.version}` : "";
+  return `${parts.join("_")}${version}.${input.kind}`;
 }
 
 export function formatPrintCode(n: number) {

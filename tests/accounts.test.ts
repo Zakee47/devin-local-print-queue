@@ -106,6 +106,10 @@ describe("deleteParticipant cascade", () => {
       // second uses its own blob.
       const sharedStorage = await ctx.storage.store(new Blob(["solid shared"]));
       const aOnlyStorage = await ctx.storage.store(new Blob(["solid a"]));
+      const aVersionStorage = await ctx.storage.store(new Blob(["solid old a"]));
+      const aVersionPreview = await ctx.storage.store(new Blob(["preview old a"]));
+      const sharedVersionStorage = await ctx.storage.store(new Blob(["solid shared version"]));
+      const sharedVersionPreview = await ctx.storage.store(new Blob(["preview shared version"]));
       for (let i = 0; i < 2; i++) {
         const storageId = i === 0 ? sharedStorage : aOnlyStorage;
         storageIds.push(storageId);
@@ -135,6 +139,39 @@ describe("deleteParticipant cascade", () => {
         status: "submitted",
         printCode: "KC-010",
       });
+      await ctx.db.insert("submissionVersions", {
+        submissionId: aSubs[0],
+        version: 1,
+        storageId: aVersionStorage,
+        previewStorageId: aVersionPreview,
+        originalFileName: "a-old.stl",
+        kind: "stl",
+        sizeBytes: 8,
+        archivedAt: 1,
+        why: "replaced",
+      });
+      await ctx.db.insert("submissionVersions", {
+        submissionId: aSubs[0],
+        version: 2,
+        storageId: sharedVersionStorage,
+        previewStorageId: sharedVersionPreview,
+        originalFileName: "a-shared.stl",
+        kind: "stl",
+        sizeBytes: 8,
+        archivedAt: 2,
+        why: "replaced",
+      });
+      await ctx.db.insert("submissionVersions", {
+        submissionId: bSub,
+        version: 1,
+        storageId: sharedVersionStorage,
+        previewStorageId: sharedVersionPreview,
+        originalFileName: "b-shared.stl",
+        kind: "stl",
+        sizeBytes: 8,
+        archivedAt: 2,
+        why: "replaced",
+      });
       // A votes and likes B's entry; B votes and likes A's entry; A likes own entry.
       await ctx.db.insert("votes", { voterId: a, submissionId: bSub });
       await ctx.db.insert("likes", {
@@ -156,9 +193,31 @@ describe("deleteParticipant cascade", () => {
         reaction: "like",
         updatedAt: 1,
       });
-      return { a, b, aSubs, bSub, storageIds, bStorage };
+      return {
+        a,
+        b,
+        aSubs,
+        bSub,
+        storageIds,
+        bStorage,
+        aVersionStorage,
+        aVersionPreview,
+        sharedVersionStorage,
+        sharedVersionPreview,
+      };
     });
-    const { a, b, aSubs, bSub, storageIds, bStorage } = seeded;
+    const {
+      a,
+      b,
+      aSubs,
+      bSub,
+      storageIds,
+      bStorage,
+      aVersionStorage,
+      aVersionPreview,
+      sharedVersionStorage,
+      sharedVersionPreview,
+    } = seeded;
 
     const res = await owner.mutation(api.accounts.deleteParticipant, {
       participantId: a,
@@ -177,6 +236,13 @@ describe("deleteParticipant cascade", () => {
       expect(await ctx.storage.get(storageIds[1])).toBeNull();
       expect(await ctx.storage.get(storageIds[0])).not.toBeNull();
       expect(await ctx.storage.get(bStorage)).not.toBeNull();
+      expect(await ctx.storage.get(aVersionStorage)).toBeNull();
+      expect(await ctx.storage.get(aVersionPreview)).toBeNull();
+      expect(await ctx.storage.get(sharedVersionStorage)).not.toBeNull();
+      expect(await ctx.storage.get(sharedVersionPreview)).not.toBeNull();
+      expect(await ctx.db.query("submissionVersions").collect()).toMatchObject([
+        { submissionId: bSub, storageId: sharedVersionStorage, previewStorageId: sharedVersionPreview },
+      ]);
     });
 
     const logs = await t.run((ctx) => ctx.db.query("auditLog").collect());
@@ -375,9 +441,11 @@ describe("listParticipants", () => {
         status: "queued",
         printCode: "KC-003",
       });
+      await ctx.db.patch(aEntry, { version: 2 });
       await ctx.db.insert("votes", { voterId: a, submissionId: bEntry });
       await ctx.db.insert("votes", { voterId: b, submissionId: aEntry });
       await ctx.db.insert("votes", { voterId: a, submissionId: aEntry });
+      await ctx.db.insert("votes", { voterId: b, submissionId: aEntry, version: 2 });
       await ctx.db.insert("likes", {
         participantId: b,
         submissionId: aEntry,
@@ -389,6 +457,13 @@ describe("listParticipants", () => {
         submissionId: aEntry,
         reaction: "skip",
         updatedAt: 1,
+      });
+      await ctx.db.insert("likes", {
+        participantId: b,
+        submissionId: aEntry,
+        reaction: "like",
+        updatedAt: 2,
+        version: 2,
       });
       return { a, b };
     });
@@ -402,13 +477,13 @@ describe("listParticipants", () => {
       email: "a@example.com",
       uploadCount: 2,
       votesCast: 2,
-      votesReceived: 2,
+      votesReceived: 1,
       likesReceived: 1,
     });
     expect(ada.entry).toEqual({ printCode: "KC-001", title: "Rocket", status: "done" });
     const grace = list[0];
     expect(grace.entry).toEqual({ printCode: "KC-003", title: "Ring", status: "queued" });
-    expect(grace.votesCast).toBe(1);
+    expect(grace.votesCast).toBe(2);
     expect(grace.votesReceived).toBe(1);
   });
 });

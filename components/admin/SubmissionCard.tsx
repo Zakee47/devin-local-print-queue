@@ -9,6 +9,7 @@ import {
   Download,
   Printer,
   TriangleAlert,
+  Trophy,
   Undo2,
   X,
 } from "lucide-react";
@@ -22,9 +23,12 @@ import { formatDimensions } from "@/lib/dimensions";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { NativeSelect } from "@/components/ui/native-select";
 import RejectDialog from "@/components/admin/RejectDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
+import HistoryDialog from "@/components/admin/HistoryDialog";
+import { errorMessage } from "@/lib/errors";
 
 export type BoardRow = FunctionReturnType<typeof api.queue.board>[number];
 
@@ -69,16 +73,20 @@ export default function SubmissionCard({
   position,
   isFirst,
   isLast,
+  isOwner = false,
 }: {
   row: BoardRow;
   position?: number;
   isFirst?: boolean;
   isLast?: boolean;
+  isOwner?: boolean;
 }) {
   const approve = useMutation(api.queue.approve);
   const startPrinting = useMutation(api.queue.startPrinting);
   const setPrinter = useMutation(api.queue.setPrinter);
   const markDone = useMutation(api.queue.markDone);
+  const removeFromCompetition = useMutation(api.queue.removeFromCompetition);
+  const restoreToCompetition = useMutation(api.queue.restoreToCompetition);
   const moveBack = useMutation(api.queue.moveBack);
   const move = useMutation(api.queue.move);
   const download = useDownloadSubmission();
@@ -96,7 +104,7 @@ export default function SubmissionCard({
       await fn();
       toast.success(`${row.printCode} ${label}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : "Failed");
+      toast.error(errorMessage(err, "Failed"));
     } finally {
       setBusy(false);
     }
@@ -114,10 +122,25 @@ export default function SubmissionCard({
           {position !== undefined ? (
             <span className="font-mono text-xs text-muted-dim">#{position}</span>
           ) : null}
-          <span className="font-mono text-3xl font-semibold tracking-tight tabular-nums">
-            {row.printCode}
-          </span>
-          {backup ? <Badge variant="outline">Backup file</Badge> : null}
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-3xl font-semibold tracking-tight tabular-nums">{row.printCode}</span>
+            {row.version > 1 ? <Badge variant="outline">v{row.version}</Badge> : null}
+          </div>
+          {backup ? <Badge variant="outline">Vote only</Badge> : null}
+          <div className="flex flex-wrap gap-x-2 gap-y-1 sm:flex-col">
+            <Badge variant={row.designEntry && !row.designRemoved ? "default" : "outline"}>
+              <Trophy aria-hidden="true" />
+              {row.designRemoved
+                ? "Removed from voting"
+                : row.designEntry
+                  ? "In voting"
+                  : "Not in voting"}
+            </Badge>
+            <Badge variant={row.printRequested ? "default" : "outline"}>
+              <Printer aria-hidden="true" />
+              {row.printRequested ? "Print request" : "No print"}
+            </Badge>
+          </div>
         </div>
 
         <div className="min-w-0 flex-1">
@@ -168,7 +191,7 @@ export default function SubmissionCard({
               size="sm"
               onClick={() =>
                 download(row._id, row.downloadName).catch((err) =>
-                  toast.error(err instanceof Error ? err.message : "Download failed")
+                  toast.error(errorMessage(err, "Download failed"))
                 )
               }
             >
@@ -181,6 +204,17 @@ export default function SubmissionCard({
           </div>
           {row.notes ? (
             <p className="mt-2 rounded-md bg-surface px-2.5 py-1.5 text-sm">{row.notes}</p>
+          ) : null}
+          {row.participantNotice ? (
+            <Alert className="mt-3">
+              <AlertDescription>
+                {row.participantNotice.kind === "replaced"
+                  ? `Replaced by participant (v${row.participantNotice.version}), needs re-approval`
+                  : row.participantNotice.kind === "withdrawn"
+                    ? "Withdrawn by participant: print request removed"
+                    : `Restored by owner (v${row.participantNotice.version}), needs re-approval · ${formatTime(row.participantNotice.at)}`}
+              </AlertDescription>
+            </Alert>
           ) : null}
           {row.status === "rejected" && row.rejectionReason ? (
             <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-destructive">
@@ -207,7 +241,7 @@ export default function SubmissionCard({
             />
           ) : null}
           {row.status === "submitted" ? (
-            <>
+            !backup ? <>
               <Button size="sm" disabled={busy} onClick={() => run("approved", () => approve({ id: row._id }))}>
                 <Check data-icon="inline-start" />
                 Approve
@@ -224,7 +258,7 @@ export default function SubmissionCard({
                 <X data-icon="inline-start" />
                 Reject
               </Button>
-            </>
+            </> : null
           ) : null}
           {row.status === "queued" ? (
             <>
@@ -308,6 +342,28 @@ export default function SubmissionCard({
               Reject
             </Button>
           ) : null}
+          {row.designRemoved ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => run("restored to the competition", () => restoreToCompetition({ id: row._id }))}
+            >
+              <Trophy data-icon="inline-start" />
+              Restore to competition
+            </Button>
+          ) : row.designEntry ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy}
+              onClick={() => run("removed from the competition", () => removeFromCompetition({ id: row._id }))}
+            >
+              <Trophy data-icon="inline-start" />
+              Remove from competition
+            </Button>
+          ) : null}
+          {isOwner ? <HistoryDialog submissionId={row._id} /> : null}
         </div>
       </div>
 
@@ -342,6 +398,7 @@ export default function SubmissionCard({
         open={rejecting}
         onOpenChange={setRejecting}
         kind={rejectKind}
+        designEntry={row.designEntry && !row.designRemoved}
       />
     </li>
   );

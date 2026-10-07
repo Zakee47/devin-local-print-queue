@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CHALLENGE, EVENT_NAME, EVENT_URL, MAX_SUBMISSIONS_PER_PARTICIPANT } from "@/lib/event";
 import { validateUsername } from "@/lib/usernames";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/errors";
 
 const HERO_BUTTON =
   "h-12 min-w-44 gap-2 px-7 text-base has-data-[icon=inline-start]:pl-6 sm:h-11 sm:min-w-0 sm:px-4.5 sm:text-[15px]";
@@ -30,6 +31,7 @@ export default function Home() {
   const { authReady, signedIn, canQuery } = useViewerAuth();
   const status = useQuery(api.participants.viewerStatus, canQuery ? {} : "skip");
   const liveLeaderboard = useQuery(api.tv.leaderboard);
+  const myStanding = useQuery(api.votes.myStanding, canQuery ? {} : "skip");
   const register = useMutation(api.participants.register);
   const usernameError = username ? validateUsername(username) : null;
 
@@ -44,8 +46,9 @@ export default function Home() {
               {CHALLENGE}. We&apos;ll print it.
             </h1>
             <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
-              Upload up to {MAX_SUBMISSIONS_PER_PARTICIPANT} STL or 3MF files and pick one to print. Follow it
-              from queued to printing to done, then vote for your two favourite designs.
+              Upload up to {MAX_SUBMISSIONS_PER_PARTICIPANT} STL or 3MF files. Enter one design in the competition,
+              where everyone votes and the winner takes home a 3D printer. Request a print of one, the same file or
+              the other, and follow it from queued to printing to done.
             </p>
           </div>
           <HeroKeychains className="mt-4 h-36 w-64 sm:h-44 sm:w-80 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:mt-0 lg:aspect-square lg:h-auto lg:w-full lg:self-center" />
@@ -100,7 +103,7 @@ export default function Home() {
                       try {
                         await register({ username });
                       } catch (e) {
-                        toast.error(e instanceof Error ? e.message : "Couldn't create your account");
+                        toast.error(errorMessage(e, "Couldn't create your account"));
                       }
                     }}
                   >
@@ -151,6 +154,7 @@ export default function Home() {
               rows={liveLeaderboard.leaderboard}
               totalVotes={liveLeaderboard.totalVotes}
               totalLikes={liveLeaderboard.totalLikes}
+              mine={myStanding}
               votingOpen={liveLeaderboard.votingOpen}
               votingNotOpenYet={liveLeaderboard.votingNotOpenYet}
             />
