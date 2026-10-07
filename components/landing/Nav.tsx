@@ -20,7 +20,7 @@ export default function Nav() {
   useEffect(() => {
     const zones = () =>
       Array.from(document.querySelectorAll<HTMLElement>("[data-tone]")).map(
-        (el) => [el.offsetTop + Number(el.dataset.toneOffset ?? 0), el.dataset.tone as Tone] as const
+        (el) => [el.offsetTop, el.dataset.tone as Tone] as const
       );
     let list = zones();
     const tick = () => {
