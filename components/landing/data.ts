@@ -6,7 +6,7 @@ export const SITE_DESCRIPTION =
 export const OG_IMAGE = "/landing/og.png";
 
 export const LUMA_CALENDAR = "https://luma.com/Cognition-london";
-export const RECAP_YOUTUBE_ID = "nMpjUgOoVNI";
+export const RECAP_YOUTUBE_ID = "l_PUj9FA5Gs";
 export const LONDON_EVENT_HREF = EVENT_HOME;
 
 export const LINKS = {

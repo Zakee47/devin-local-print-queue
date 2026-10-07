@@ -87,7 +87,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="dl-seam" id="london" data-tone="cream" data-tone-offset="190">
+        <section className="dl-seam" id="london" data-tone="cream">
           <div className="dl-wrap">
             <article className="dl-eventcard" data-reveal="scale">
               <div className="poster">
