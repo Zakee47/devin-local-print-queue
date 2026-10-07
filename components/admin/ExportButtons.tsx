@@ -20,7 +20,8 @@ export default function ExportButtons() {
 
   async function exportAll() {
     if (!rows) return;
-    const total = rows.length;
+    const filesToExport = rows.filter((row) => !row.deleted);
+    const total = filesToExport.length;
     setZipping({ done: 0, total });
     try {
       const files: Record<string, [Uint8Array, { level: 0 | 6 }]> = {};
@@ -29,7 +30,7 @@ export default function ExportButtons() {
       let done = 0;
       const worker = async () => {
         while (next < total) {
-          const row = rows[next++];
+          const row = filesToExport[next++];
           try {
             const { blob, fileName } = await fetchFile(row.id, row.downloadName);
             const zipName = fileName ?? row.downloadName;

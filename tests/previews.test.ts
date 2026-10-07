@@ -87,6 +87,7 @@ async function createSubmission(
     title: options.title ?? "Rocket",
     originalFileName: options.name ?? "rocket.stl",
     dimensionsMm: { x: 27, y: 51, z: 40 },
+    role: "print",
   });
   return { storageId, result };
 }
@@ -190,7 +191,7 @@ describe("preview lifecycle", () => {
     expect((await asAda.query(api.submissions.mine, {}))?.[1].previewUrl).toBeNull();
   });
 
-  test("removing a submission deletes its preview blob", async () => {
+  test("soft deletion keeps the submission preview blob", async () => {
     vi.useFakeTimers();
     const { t, asAda } = await setup();
     const previewStorageId = await storeBlob(t, pngBlob());
@@ -198,7 +199,47 @@ describe("preview lifecycle", () => {
     if (!result.ok) throw new Error(result.error);
     await t.finishAllScheduledFunctions(vi.runAllTimers);
     await asAda.mutation(api.submissions.remove, { id: result.id });
-    expect(await storageExists(t, previewStorageId)).toBe(false);
+    expect(await storageExists(t, previewStorageId)).toBe(true);
+  });
+
+  test("discards a stale preview and retains previews archived in a version", async () => {
+    vi.useFakeTimers();
+    const { t, asAda } = await setup();
+    const stalePreview = await storeBlob(t, pngBlob());
+    const stale = await createSubmission(t, asAda, { previewStorageId: stalePreview });
+    if (!stale.result.ok) throw new Error(stale.result.error);
+    const replacementStorage = await storeBlob(t);
+    await asAda.mutation(api.submissions.replaceFile, {
+      id: stale.result.id,
+      storageId: replacementStorage,
+      originalFileName: "rocket-v2.stl",
+      dimensionsMm: { x: 27, y: 51, z: 40 },
+    });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(await storageExists(t, stalePreview)).toBe(false);
+
+    const { t: t2, asAda: ada2 } = await setup();
+    const oldPreview = await storeBlob(t2, pngBlob());
+    const current = await createSubmission(t2, ada2, { previewStorageId: oldPreview });
+    if (!current.result.ok) throw new Error(current.result.error);
+    const currentId = current.result.id;
+    await t2.finishAllScheduledFunctions(vi.runAllTimers);
+    const newPreview = await storeBlob(t2, pngBlob());
+    const nextStorage = await storeBlob(t2);
+    await ada2.mutation(api.submissions.replaceFile, {
+      id: currentId,
+      storageId: nextStorage,
+      previewStorageId: newPreview,
+      originalFileName: "rocket-v2.stl",
+      dimensionsMm: { x: 27, y: 51, z: 40 },
+    });
+    await t2.finishAllScheduledFunctions(vi.runAllTimers);
+    const currentRow = await t2.run((ctx) => ctx.db.get(currentId));
+    expect(currentRow?.previewStorageId).toBe(newPreview);
+    expect(await storageExists(t2, oldPreview)).toBe(true);
+    expect(await t2.run((ctx) => ctx.db.query("submissionVersions").collect())).toMatchObject([
+      { submissionId: currentId, version: 1, previewStorageId: oldPreview, why: "replaced" },
+    ]);
   });
 
   test("owner account deletion removes participant preview blobs", async () => {

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { entryFor } from "../convex/entries";
+import { DEFAULT_SETTINGS } from "../convex/settings";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -21,6 +22,7 @@ async function setup() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
     await ctx.db.insert("admins", { email: admin.email });
+    await ctx.db.insert("settings", { ...DEFAULT_SETTINGS, submissionsOpen: true });
     const participantId = await ctx.db.insert("participants", {
       clerkUserId: guest.subject,
       email: guest.email,
@@ -68,6 +70,19 @@ async function setup() {
 }
 
 describe("state machine", () => {
+  test("approve requires a print request and clears participant notices", async () => {
+    const { t, as, participantId, addSubmission, get } = await setup();
+    const voteOnly = await addSubmission(participantId, { printRequested: false });
+    await expect(as.mutation(api.queue.approve, { id: voteOnly })).rejects.toThrow("KC-001 isn't a print request");
+    const print = await addSubmission(participantId);
+    await t.run((ctx) =>
+      ctx.db.patch(print, { participantNotice: { kind: "replaced", version: 2, at: Date.now() } })
+    );
+    await as.mutation(api.queue.approve, { id: print });
+    expect((await get(print))?.status).toBe("queued");
+    expect((await get(print))?.participantNotice).toBeUndefined();
+  });
+
   test("approve → printing → done, with audit rows and queue order", async () => {
     const { t, as, participantId, otherId, addSubmission, get } = await setup();
     const a = await addSubmission(participantId);
@@ -251,7 +266,7 @@ describe("printer assignments", () => {
 });
 
 describe("printFailed", () => {
-  test("rejects a printing submission, records the reason, and clears the print entry", async () => {
+  test("rejects a printing submission, records the reason, and clears the print request only", async () => {
     const { t, as, participantId, addSubmission, get } = await setup();
     const id = await addSubmission(participantId);
     await as.mutation(api.queue.approve, { id });
@@ -264,8 +279,9 @@ describe("printFailed", () => {
       rejectionKind: "print_failed",
       rejectionReason: "Detached from the bed",
       printRequested: false,
+      designEntry: true,
     });
-    expect(await t.run((ctx) => entryFor(ctx, participantId))).toBeNull();
+    expect(await t.run((ctx) => entryFor(ctx, participantId))).toMatchObject({ _id: id });
     const audit = await t.run(async (ctx) =>
       (await ctx.db.query("auditLog").collect()).find((row) => row.action === "queue.printFailed")
     );
@@ -305,7 +321,7 @@ describe("one in pipeline per participant", () => {
   test("approving a second file while the first is in the pipeline errors", async () => {
     const { as, participantId, addSubmission } = await setup();
     const first = await addSubmission(participantId);
-    const second = await addSubmission(participantId, { printRequested: false });
+    const second = await addSubmission(participantId);
     await as.mutation(api.queue.approve, { id: first });
     await expect(as.mutation(api.queue.approve, { id: second })).rejects.toThrow(/already has/);
     await as.mutation(api.queue.startPrinting, { id: first });
@@ -314,19 +330,20 @@ describe("one in pipeline per participant", () => {
     await expect(as.mutation(api.queue.approve, { id: second })).rejects.toThrow(/already has/);
   });
 
-  test("approving the backup file makes it the print", async () => {
+  test("staff cannot approve a Vote-only upload", async () => {
     const { as, participantId, addSubmission, get } = await setup();
     const requested = await addSubmission(participantId);
-    const backup = await addSubmission(participantId, { printRequested: false });
-    await as.mutation(api.queue.approve, { id: backup });
-    expect((await get(backup))?.printRequested).toBe(true);
-    expect((await get(requested))?.printRequested).toBe(false);
+    const voteOnly = await addSubmission(participantId, { printRequested: false });
+    await expect(as.mutation(api.queue.approve, { id: voteOnly })).rejects.toThrow(/isn't a print request/);
+    expect((await get(voteOnly))?.printRequested).toBe(false);
+    expect((await get(voteOnly))?.status).toBe("submitted");
+    expect((await get(requested))?.printRequested).toBe(true);
   });
 
   test("a rejected first file frees the pipeline", async () => {
     const { as, participantId, addSubmission, get } = await setup();
     const first = await addSubmission(participantId);
-    const second = await addSubmission(participantId, { printRequested: false });
+    const second = await addSubmission(participantId);
     await as.mutation(api.queue.approve, { id: first });
     await as.mutation(api.queue.reject, { id: first, reason: "Too large" });
     await as.mutation(api.queue.approve, { id: second });
@@ -540,5 +557,31 @@ describe("exportRows", () => {
       expect(row).not.toHaveProperty("storageId");
       expect(row).not.toHaveProperty("fileUrl");
     }
+  });
+
+  test("filters votes and likes by current version and includes deleted rows", async () => {
+    const { t, as, participantId, addSubmission } = await setup();
+    const id = await addSubmission(participantId);
+    await t.run(async (ctx) => {
+      await ctx.db.patch(id, { version: 2 });
+      await ctx.db.insert("likes", {
+        participantId,
+        submissionId: id,
+        reaction: "like",
+        updatedAt: 1,
+      });
+      await ctx.db.insert("likes", {
+        participantId,
+        submissionId: id,
+        reaction: "like",
+        updatedAt: 2,
+        version: 2,
+      });
+      await ctx.db.insert("votes", { voterId: participantId, submissionId: id });
+      await ctx.db.insert("votes", { voterId: participantId, submissionId: id, version: 2 });
+    });
+    await t.withIdentity(guest).mutation(api.submissions.remove, { id });
+    const [row] = await as.query(api.queue.exportRows);
+    expect(row).toMatchObject({ id, version: 2, deleted: true, likes: 1, votes: 1 });
   });
 });

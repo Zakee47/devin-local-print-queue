@@ -79,10 +79,12 @@ export type TvBoard =
     };
 
 async function byStatus(ctx: QueryCtx, status: Doc<"submissions">["status"]) {
-  return await ctx.db
+  return (
+    await ctx.db
     .query("submissions")
     .withIndex("by_status", (q) => q.eq("status", status))
-    .collect();
+    .collect()
+  ).filter((submission) => submission.deletedAt === undefined);
 }
 
 function makeNamer(ctx: QueryCtx) {

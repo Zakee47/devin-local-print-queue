@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Heart } from "lucide-react";
 import type { TvRanked } from "@/convex/tv";
+import type { MyStanding } from "@/convex/votes";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import Swatch from "@/components/tv/Swatch";
@@ -15,6 +16,7 @@ export default function LiveLeaderboard({
   variant,
   votingOpen,
   votingNotOpenYet,
+  mine,
 }: {
   rows: TvRanked[];
   totalVotes: number;
@@ -22,10 +24,15 @@ export default function LiveLeaderboard({
   variant: "tv" | "page";
   votingOpen?: boolean;
   votingNotOpenYet?: boolean;
+  mine?: MyStanding;
 }) {
   const { register, changes } = useRankMotion(rows);
   const topVotes = Math.max(1, ...rows.map((row) => row.votes));
   const tv = variant === "tv";
+  const myEntry = mine?.entries[0];
+  const myEntryIsVisible =
+    mine?.entries.some((entry) => rows.some((row) => row.printCode === entry.printCode)) ?? false;
+  const pinnedEntry = myEntry && !myEntryIsVisible ? myEntry : null;
 
   return (
     <section
@@ -88,6 +95,7 @@ export default function LiveLeaderboard({
             {rows.map((row) => {
               const change = changes.get(row.printCode);
               const barWidth = `${(row.votes / topVotes) * 100}%`;
+              const isMine = mine?.entries.some((entry) => entry.printCode === row.printCode) ?? false;
               return (
                 <li
                   key={row.printCode}
@@ -96,7 +104,8 @@ export default function LiveLeaderboard({
                     "relative flex shrink-0 items-center border-b border-border/70 last:border-0",
                     tv ? "h-[64px] gap-4 px-3" : "h-14 gap-2 px-1 sm:gap-3 sm:px-2",
                     change?.votesDelta && change.votesDelta > 0 && "rank-flash",
-                    change?.isNew && "animate-in fade-in slide-in-from-bottom-3"
+                    change?.isNew && "animate-in fade-in slide-in-from-bottom-3",
+                    isMine && "z-10 rounded-lg bg-brand/5 ring-2 ring-brand/70"
                   )}
                 >
                   <span
@@ -117,7 +126,14 @@ export default function LiveLeaderboard({
                   </span>
                   <Swatch colour={row.colour} className={tv ? "relative z-10 size-6" : "relative z-10 size-4"} />
                   <div className="relative z-10 min-w-0 flex-1">
-                    <p className={cn("truncate font-medium", tv ? "text-2xl" : "text-base")}>{row.title}</p>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <p className={cn("min-w-0 truncate font-medium", tv ? "text-2xl" : "text-base")}>{row.title}</p>
+                      {isMine ? (
+                        <span className="shrink-0 rounded-full bg-brand px-2 py-0.5 text-[0.6rem] leading-none font-semibold text-brand-foreground">
+                          You
+                        </span>
+                      ) : null}
+                    </div>
                     <p className={cn("truncate text-muted-foreground", tv ? "text-base" : "text-xs")}>
                       {row.displayName}
                     </p>
@@ -174,6 +190,48 @@ export default function LiveLeaderboard({
             })}
           </ol>
         )}
+        {pinnedEntry ? (
+          <div className={cn("mt-3 border-t border-border pt-3", tv && "mt-4 pt-4")}>
+            <p className={cn("mb-1 text-xs font-medium text-muted-foreground", tv && "text-sm")}>Your entry</p>
+            <div
+              className={cn(
+                "relative flex shrink-0 items-center rounded-lg bg-brand/5 ring-2 ring-brand/70",
+                tv ? "h-[64px] gap-4 px-3" : "h-14 gap-2 px-1 sm:gap-3 sm:px-2"
+              )}
+            >
+              <span
+                className={cn(
+                  "relative z-10 grid shrink-0 place-items-center rounded-full font-mono font-semibold tabular-nums",
+                  tv ? "size-9 text-lg" : "size-7 text-xs",
+                  pinnedEntry.rank === 1
+                    ? "bg-brand text-brand-foreground"
+                    : "border border-border bg-background text-muted-foreground"
+                )}
+              >
+                {pinnedEntry.rank}
+              </span>
+              <Swatch colour={null} className={tv ? "relative z-10 size-6" : "relative z-10 size-4"} />
+              <div className="relative z-10 min-w-0 flex-1">
+                <p className={cn("truncate font-medium", tv ? "text-2xl" : "text-base")}>{pinnedEntry.title}</p>
+                <p className={cn("truncate text-muted-foreground", tv ? "text-base" : "text-xs")}>
+                  {pinnedEntry.printCode}
+                </p>
+              </div>
+              <span className={cn("relative z-10 flex shrink-0 items-center gap-1 font-mono tabular-nums", tv ? "text-lg" : "text-xs")}>
+                <Heart className={cn("text-brand", tv ? "size-5" : "size-4")} aria-hidden="true" />
+                {pinnedEntry.likes}
+              </span>
+              <span className="relative z-10 flex shrink-0 items-baseline gap-1">
+                <span className={cn("font-mono font-bold tabular-nums", tv ? "text-4xl" : "text-xl")}>
+                  {pinnedEntry.votes}
+                </span>
+                <span className={cn("text-muted-foreground", tv ? "text-base" : "hidden text-[0.65rem] sm:inline")}>
+                  {pinnedEntry.votes === 1 ? "vote" : "votes"}
+                </span>
+              </span>
+            </div>
+          </div>
+        ) : null}
       </Card>
     </section>
   );

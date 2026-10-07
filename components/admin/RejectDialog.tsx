@@ -36,12 +36,14 @@ export default function RejectDialog({
   open,
   onOpenChange,
   kind,
+  designEntry,
 }: {
   submissionId: Id<"submissions">;
   printCode: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   kind: "review" | "print_failed";
+  designEntry: boolean;
 }) {
   const reject = useMutation(api.queue.reject);
   const printFailed = useMutation(api.queue.printFailed);
@@ -78,7 +80,11 @@ export default function RejectDialog({
             <DialogDescription>
               {isPrintFailed
                 ? "The participant sees this reason and can submit again."
-                : "The participant sees this comment and can upload a fixed file."}
+                : "The participant sees this comment and can upload a fixed file."}{" "}
+              This only affects printing.
+              {designEntry
+                ? " The design stays in the competition and keeps its votes. Use Remove from competition to pull it from voting."
+                : ""}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap gap-1.5">

@@ -146,7 +146,7 @@ function OwnerResults() {
         <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
           <dt className="eyebrow text-muted-dim">Votes cast</dt>
           <dd className="mt-2 font-heading text-xl font-medium tabular-nums">
-            {totalVotes} <span className="text-sm text-muted-foreground">on {results.rows.length} entries</span>
+            {totalVotes} <span className="text-sm text-muted-foreground">on {results.rows.length} competition entries</span>
           </dd>
         </div>
       </dl>
@@ -195,8 +195,8 @@ function OwnerResults() {
         {results.rows.length === 0 ? (
           <Empty className="border border-dashed border-border-strong py-16">
             <EmptyHeader>
-              <EmptyTitle>No entries yet</EmptyTitle>
-              <EmptyDescription>Entries appear here as soon as they&apos;re submitted.</EmptyDescription>
+              <EmptyTitle>No competition entries yet</EmptyTitle>
+              <EmptyDescription>Designs appear here as soon as they&apos;re entered in the competition.</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (

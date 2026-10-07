@@ -43,7 +43,7 @@ export default function QrRail() {
   const siteUrl = useSiteUrl();
   return (
     <aside className="flex h-full flex-col justify-center gap-6 border-l border-border bg-background px-6 py-8">
-      <QrCard label="Enter, track & vote" hint="Submit your keychain" url={siteUrl} />
+      <QrCard label="Enter, track & vote" hint="Vote on designs to win a 3D printer" url={siteUrl} />
       <QrCard label="Try Devin" hint="The AI software engineer" url={TRY_DEVIN_URL} />
     </aside>
   );

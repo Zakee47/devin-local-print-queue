@@ -22,12 +22,11 @@ export type VoteButtonState =
   | { kind: "closed" }
   | { kind: "not_open" }
   | { kind: "no_votes_left"; swapFrom: GalleryEntry[] }
-  | { kind: "available"; votesLeft: number };
+  | { kind: "available"; votesLeft: number; maxVotes: number };
 
 export default function VoteButton({
   entry,
   state,
-  prominent,
   pending,
   onVote,
   onRetract,
@@ -36,7 +35,6 @@ export default function VoteButton({
 }: {
   entry: GalleryEntry;
   state: VoteButtonState;
-  prominent: boolean;
   pending: boolean;
   onVote: () => void;
   onRetract: () => void;
@@ -48,9 +46,9 @@ export default function VoteButton({
     case "signed_out":
       return (
         <SignInButton mode="modal">
-          <Button variant="outline" className={base}>
+          <Button variant="outline" size="lg" className={base}>
             <LogIn data-icon="inline-start" />
-            Sign in to like and vote
+            Sign in to vote
           </Button>
         </SignInButton>
       );
@@ -60,6 +58,7 @@ export default function VoteButton({
       return (
         <Button
           variant="brand"
+          size="lg"
           className={base}
           disabled={pending || !state.canRetract}
           onClick={onRetract}
@@ -72,14 +71,14 @@ export default function VoteButton({
       );
     case "closed":
       return (
-        <Button variant="outline" className={base} disabled>
+        <Button variant="outline" size="lg" className={base} disabled>
           <Lock data-icon="inline-start" />
           Voting has closed
         </Button>
       );
     case "not_open":
       return (
-        <Button variant="outline" className={base} disabled>
+        <Button variant="outline" size="lg" className={base} disabled>
           <Clock data-icon="inline-start" />
           Voting hasn&apos;t opened yet
         </Button>
@@ -87,7 +86,7 @@ export default function VoteButton({
     case "no_votes_left":
       return (
         <Popover>
-          <PopoverTrigger render={<Button variant="outline" className={base} disabled={pending} />}>
+          <PopoverTrigger render={<Button variant="outline" size="lg" className={base} disabled={pending} />}>
             <ArrowLeftRight data-icon="inline-start" />
             Swap a vote to this
           </PopoverTrigger>
@@ -116,14 +115,15 @@ export default function VoteButton({
     case "available":
       return (
         <Button
-          variant={prominent ? "brand" : "outline"}
+          variant="brand"
+          size="lg"
           className={base}
           disabled={pending}
           onClick={onVote}
-          aria-label={`Vote for ${entry.title} (${state.votesLeft} left)`}
+          aria-label={`Cast a vote for ${entry.title}. ${state.votesLeft} of ${state.maxVotes} votes left.`}
         >
           <Vote data-icon="inline-start" />
-          Vote
+          Cast vote · {state.votesLeft} of {state.maxVotes} left
         </Button>
       );
   }
