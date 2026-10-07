@@ -1,4 +1,4 @@
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { requireAdmin, requireOwner } from "./admins";
@@ -58,6 +58,14 @@ async function writeSettings(ctx: MutationCtx, patch: Partial<Settings>) {
     await ctx.db.insert("settings", initialSettings);
   }
 }
+
+// One-off per event; not exposed in the Settings UI.
+export const setKeepVotesOnReplace = internalMutation({
+  args: { enabled: v.boolean() },
+  handler: async (ctx, { enabled }) => {
+    await writeSettings(ctx, { keepVotesOnReplace: enabled });
+  },
+});
 
 // Allocates the next sequential print code number.
 export async function takePrintNumber(ctx: MutationCtx) {
