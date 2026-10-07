@@ -96,7 +96,7 @@ export default function SubmissionCard({
   const [busy, setBusy] = useState(false);
   const [printerChoice, setPrinterChoice] = useState("");
 
-  const backup = row.status === "submitted" && !row.printRequested;
+  const alreadyHasPrint = row.participantPrint !== null && row.participantPrint.printCode !== row.printCode;
 
   async function run(label: string, fn: () => Promise<unknown>) {
     setBusy(true);
@@ -114,7 +114,7 @@ export default function SubmissionCard({
     <li
       className={cn(
         "rounded-xl bg-card shadow-(--shadow-card) ring-1 ring-foreground/10 transition-opacity",
-        backup && "opacity-55 hover:opacity-100"
+        alreadyHasPrint && "opacity-55 hover:opacity-100"
       )}
     >
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
@@ -126,7 +126,19 @@ export default function SubmissionCard({
             <span className="font-mono text-3xl font-semibold tracking-tight tabular-nums">{row.printCode}</span>
             {row.version > 1 ? <Badge variant="outline">v{row.version}</Badge> : null}
           </div>
-          {backup ? <Badge variant="outline">Vote only</Badge> : null}
+          {row.status === "submitted" || row.status === "rejected" ? (
+            alreadyHasPrint && row.participantPrint ? (
+              <Badge variant="outline">
+                {row.participantPrint.status === "done"
+                  ? `Already printed · ${row.participantPrint.printCode}`
+                  : row.participantPrint.status === "printing"
+                    ? `Printing · ${row.participantPrint.printCode}`
+                    : `Print queued · ${row.participantPrint.printCode}`}
+              </Badge>
+            ) : (
+              <Badge variant="default">No print yet</Badge>
+            )
+          ) : null}
           <div className="flex flex-wrap gap-x-2 gap-y-1 sm:flex-col">
             <Badge variant={row.designEntry && !row.designRemoved ? "default" : "outline"}>
               <Trophy aria-hidden="true" />
@@ -135,10 +147,6 @@ export default function SubmissionCard({
                 : row.designEntry
                   ? "In voting"
                   : "Not in voting"}
-            </Badge>
-            <Badge variant={row.printRequested ? "default" : "outline"}>
-              <Printer aria-hidden="true" />
-              {row.printRequested ? "Print request" : "No print"}
             </Badge>
           </div>
         </div>
@@ -241,7 +249,7 @@ export default function SubmissionCard({
             />
           ) : null}
           {row.status === "submitted" ? (
-            !backup ? <>
+            !alreadyHasPrint ? <>
               <Button size="sm" disabled={busy} onClick={() => run("approved", () => approve({ id: row._id }))}>
                 <Check data-icon="inline-start" />
                 Approve
