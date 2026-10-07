@@ -45,6 +45,7 @@ function EntriesSkeleton() {
 function StandingBanner({ standing }: { standing: NonNullable<MyStanding> }) {
   const entry = standing.entries[0];
   if (!entry) return null;
+  const voteLabel = entry.votes === 1 ? "vote" : "votes";
 
   return (
     <div
@@ -55,8 +56,8 @@ function StandingBanner({ standing }: { standing: NonNullable<MyStanding> }) {
         {standing.votingNotOpenYet
           ? "Your design is in. It goes public when voting opens."
           : standing.votingOpen
-            ? `Your design ${entry.printCode} '${entry.title}' is public and open for voting · #${entry.rank} of ${standing.totalEntries} · ${entry.votes} votes`
-            : `Voting has closed · final #${entry.rank} · ${entry.votes} votes`}
+            ? `Your design ${entry.printCode} '${entry.title}' is public and open for voting · #${entry.rank} of ${standing.totalEntries} · ${entry.votes} ${voteLabel}`
+            : `Voting has closed · final #${entry.rank} · ${entry.votes} ${voteLabel}`}
       </p>
       {standing.votingOpen ? (
         <Link

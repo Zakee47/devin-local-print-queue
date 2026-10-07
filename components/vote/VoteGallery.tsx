@@ -404,7 +404,13 @@ export default function VoteGallery() {
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-muted-foreground">Your entry is live</p>
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {votingOpen
+                          ? "Your entry is live"
+                          : notOpenYet
+                            ? "Your entry · voting opens soon"
+                            : "Your entry · voting closed"}
+                      </p>
                       <p className="truncate text-sm font-medium">
                         {entry.printCode} · {entry.title}
                       </p>
