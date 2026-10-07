@@ -168,7 +168,7 @@ export default function LandingPage() {
             </div>
             <div className="dl-video" data-reveal="scale" style={delay(0.1)}>
               <iframe
-                src={`https://www.youtube.com/embed/${RECAP_YOUTUBE_ID}?mute=1&rel=0&playsinline=1`}
+                src={`https://www.youtube.com/embed/${RECAP_YOUTUBE_ID}?rel=0&playsinline=1`}
                 title="Devin Local London recap"
                 loading="lazy"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
