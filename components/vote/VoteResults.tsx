@@ -26,6 +26,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { errorMessage } from "@/lib/errors";
+import { SETTINGS_HELP } from "@/lib/settings-help";
+import SettingHelp from "@/components/admin/SettingHelp";
 
 export default function VoteResults() {
   return <OwnerResults />;
@@ -95,7 +97,8 @@ function OwnerResults() {
           <p className="eyebrow text-muted-foreground">People&apos;s choice</p>
           <h1 className="mt-3 font-heading text-3xl font-semibold tracking-tight">Votes</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1">
           {settings.votingOpen ? (
             <AlertDialog>
               <AlertDialogTrigger render={<Button variant="outline" disabled={saving} />}>
@@ -122,6 +125,9 @@ function OwnerResults() {
               Open voting
             </Button>
           )}
+            <SettingHelp {...SETTINGS_HELP.voting} />
+          </div>
+          <div className="flex items-center gap-1">
           <Button
             variant="outline"
             disabled={saving}
@@ -130,8 +136,13 @@ function OwnerResults() {
             {settings.showResultsOnTv ? <MonitorOff data-icon="inline-start" /> : <Monitor data-icon="inline-start" />}
             {settings.showResultsOnTv ? "Hide results on TV" : "Show results on TV"}
           </Button>
+            <SettingHelp {...SETTINGS_HELP.showResultsOnTv} />
+          </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">TV default view</span>
+            <span className="flex items-center gap-1 text-sm text-muted-foreground">
+              TV default view
+              <SettingHelp {...SETTINGS_HELP.tvDefaultView} />
+            </span>
             <ToggleGroup
               value={[settings.tvDefaultView ?? "main"]}
               onValueChange={(value) => {
