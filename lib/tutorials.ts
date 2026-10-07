@@ -46,7 +46,7 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "help",
       title: "Help is always here",
-      body: "Tap the ? button at the top of the page to replay this tour.",
+      body: "Tap the i button at the top of the page to replay this tour.",
     },
   ],
   staff: [
@@ -78,7 +78,7 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "tv",
       title: "TV mode and help",
-      body: "Open TV from the nav for the big screen. Tap the ? button at the top any time to replay this tour.",
+      body: "Open TV from the nav for the big screen. Tap the i button at the top any time to replay this tour.",
     },
   ],
 };

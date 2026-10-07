@@ -1,14 +1,4 @@
-import {
-  AlertCircle,
-  ArrowDownToLine,
-  Check,
-  CircleHelp,
-  File,
-  Printer,
-  Tv,
-  Trophy,
-  Upload,
-} from "lucide-react";
+import { AlertCircle, ArrowDownToLine, Check, File, Info, Printer, Trophy, Tv, Upload } from "lucide-react";
 import type { TutorialArt as TutorialArtKey } from "@/lib/tutorials";
 import VoteVsHeartArt from "./VoteVsHeartArt";
 
@@ -120,7 +110,7 @@ function HelpArt() {
           <span className="size-4 rounded-full border border-border bg-muted" aria-hidden />
           <span className="tour-help-button relative grid size-8 place-items-center rounded-full border border-border bg-background text-foreground">
             <span className="tour-help-ring absolute inset-0 rounded-full border-2 border-brand/30" />
-            <CircleHelp aria-hidden className="size-4" />
+            <Info aria-hidden className="size-4" />
           </span>
         </div>
       </div>

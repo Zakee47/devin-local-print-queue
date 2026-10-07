@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
-import { CircleHelp } from "lucide-react";
+import { Info } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
 import type { Tour } from "@/lib/tutorials";
@@ -37,12 +37,12 @@ export default function HelpTour({
     <>
       <button
         type="button"
-        aria-label="Help"
-        title="Help"
+        aria-label="Replay tutorial"
+        title="Replay tutorial"
         onClick={() => setManualOpen(true)}
         className="flex size-8 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
-        <CircleHelp aria-hidden className="size-4.5" />
+        <Info aria-hidden className="size-4.5" />
       </button>
       <TutorialDialog tour={tour} open={open} onClose={close} />
     </>
