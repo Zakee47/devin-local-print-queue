@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Tv } from "lucide-react";
+import BrandHomeLink from "@/components/BrandHomeLink";
 import BrandMark from "@/components/BrandMark";
 import { CognitionLogo, DevinLogo } from "@/components/landing/Logos";
 import HeaderAuth from "@/components/HeaderAuth";
@@ -7,7 +8,7 @@ import HeaderBar from "@/components/HeaderBar";
 import NoticeBanner from "@/components/NoticeBanner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import HelpTour from "@/components/tutorial/HelpTour";
-import { EVENT_HOME, EVENT_TITLE } from "@/lib/event";
+import { EVENT_TITLE } from "@/lib/event";
 import { PAGE_WIDTHS, type PageWidth } from "@/lib/page-width";
 import { cn } from "@/lib/utils";
 
@@ -27,9 +28,7 @@ export default function SiteHeader({
           PAGE_WIDTHS[width]
         )}
       >
-        <Link
-          href={EVENT_HOME}
-          aria-label={`${EVENT_TITLE} home`}
+        <BrandHomeLink
           className="group flex shrink-0 items-center rounded-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
           <span className="hidden items-center gap-3 sm:flex">
@@ -41,7 +40,7 @@ export default function SiteHeader({
             <BrandMark className="size-6" />
             <span className="whitespace-nowrap font-heading text-sm font-semibold tracking-tight">{EVENT_TITLE}</span>
           </span>
-        </Link>
+        </BrandHomeLink>
         <span
           aria-hidden="true"
           className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 font-heading text-lg font-semibold tracking-tight sm:block"
