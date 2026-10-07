@@ -21,7 +21,7 @@ export default function TvLayout({
   return (
     <TvStage>
       <div className="grid h-full grid-cols-[1fr_340px]">
-        <div className="grid min-h-0 min-w-0 grid-rows-[112px_auto_1fr]">
+        <div className="grid min-h-0 min-w-0 grid-rows-[136px_auto_1fr]">
           <TvHeader counts={counts} tabs={tabs} />
           <Notices notices={notices} />
           {children}

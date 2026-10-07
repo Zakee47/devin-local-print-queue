@@ -23,12 +23,12 @@ describe("submissionsStatusText", () => {
         { submissionsOpen: true, submissionsDeadline: deadline },
         deadline - 15 * 60 * 1000
       )
-    ).toMatch(/^Submissions close in 15m 00s \(at \d{2}:\d{2}\)$/);
+    ).toMatch(/^Submissions close in 15m 00s \(at \d{1,2} [A-Z][a-z]{2} 2026, \d{2}:\d{2}\)$/);
   });
 
   it("shows when a deadline has passed", () => {
     expect(
       submissionsStatusText({ submissionsOpen: true, submissionsDeadline: deadline }, deadline)
-    ).toMatch(/^Submissions closed at \d{2}:\d{2}$/);
+    ).toMatch(/^Submissions closed at \d{1,2} [A-Z][a-z]{2} 2026, \d{2}:\d{2}$/);
   });
 });

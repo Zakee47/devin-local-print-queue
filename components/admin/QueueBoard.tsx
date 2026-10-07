@@ -5,6 +5,7 @@ import { Download, Inbox } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { formatDateTime } from "@/lib/datetime";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -144,7 +145,7 @@ export default function QueueBoard() {
               {withdrawals.map((row) => (
                 <li key={row._id}>
                   <span className="font-mono">{row.printCode}</span> {row.title} · {row.participantUsername} ·{" "}
-                  {row.detail} · {new Date(row.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                  {row.detail} · {formatDateTime(row.at)}
                 </li>
               ))}
             </ul>

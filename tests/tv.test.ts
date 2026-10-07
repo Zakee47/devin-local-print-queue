@@ -517,7 +517,7 @@ test("live leaderboard caps at 10 rows", async () => {
     const maker = await addParticipant(ctx, "Maker");
     const voter = await addParticipant(ctx, "Voter");
     for (let n = 1; n <= 12; n++) {
-      const entry = await addSubmission(ctx, maker, n, "done", { doneAt: n });
+      const entry = await addSubmission(ctx, maker, n, "done", { doneAt: n, preview: n === 2 });
       await ctx.db.insert("likes", {
         participantId: voter,
         submissionId: entry,
@@ -533,6 +533,30 @@ test("live leaderboard caps at 10 rows", async () => {
     Array.from({ length: 10 }, (_, index) => `KC-${String(index + 1).padStart(3, "0")}`)
   );
   expect(live.totalLikes).toBe(12);
+
+  const designs = await t.query(api.tv.designs);
+  const board = await t.query(api.tv.board);
+  const showcase = await t.query(api.tv.showcase);
+  expectNoPrivateFields(showcase);
+  expect(Object.keys(showcase).sort()).toEqual([
+    "designs",
+    "leaderboard",
+    "totalLikes",
+    "totalVotes",
+    "votingNotOpenYet",
+    "votingOpen",
+  ]);
+  expect(showcase.designs).toHaveLength(12);
+  expect(showcase.designs.map((design) => design.printCode)).toEqual(
+    Array.from({ length: 12 }, (_, index) => `KC-${String(index + 1).padStart(3, "0")}`)
+  );
+  expect(showcase.designs.find((design) => design.printCode === "KC-001")?.previewUrl).toBeNull();
+  expect(showcase.designs.find((design) => design.printCode === "KC-002")?.previewUrl).toMatch(/^https?:\/\//);
+  expect(showcase.leaderboard).toHaveLength(12);
+  expect(showcase.leaderboard[0]).toMatchObject({ rank: 1, printCode: "KC-001", likes: 1 });
+  expect(designs.leaderboard).toHaveLength(10);
+  if (board.mode !== "queue") throw new Error("expected queue mode");
+  expect(board.leaderboard).toHaveLength(10);
 });
 
 test("results mode breaks vote ties by likes", async () => {
