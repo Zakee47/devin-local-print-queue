@@ -332,9 +332,9 @@ test("designs collage includes newest public previews and caps at 60", async () 
   const designs = await t.query(api.tv.designs);
   expectNoPrivateFields(designs);
   expect(designs.collage).toHaveLength(60);
-  expect(designs.collage[0].printCode).toBe("KC-063");
-  expect(designs.collage.at(-1)?.printCode).toBe("KC-004");
-  expect(designs.collage.map((item) => item.printCode)).not.toContain("KC-064");
+  expect(designs.collage[0].printCode).toBe("KC-064");
+  expect(designs.collage.at(-1)?.printCode).toBe("KC-005");
+  expect(designs.collage.map((item) => item.printCode)).toContain("KC-064");
   expect(designs.collage.map((item) => item.printCode)).not.toContain("KC-065");
   expect(designs.collage.map((item) => item.printCode)).not.toContain("KC-066");
   expect(designs.collage.every((item) => item.previewUrl.startsWith("http"))).toBe(true);
