@@ -35,8 +35,8 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     },
     {
       art: "voting",
-      title: "Votes pick the winner, hearts break ties",
-      body: "Your 2 votes are your real picks for who wins the 3D printer, and you can't vote for your own. A heart just means \"I like this\" and only counts to break ties.",
+      title: "Votes pick the winner, likes only break ties",
+      body: "Tap Cast vote to use one of your 2 real votes. A VOTED stamp lands when it counts, and you can't vote for your own. Like · tie-breaker just shortlists designs you like and only settles ties.",
     },
     {
       art: "changes",

@@ -665,38 +665,56 @@ input:-webkit-autofill:focus {
   animation: tour-changed-badge 4.8s ease-in-out infinite;
 }
 
-@keyframes tour-vote-cast {
-  0% {
-    border-color: var(--border);
-    background: var(--card);
-    color: var(--muted-foreground);
-    transform: scale(0.85) rotate(-12deg);
-  }
-  25%,
-  100% {
-    border-color: var(--brand);
-    background: var(--brand);
-    color: var(--brand-foreground);
-    transform: scale(1) rotate(0);
-  }
+.tour-stamp-drop {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: tour-stamp-drop 4.8s cubic-bezier(0.2, 0.9, 0.3, 1) infinite;
 }
 
-@keyframes tour-heart-beat {
+.tour-stamp-drop .vote-stamp {
+  position: static;
+  scale: 0.42;
+}
+
+@keyframes tour-stamp-drop {
   0%,
+  22% {
+    opacity: 0;
+    transform: scale(2.4) rotate(-14deg);
+  }
+  32% {
+    opacity: 1;
+    transform: scale(0.9);
+  }
+  38%,
+  88% {
+    opacity: 1;
+    transform: none;
+  }
+  96%,
   100% {
-    transform: scale(1);
-  }
-  45% {
-    transform: scale(1.16);
+    opacity: 0;
+    transform: none;
   }
 }
 
-.tour-vote-cast {
-  animation: tour-vote-cast 4.4s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+.tour-cast-press {
+  animation: tour-cast-press 4.8s ease-in-out infinite;
 }
 
-.tour-heart {
-  animation: tour-heart-beat 3.4s ease-in-out infinite;
+@keyframes tour-cast-press {
+  0%,
+  12%,
+  26%,
+  100% {
+    transform: none;
+  }
+  18% {
+    transform: translateY(1px) scale(0.97);
+  }
 }
 
 .tour-tv {
