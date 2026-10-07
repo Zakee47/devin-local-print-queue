@@ -125,6 +125,7 @@ export default defineSchema({
   settings: defineTable({
     submissionsOpen: v.boolean(),
     votingOpen: v.boolean(),
+    keepVotesOnReplace: v.optional(v.boolean()),
     showResultsOnTv: v.boolean(),
     maxFileBytes: v.number(),
     colours: v.array(v.string()),

@@ -43,6 +43,7 @@ async function setup() {
     participantId: Id<"participants">,
     opts: {
       printRequested?: boolean;
+      designEntry?: boolean;
       status?: Status;
       title?: string;
       colour?: string;
@@ -61,6 +62,7 @@ async function setup() {
         title: opts.title ?? `Rocket ${n}`,
         colour: opts.colour ?? "Red",
         dimensionsMm: opts.dimensionsMm,
+        ...(opts.designEntry === undefined ? {} : { designEntry: opts.designEntry }),
         printRequested: opts.printRequested ?? true,
         status: opts.status ?? "submitted",
         printCode: `KC-${String(n).padStart(3, "0")}`,
@@ -71,17 +73,28 @@ async function setup() {
 }
 
 describe("state machine", () => {
-  test("approve requires a print request and clears participant notices", async () => {
+  test.each([
+    { name: "legacy row", designEntry: undefined, expectedDesignEntry: false },
+    { name: "design entry", designEntry: true, expectedDesignEntry: true },
+  ])("approving a submitted no-print $name queues it and clears participant notices", async ({
+    designEntry,
+    expectedDesignEntry,
+  }) => {
     const { t, as, participantId, addSubmission, get } = await setup();
-    const voteOnly = await addSubmission(participantId, { printRequested: false });
-    await expect(as.mutation(api.queue.approve, { id: voteOnly })).rejects.toThrow("KC-001 isn't a print request");
-    const print = await addSubmission(participantId);
+    const submission = await addSubmission(participantId, {
+      printRequested: false,
+      ...(designEntry === undefined ? {} : { designEntry }),
+    });
     await t.run((ctx) =>
-      ctx.db.patch(print, { participantNotice: { kind: "replaced", version: 2, at: Date.now() } })
+      ctx.db.patch(submission, { participantNotice: { kind: "replaced", version: 2, at: Date.now() } })
     );
-    await as.mutation(api.queue.approve, { id: print });
-    expect((await get(print))?.status).toBe("queued");
-    expect((await get(print))?.participantNotice).toBeUndefined();
+    await as.mutation(api.queue.approve, { id: submission });
+    expect(await get(submission)).toMatchObject({
+      status: "queued",
+      printRequested: true,
+      designEntry: expectedDesignEntry,
+    });
+    expect((await get(submission))?.participantNotice).toBeUndefined();
   });
 
   test("approve → printing → done, with audit rows and queue order", async () => {
@@ -322,7 +335,7 @@ describe("one in pipeline per participant", () => {
   test("approving a second file while the first is in the pipeline errors", async () => {
     const { as, participantId, addSubmission } = await setup();
     const first = await addSubmission(participantId);
-    const second = await addSubmission(participantId);
+    const second = await addSubmission(participantId, { printRequested: false });
     await as.mutation(api.queue.approve, { id: first });
     await expect(as.mutation(api.queue.approve, { id: second })).rejects.toThrow(/already has/);
     await as.mutation(api.queue.startPrinting, { id: first });
@@ -334,7 +347,7 @@ describe("one in pipeline per participant", () => {
   test("the one-in-pipeline guard rejects with a ConvexError carrying the reason", async () => {
     const { as, participantId, addSubmission, get } = await setup();
     const first = await addSubmission(participantId);
-    const second = await addSubmission(participantId);
+    const second = await addSubmission(participantId, { printRequested: false });
     await as.mutation(api.queue.approve, { id: first });
     const code = (await get(first))?.printCode;
     const error = await as.mutation(api.queue.approve, { id: second }).catch((e: unknown) => e);
@@ -342,20 +355,24 @@ describe("one in pipeline per participant", () => {
     expect((error as ConvexError<string>).data).toBe(`This participant already has ${code} queued`);
   });
 
-  test("staff cannot approve a Vote-only upload", async () => {
+  test("approve refuses when another submitted print request is waiting", async () => {
     const { as, participantId, addSubmission, get } = await setup();
     const requested = await addSubmission(participantId);
-    const voteOnly = await addSubmission(participantId, { printRequested: false });
-    await expect(as.mutation(api.queue.approve, { id: voteOnly })).rejects.toThrow(/isn't a print request/);
-    expect((await get(voteOnly))?.printRequested).toBe(false);
-    expect((await get(voteOnly))?.status).toBe("submitted");
+    const other = await addSubmission(participantId, { printRequested: false });
+    const error = await as.mutation(api.queue.approve, { id: other }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ConvexError);
+    expect((error as ConvexError<string>).data).toBe(
+      "This participant's print request is KC-001; approve or reject that one first"
+    );
+    expect((await get(other))?.printRequested).toBe(false);
+    expect((await get(other))?.status).toBe("submitted");
     expect((await get(requested))?.printRequested).toBe(true);
   });
 
   test("a rejected first file frees the pipeline", async () => {
     const { as, participantId, addSubmission, get } = await setup();
     const first = await addSubmission(participantId);
-    const second = await addSubmission(participantId);
+    const second = await addSubmission(participantId, { printRequested: false });
     await as.mutation(api.queue.approve, { id: first });
     await as.mutation(api.queue.reject, { id: first, reason: "Too large" });
     await as.mutation(api.queue.approve, { id: second });
@@ -397,6 +414,44 @@ describe("access", () => {
     await addSubmission(participantId);
     const [row] = await owner.query(api.queue.board);
     expect(row.participantEmail).toBe(guest.email);
+  });
+
+  test.each(["queued", "done"] as const)(
+    "board attaches a participant's %s print to the print row and submitted backup",
+    async (status) => {
+      const { as, participantId, otherId, addSubmission, get } = await setup();
+      const noPrint = await addSubmission(otherId, { printRequested: false });
+      const print = await addSubmission(participantId, { status });
+      const backup = await addSubmission(participantId, { printRequested: false });
+      const printCode = (await get(print))?.printCode;
+      const rows = await as.query(api.queue.board);
+      const participantPrint = { printCode, status };
+
+      expect(rows.find((row) => row._id === noPrint)?.participantPrint).toBeNull();
+      expect(rows.find((row) => row._id === print)?.participantPrint).toEqual(participantPrint);
+      expect(rows.find((row) => row._id === backup)?.participantPrint).toEqual(participantPrint);
+    }
+  );
+
+  test("board prefers done over printing and queued when a participant has multiple pipeline rows", async () => {
+    const { as, participantId, addSubmission, get } = await setup();
+    await addSubmission(participantId, { status: "queued" });
+    await addSubmission(participantId, { status: "printing" });
+    const done = await addSubmission(participantId, { status: "done" });
+    const doneCode = (await get(done))?.printCode;
+    const rows = await as.query(api.queue.board);
+
+    expect(rows.every((row) => row.participantPrint?.printCode === doneCode)).toBe(true);
+    expect(rows.every((row) => row.participantPrint?.status === "done")).toBe(true);
+  });
+
+  test("counts review excludes submitted backups whose owner has a queued print", async () => {
+    const { as, participantId, otherId, addSubmission } = await setup();
+    await addSubmission(participantId, { status: "queued" });
+    await addSubmission(participantId, { printRequested: false });
+    await addSubmission(otherId, { printRequested: false });
+
+    expect(await as.query(api.queue.counts)).toMatchObject({ review: 1, queued: 1 });
   });
 
   test("board reports loaded colours and dimensions against settings", async () => {

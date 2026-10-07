@@ -9,7 +9,19 @@ import { readSettings, type Settings } from "./settings";
 import { previewUrlOf } from "./submissions";
 import { currentVersion, isActive, isDeleted, isDesignEntry, printRequestPatch } from "./entries";
 
-const PIPELINE: Doc<"submissions">["status"][] = ["queued", "printing", "done"];
+type PipelineStatus = "queued" | "printing" | "done";
+type ParticipantPrint = { printCode: string; status: PipelineStatus };
+
+const PIPELINE: PipelineStatus[] = ["queued", "printing", "done"];
+const PIPELINE_PRIORITY: Record<PipelineStatus, number> = {
+  done: 0,
+  printing: 1,
+  queued: 2,
+};
+
+function isPipelineStatus(status: Doc<"submissions">["status"]): status is PipelineStatus {
+  return PIPELINE.includes(status as PipelineStatus);
+}
 
 export function printersWithColour(printers: Printer[], colour?: string): string[] {
   const requested = colour?.trim().toLowerCase();
@@ -72,6 +84,14 @@ export const board = query({
     const settings = await readSettings(ctx);
     const isOwner = role === "owner";
     const submissions = await ctx.db.query("submissions").collect();
+    const participantPrints = new Map<Id<"participants">, ParticipantPrint>();
+    for (const s of submissions) {
+      if (isDeleted(s) || !isPipelineStatus(s.status)) continue;
+      const current = participantPrints.get(s.participantId);
+      if (!current || PIPELINE_PRIORITY[s.status] < PIPELINE_PRIORITY[current.status]) {
+        participantPrints.set(s.participantId, { printCode: s.printCode, status: s.status });
+      }
+    }
     const participants = new Map<Id<"participants">, Doc<"participants"> | null>();
     const rows = [];
     for (const s of submissions) {
@@ -90,6 +110,7 @@ export const board = query({
         version: currentVersion(s),
         designEntry: isDesignEntry(s),
         designRemoved: s.designRemoved ?? false,
+        participantPrint: participantPrints.get(s.participantId) ?? null,
         participantUsername,
         participantName,
         ...(isOwner ? { participantEmail: participant?.email ?? "" } : {}),
@@ -126,12 +147,17 @@ export const counts = query({
           .withIndex("by_status", (q) => q.eq("status", status))
           .collect()
       ).filter((submission) => !isDeleted(submission)).length;
-    const submitted = await ctx.db
-      .query("submissions")
-      .withIndex("by_status", (q) => q.eq("status", "submitted"))
-      .collect();
+    const submissions = await ctx.db.query("submissions").collect();
+    const participantsWithPrint = new Set<Id<"participants">>();
+    for (const submission of submissions) {
+      if (!isDeleted(submission) && isPipelineStatus(submission.status)) {
+        participantsWithPrint.add(submission.participantId);
+      }
+    }
     return {
-      review: submitted.filter((s) => !isDeleted(s) && s.printRequested).length,
+      review: submissions.filter(
+        (s) => s.status === "submitted" && !isDeleted(s) && !participantsWithPrint.has(s.participantId)
+      ).length,
       queued: await count("queued"),
       printing: await count("printing"),
       done: await count("done"),
@@ -173,15 +199,22 @@ export const approve = mutation({
   handler: async (ctx, { id }) => {
     const actor = await requireAdmin(ctx);
     const submission = await load(ctx, id);
-    if (!submission.printRequested) throw new ConvexError(`${submission.printCode} isn't a print request`);
     expectStatus(submission, "submitted");
     const siblings = await ctx.db
       .query("submissions")
       .withIndex("by_participant", (q) => q.eq("participantId", submission.participantId))
       .collect();
-    const inPipeline = siblings.find((s) => s._id !== id && PIPELINE.includes(s.status));
+    const inPipeline = siblings.find((s) => s._id !== id && isPipelineStatus(s.status));
     if (inPipeline) {
       throw new ConvexError(`This participant already has ${inPipeline.printCode} ${inPipeline.status}`);
+    }
+    const otherPrintRequest = siblings.find(
+      (s) => s._id !== id && !isDeleted(s) && s.status === "submitted" && s.printRequested
+    );
+    if (otherPrintRequest) {
+      throw new ConvexError(
+        `This participant's print request is ${otherPrintRequest.printCode}; approve or reject that one first`
+      );
     }
     await ctx.db.patch(id, {
       status: "queued",
@@ -191,6 +224,7 @@ export const approve = mutation({
       rejectionReason: undefined,
       rejectionKind: undefined,
       participantNotice: undefined,
+      ...printRequestPatch(submission, true),
     });
     await audit(ctx, actor, "queue.approve", id);
   },

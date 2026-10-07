@@ -141,6 +141,11 @@ describe("submission history", () => {
       await ctx.db.insert("likes", { participantId, submissionId: id, reaction: "like", updatedAt: 10, version: 2 });
     });
 
+    await owner.mutation(api.settings.update, { votingOpen: false });
+    await t.run(async (ctx) => {
+      const settings = (await ctx.db.query("settings").first())!;
+      await ctx.db.patch(settings._id, { keepVotesOnReplace: true });
+    });
     await owner.mutation(api.history.restoreVersion, { versionId: versionOne!._id });
     const current = await t.run((ctx) => ctx.db.get(id));
     expect(current).toMatchObject({
@@ -160,6 +165,10 @@ describe("submission history", () => {
     const ballot = await grace.query(api.votes.mine);
     expect(ballot).toMatchObject({ votesLeft: 2, droppedVotes: [{ replaced: true }] });
     expect(await grace.query(api.likes.mine)).toEqual([]);
+    expect((await owner.query(api.votes.results)).rows.find((row) => row.submissionId === id)).toMatchObject({
+      votes: 0,
+      likes: 0,
+    });
     const versionTwo = versions.find((version) => version.version === 2)!;
     expect(await owner.query(internal.history.versionDownloadInfo, { versionId: String(versionTwo._id) })).toMatchObject({
       fileName: "KC-001_ada_any-colour_rocket_v2.stl",

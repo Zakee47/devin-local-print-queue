@@ -22,7 +22,7 @@ function columns(rows: BoardRow[]): Record<Column, BoardRow[]> {
   const of = (status: BoardRow["status"]) => rows.filter((r) => r.status === status);
   return {
     review: of("submitted").sort(
-      (a, b) => Number(b.printRequested) - Number(a.printRequested) || byTime(a, b)
+      (a, b) => Number(a.participantPrint !== null) - Number(b.participantPrint !== null) || byTime(a, b)
     ),
     queued: of("queued").sort((a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0)),
     printing: of("printing").sort((a, b) => (a.printingAt ?? 0) - (b.printingAt ?? 0)),
@@ -86,6 +86,7 @@ export default function QueueBoard() {
   }
 
   const cols = columns(rows);
+  const reviewCount = cols.review.filter((row) => row.participantPrint === null).length;
   const printerGroups = printingGroups(
     cols.printing,
     settings.printers.map(({ name }) => name)
@@ -114,7 +115,7 @@ export default function QueueBoard() {
               <TabsTrigger key={tab.value} value={tab.value} className="px-2.5">
                 {tab.label}
                 <span className="font-mono text-xs text-muted-dim tabular-nums">
-                  {cols[tab.value].length}
+                  {tab.value === "review" ? reviewCount : cols[tab.value].length}
                 </span>
               </TabsTrigger>
             ))}
