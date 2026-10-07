@@ -10,6 +10,7 @@ import { downloadCsv, toCsv } from "@/lib/csv";
 import { exportCsvName, exportCsvRows, exportZipName } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { saveBlob, useFetchSubmissionFile } from "@/components/admin/download";
+import { errorMessage } from "@/lib/errors";
 
 const CONCURRENCY = 4;
 
@@ -55,7 +56,7 @@ export default function ExportButtons() {
         toast.success(`Exported ${total} files`);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Export failed");
+      toast.error(errorMessage(err, "Export failed"));
     } finally {
       setZipping(null);
     }

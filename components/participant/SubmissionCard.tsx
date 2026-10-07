@@ -35,15 +35,9 @@ import { type Role, type RoleFile, roleOf } from "@/lib/roles";
 import { ALLOWED_EXTENSIONS, type Dimensions } from "@/lib/event";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
+import { errorMessage } from "@/lib/errors";
 
 export type MySubmission = NonNullable<FunctionReturnType<typeof api.submissions.mine>>[number];
-
-function errorMessage(e: unknown) {
-  if (!(e instanceof Error)) return "Something went wrong";
-  // Convex prefixes server errors with request metadata.
-  const match = e.message.match(/Uncaught Error: (.+?)(\n|$)/);
-  return match ? match[1] : e.message;
-}
 
 export default function SubmissionCard({
   submission: s,
@@ -118,7 +112,7 @@ export default function SubmissionCard({
       setReplacement({ file, kind, dimensions });
       setReplaceDialogOpen(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Couldn't use that file");
+      toast.error(errorMessage(error, "Couldn't use that file"));
     } finally {
       if (replaceInputRef.current) replaceInputRef.current.value = "";
     }
@@ -147,7 +141,7 @@ export default function SubmissionCard({
       setReplacement(null);
       setReplaceDialogOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? errorMessage(error) : "Upload failed");
+      toast.error(errorMessage(error, "Upload failed"));
     } finally {
       setBusy(false);
     }

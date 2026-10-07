@@ -1,6 +1,6 @@
 import { internalQuery, mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { viewerRole, requireAdmin } from "./admins";
 import { downloadFileName } from "../lib/files";
 import { MAX_SUBMISSIONS_PER_PARTICIPANT, type Printer } from "../lib/event";
@@ -25,15 +25,15 @@ function requireKnownPrinter(settings: Settings, name: string | undefined): stri
   const printer = settings.printers.find(
     ({ name: configuredName }) => configuredName.trim().toLowerCase() === trimmed.toLowerCase()
   );
-  if (!printer) throw new Error(`Unknown printer "${trimmed}"`);
+  if (!printer) throw new ConvexError(`Unknown printer "${trimmed}"`);
   return printer.name;
 }
 
 async function load(ctx: MutationCtx, id: Id<"submissions">) {
   const submission = await ctx.db.get(id);
-  if (!submission) throw new Error("Submission not found");
+  if (!submission) throw new ConvexError("Submission not found");
   if (isDeleted(submission)) {
-    throw new Error(`${submission.printCode} was deleted by the participant`);
+    throw new ConvexError(`${submission.printCode} was deleted by the participant`);
   }
   return submission;
 }
@@ -50,7 +50,7 @@ async function audit(
 
 function expectStatus(submission: Doc<"submissions">, ...allowed: Doc<"submissions">["status"][]) {
   if (!allowed.includes(submission.status)) {
-    throw new Error(`${submission.printCode} is ${submission.status}, expected ${allowed.join(" or ")}`);
+    throw new ConvexError(`${submission.printCode} is ${submission.status}, expected ${allowed.join(" or ")}`);
   }
 }
 
@@ -68,7 +68,7 @@ export const board = query({
   args: {},
   handler: async (ctx) => {
     const role = await viewerRole(ctx);
-    if (!role) throw new Error("Not an admin");
+    if (!role) throw new ConvexError("Not an admin");
     const settings = await readSettings(ctx);
     const isOwner = role === "owner";
     const submissions = await ctx.db.query("submissions").collect();
@@ -173,7 +173,7 @@ export const approve = mutation({
   handler: async (ctx, { id }) => {
     const actor = await requireAdmin(ctx);
     const submission = await load(ctx, id);
-    if (!submission.printRequested) throw new Error(`${submission.printCode} isn't a print request`);
+    if (!submission.printRequested) throw new ConvexError(`${submission.printCode} isn't a print request`);
     expectStatus(submission, "submitted");
     const siblings = await ctx.db
       .query("submissions")
@@ -181,7 +181,7 @@ export const approve = mutation({
       .collect();
     const inPipeline = siblings.find((s) => s._id !== id && PIPELINE.includes(s.status));
     if (inPipeline) {
-      throw new Error(`This participant already has ${inPipeline.printCode} ${inPipeline.status}`);
+      throw new ConvexError(`This participant already has ${inPipeline.printCode} ${inPipeline.status}`);
     }
     await ctx.db.patch(id, {
       status: "queued",
@@ -234,7 +234,7 @@ export const reject = mutation({
   handler: async (ctx, { id, reason }) => {
     const actor = await requireAdmin(ctx);
     const trimmed = reason.trim();
-    if (!trimmed) throw new Error("A rejection comment is required");
+    if (!trimmed) throw new ConvexError("A rejection comment is required");
     const submission = await load(ctx, id);
     expectStatus(submission, "submitted", "queued");
     await ctx.db.patch(id, {
@@ -256,7 +256,7 @@ export const printFailed = mutation({
   handler: async (ctx, { id, reason }) => {
     const actor = await requireAdmin(ctx);
     const trimmed = reason.trim();
-    if (!trimmed) throw new Error("A reason is required");
+    if (!trimmed) throw new ConvexError("A reason is required");
     const submission = await load(ctx, id);
     expectStatus(submission, "printing");
     await ctx.db.patch(id, {
@@ -302,7 +302,7 @@ export const moveBack = mutation({
             .collect()
         ).filter((s) => s._id !== id && isActive(s));
         if (active.length >= MAX_SUBMISSIONS_PER_PARTICIPANT) {
-          throw new Error("This participant already has the maximum active submissions");
+          throw new ConvexError("This participant already has the maximum active submissions");
         }
         await ctx.db.patch(id, {
           status: "submitted",
@@ -314,7 +314,7 @@ export const moveBack = mutation({
         break;
       }
       default:
-        throw new Error(`${submission.printCode} is already awaiting review`);
+        throw new ConvexError(`${submission.printCode} is already awaiting review`);
     }
     await audit(ctx, actor, "queue.moveBack", id, `from ${submission.status}`);
   },
@@ -327,7 +327,7 @@ export const removeFromCompetition = mutation({
   handler: async (ctx, { id, reason }) => {
     const actor = await requireAdmin(ctx);
     const submission = await load(ctx, id);
-    if (!isDesignEntry(submission)) throw new Error(`${submission.printCode} isn't a competition entry`);
+    if (!isDesignEntry(submission)) throw new ConvexError(`${submission.printCode} isn't a competition entry`);
     if (submission.designRemoved) return;
     const trimmed = reason?.trim() || undefined;
     await ctx.db.patch(id, {
@@ -395,7 +395,7 @@ export const downloadInfo = internalQuery({
   args: { id: v.string() },
   handler: async (ctx, { id }) => {
     const role = await viewerRole(ctx);
-    if (!role) throw new Error("Not an admin");
+    if (!role) throw new ConvexError("Not an admin");
     const submissionId = ctx.db.normalizeId("submissions", id);
     const submission = submissionId ? await ctx.db.get(submissionId) : null;
     if (!submission || (isDeleted(submission) && role !== "owner")) return null;

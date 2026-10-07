@@ -27,6 +27,7 @@ import {
   submissionsNotOpenYet,
   votingNotOpenYet,
 } from "@/lib/event";
+import { errorMessage } from "@/lib/errors";
 
 function EntriesSkeleton() {
   return (
@@ -114,7 +115,7 @@ export default function SubmitPage() {
     try {
       await completePlaybookStep({});
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Couldn't update your playbook step");
+      toast.error(errorMessage(error, "Couldn't update your playbook step"));
     } finally {
       setCompletingPlaybookStep(false);
     }

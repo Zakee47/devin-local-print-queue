@@ -35,10 +35,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { submissionsStatusText } from "@/components/admin/countdown";
 import { useNow } from "@/components/admin/use-now";
-
-function errorMessage(err: unknown) {
-  return err instanceof Error ? err.message.replace(/^.*Uncaught Error: /, "").split("\n")[0] : "Failed";
-}
+import { errorMessage } from "@/lib/errors";
 
 function Section({
   title,

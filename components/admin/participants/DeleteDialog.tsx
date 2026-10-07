@@ -17,6 +17,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import type { ParticipantRow } from "./ParticipantsManager";
+import { errorMessage } from "@/lib/errors";
 
 export default function DeleteDialog({
   participant,
@@ -55,7 +56,7 @@ export default function DeleteDialog({
       );
       close(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't delete");
+      toast.error(errorMessage(err, "Couldn't delete"));
     } finally {
       setSaving(false);
     }

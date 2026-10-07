@@ -36,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { errorMessage } from "@/lib/errors";
 
 type SubmissionId = Id<"submissions">;
 type StandingEntry = NonNullable<MyStanding>["entries"][number];
@@ -139,7 +140,7 @@ export default function VoteGallery() {
       setCursor(nextAfter(entry._id));
       if (!canReact || previous === direction) return;
       react({ submissionId: entry._id, reaction: direction }).catch((e: unknown) =>
-        toast.error(e instanceof Error ? e.message : "Couldn't save that")
+        toast.error(errorMessage(e, "Couldn't save that"))
       );
     },
     [reactions, canReact, nextAfter, react]
@@ -156,7 +157,7 @@ export default function VoteGallery() {
       if (last.previous) await react({ submissionId: last.id, reaction: last.previous });
       else await clearReaction({ submissionId: last.id });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't undo");
+      toast.error(errorMessage(e, "Couldn't undo"));
     }
   }, [history, activeFilter, react, clearReaction]);
 
@@ -183,7 +184,7 @@ export default function VoteGallery() {
       await action();
       setAnnouncement(voteAnnouncement(event));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't update your vote");
+      toast.error(errorMessage(e, "Couldn't update your vote"));
     } finally {
       setPending(null);
     }
@@ -319,7 +320,7 @@ export default function VoteGallery() {
                 votingOpen={votingOpen}
                 onDismiss={() =>
                   dismissDropped({}).catch((e: unknown) =>
-                    toast.error(e instanceof Error ? e.message : "Couldn't dismiss that")
+                    toast.error(errorMessage(e, "Couldn't dismiss that"))
                   )
                 }
               />
@@ -548,7 +549,7 @@ export default function VoteGallery() {
                             ? clearReaction({ submissionId: entry._id })
                             : react({ submissionId: entry._id, reaction: "like" });
                         update.catch((e: unknown) =>
-                          toast.error(e instanceof Error ? e.message : "Couldn't save that")
+                          toast.error(errorMessage(e, "Couldn't save that"))
                         );
                       }}
                       voteControl={voteControl(entry)}

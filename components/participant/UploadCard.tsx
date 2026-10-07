@@ -18,6 +18,7 @@ import { ALLOWED_EXTENSIONS, MAX_SUBMISSIONS_PER_PARTICIPANT, type Dimensions, t
 import type { Role, RoleFile } from "@/lib/roles";
 import type { FileKind } from "@/lib/files";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/errors";
 
 const EMPTY_DRAFT: SubmissionDraft = { title: "", notes: "", colour: "" };
 
@@ -142,7 +143,7 @@ export default function UploadCard({
       }
       reset();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
+      toast.error(errorMessage(err, "Upload failed"));
     } finally {
       setBusy(false);
     }

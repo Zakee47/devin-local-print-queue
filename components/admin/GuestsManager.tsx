@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
+import { errorMessage } from "@/lib/errors";
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -59,7 +60,7 @@ export default function GuestsManager() {
       });
       toast.success(`Imported ${res.total} guests, ${res.eligibleCount} eligible`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Import failed");
+      toast.error(errorMessage(err, "Import failed"));
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -96,9 +97,7 @@ export default function GuestsManager() {
             setGuestName("");
           } catch (err) {
             toast.error(
-              err instanceof Error
-                ? err.message.replace(/^.*Uncaught Error: /, "").split("\n")[0]
-                : "Couldn't add guest"
+              errorMessage(err, "Couldn't add guest")
             );
           } finally {
             setAddingGuest(false);
@@ -217,9 +216,7 @@ export default function GuestsManager() {
                               .then(() => toast.success(`${g.email} removed`))
                               .catch((err: unknown) =>
                                 toast.error(
-                                  err instanceof Error
-                                    ? err.message.replace(/^.*Uncaught Error: /, "").split("\n")[0]
-                                    : "Couldn't remove guest"
+                                  errorMessage(err, "Couldn't remove guest")
                                 )
                               )
                           }

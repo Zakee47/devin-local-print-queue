@@ -24,6 +24,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/errors";
 
 export default function VoteResults() {
   return <OwnerResults />;
@@ -49,7 +50,7 @@ function OwnerResults() {
     try {
       await update(patch);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't update settings");
+      toast.error(errorMessage(e, "Couldn't update settings"));
     } finally {
       setSaving(false);
     }

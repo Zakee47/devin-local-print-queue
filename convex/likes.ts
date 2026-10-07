@@ -1,6 +1,6 @@
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { requireParticipant, viewerParticipant } from "./participants";
 import { isEntry, requireVotingOpen } from "./votes";
 import { countsFor, currentVersion } from "./entries";
@@ -72,10 +72,10 @@ export const react = mutation({
     await requireVotingOpen(ctx);
     const submission = await ctx.db.get(submissionId);
     if (!submission || !(await isEntry(ctx, submission))) {
-      throw new Error("That design isn't in the running any more");
+      throw new ConvexError("That design isn't in the running any more");
     }
     if (submission.participantId === participant._id) {
-      throw new Error("You can't like your own entry");
+      throw new ConvexError("You can't like your own entry");
     }
     const existing = await existingReaction(ctx, participant._id, submissionId);
     const updatedAt = Date.now();

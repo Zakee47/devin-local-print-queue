@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import SubmissionCard, { type BoardRow } from "@/components/admin/SubmissionCard";
 import HistoryDialog from "@/components/admin/HistoryDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
+import { errorMessage } from "@/lib/errors";
 
 type Column = "review" | "queued" | "printing" | "done" | "rejected";
 
@@ -99,7 +100,7 @@ export default function QueueBoard() {
       }
       toast.success(`Downloaded ${cols.queued.length} files`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Download failed");
+      toast.error(errorMessage(err, "Download failed"));
     } finally {
       setDownloading(false);
     }

@@ -1,5 +1,5 @@
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { requireOwner } from "./admins";
 
 // Replaces the allowlist with a freshly parsed Luma CSV (parsed client-side
@@ -59,7 +59,7 @@ export const addGuest = mutation({
   handler: async (ctx, args) => {
     const actor = await requireOwner(ctx);
     const email = args.email.trim().toLowerCase();
-    if (!email.includes("@")) throw new Error("Enter a valid email address");
+    if (!email.includes("@")) throw new ConvexError("Enter a valid email address");
     const name = args.name?.trim() || undefined;
     const existing = await ctx.db
       .query("guests")
@@ -86,7 +86,7 @@ export const removeGuest = mutation({
   handler: async (ctx, { id }) => {
     const actor = await requireOwner(ctx);
     const guest = await ctx.db.get(id);
-    if (!guest) throw new Error("Guest not found");
+    if (!guest) throw new ConvexError("Guest not found");
     await ctx.db.delete(id);
     await ctx.db.insert("auditLog", { actor, action: "guests.remove", detail: guest.email });
   },

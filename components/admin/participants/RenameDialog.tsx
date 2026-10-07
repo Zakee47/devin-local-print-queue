@@ -16,6 +16,7 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type { ParticipantRow } from "./ParticipantsManager";
+import { errorMessage } from "@/lib/errors";
 
 export default function RenameDialog({
   participant,
@@ -60,7 +61,7 @@ function RenameForm({
       toast.success(`Renamed to ${username.trim()}`);
       onDone();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't rename");
+      toast.error(errorMessage(err, "Couldn't rename"));
     } finally {
       setSaving(false);
     }
