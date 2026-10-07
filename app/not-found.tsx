@@ -2,6 +2,7 @@ import Link from "next/link";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 import { buttonVariants } from "@/components/ui/button";
+import { EVENT_HOME } from "@/lib/event";
 import { cn } from "@/lib/utils";
 
 export default function NotFound() {
@@ -20,7 +21,7 @@ export default function NotFound() {
           Check the address or head back to the keychain print queue.
         </p>
         <Link
-          href="/"
+          href={EVENT_HOME}
           className={cn(buttonVariants({ variant: "brand" }), "mt-6 w-fit")}
         >
           Back to the queue

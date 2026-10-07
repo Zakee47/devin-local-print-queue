@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/hero/:path*",
+        source: "/(hero|landing)/:path*",
         headers: [
           {
             key: "Cache-Control",

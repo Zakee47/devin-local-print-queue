@@ -1,5 +1,7 @@
 export const EVENT_NAME = "Devin Local: London";
 export const EVENT_URL = "https://luma.com/wn0h6ffm";
+// Where the event app lives now that the site root is the Devin Local landing page.
+export const EVENT_HOME = "/london-01";
 export const CHALLENGE = "Design a keychain";
 
 // Up to 2 uploads; exactly one is the participant's entry for printing and voting.

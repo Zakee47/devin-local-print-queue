@@ -10,7 +10,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { DroppedVote, GalleryEntry, MyStanding } from "@/convex/votes";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
-import { MAX_VOTES_PER_PARTICIPANT, votingNotOpenYet, type Reaction } from "@/lib/event";
+import { EVENT_HOME, MAX_VOTES_PER_PARTICIPANT, votingNotOpenYet, type Reaction } from "@/lib/event";
 import { DECK_FILTERS, filterCounts, matchesFilter, type DeckFilter } from "@/lib/deck";
 import VoteButton, { type VoteButtonState } from "@/components/vote/VoteButton";
 import SwipeCard, { type SwipeCardHandle } from "@/components/vote/SwipeCard";
@@ -306,7 +306,7 @@ export default function VoteGallery() {
             <AlertTitle>Only registered guests can vote</AlertTitle>
             <AlertDescription>
               Pick your username on the{" "}
-              <Link href="/" className="underline">
+              <Link href={EVENT_HOME} className="underline">
                 home page
               </Link>{" "}
               first. You don&apos;t need a submission to vote. You can still browse.

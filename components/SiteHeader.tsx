@@ -7,6 +7,7 @@ import NoticeBanner from "@/components/NoticeBanner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import HelpTour from "@/components/tutorial/HelpTour";
 import { getAppName } from "@/lib/app-name";
+import { EVENT_HOME } from "@/lib/event";
 import { PAGE_WIDTHS, type PageWidth } from "@/lib/page-width";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +28,7 @@ export default function SiteHeader({
         )}
       >
         <Link
-          href="/"
+          href={EVENT_HOME}
           aria-label={`${getAppName()} home`}
           className="group flex min-w-0 items-center gap-2.5 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
