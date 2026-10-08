@@ -3,6 +3,7 @@ import LandingPage from "@/components/landing/LandingPage";
 import { OG_IMAGE, SITE_DESCRIPTION, SITE_TITLE } from "@/components/landing/data";
 
 export const metadata: Metadata = {
+  applicationName: SITE_TITLE,
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
   openGraph: {
