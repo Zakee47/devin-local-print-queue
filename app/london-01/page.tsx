@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, LogIn, Printer, ShieldAlert } from "lucide-react";
+import { ArrowRight, Printer, ShieldAlert } from "lucide-react";
 import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
+import LumaMark from "@/components/LumaMark";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import EventShowcase from "@/components/showcase/EventShowcase";
@@ -24,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { errorMessage } from "@/lib/errors";
 
 const HERO_BUTTON =
-  "h-auto min-h-12 min-w-44 max-w-full gap-2 px-7 text-base whitespace-normal has-data-[icon=inline-start]:pl-6 sm:h-11 sm:min-h-0 sm:min-w-0 sm:max-w-none sm:px-4.5 sm:text-[15px] sm:whitespace-nowrap";
+  "h-10 gap-2 px-3 text-sm whitespace-nowrap has-data-[icon=inline-start]:pl-3.5 sm:h-11 sm:px-4.5 sm:text-[15px]";
 
 export default function Home() {
   const [username, setUsername] = useState("");
@@ -60,7 +61,7 @@ export default function Home() {
                 <div>
                   <SignInButton mode="modal">
                     <Button variant="brand" size="lg" className={HERO_BUTTON}>
-                      <LogIn data-icon="inline-start" />
+                      <LumaMark data-icon="inline-start" />
                       Sign in with your Luma email
                     </Button>
                   </SignInButton>
