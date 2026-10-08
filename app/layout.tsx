@@ -5,6 +5,7 @@ import ConvexClientProvider from "@/components/ConvexClientProvider";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { APP_URL, getAppName } from "@/lib/app-name";
+import { EVENT_HOME } from "@/lib/event";
 import "./globals.css";
 
 const ibmPlexMono = IBM_Plex_Mono({
@@ -56,7 +57,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider appearance={clerkAppearance}>
+    <ClerkProvider
+      appearance={clerkAppearance}
+      signInFallbackRedirectUrl={EVENT_HOME}
+      signUpFallbackRedirectUrl={EVENT_HOME}
+      afterSignOutUrl={EVENT_HOME}
+    >
       <html
         lang="en"
         className={`${ibmPlexMono.variable} h-full overscroll-none antialiased`}

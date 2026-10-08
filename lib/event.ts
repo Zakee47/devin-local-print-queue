@@ -3,6 +3,8 @@ export const EVENT_TITLE = "London #01";
 export const EVENT_URL = "https://luma.com/wn0h6ffm";
 // Where the event app lives now that the site root is the Devin Local landing page.
 export const EVENT_HOME = "/london-01";
+// Every event app on this domain. Shared routes (/submit, /vote, /tv, /admin, /sign-in) belong to EVENT_HOME.
+export const EVENT_HOMES: readonly string[] = [EVENT_HOME];
 export const CHALLENGE = "Design a keychain";
 
 // Up to 2 uploads; exactly one is the participant's entry for printing and voting.

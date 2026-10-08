@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { SignInButton } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
+import EventSignInButton from "@/components/EventSignInButton";
 import ProfileMenu from "@/components/ProfileMenu";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -27,7 +27,7 @@ export default function HeaderAuth({
   if (!signedIn) {
     if (!showSignIn) return null;
     return (
-      <SignInButton mode="modal">
+      <EventSignInButton>
         <Button
           variant="ghost"
           size="sm"
@@ -40,7 +40,7 @@ export default function HeaderAuth({
             className="text-muted-dim transition-all group-hover/button:translate-x-0.5 group-hover/button:text-foreground"
           />
         </Button>
-      </SignInButton>
+      </EventSignInButton>
     );
   }
 
