@@ -34,8 +34,8 @@ export default function EventShowcase({
             Every design from London #01
           </h2>
         </div>
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-          <div className="lg:h-[44rem] lg:max-h-[44rem]">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+          <div className="lg:h-[44rem]">
             <LiveLeaderboard
               variant="page"
               rows={data.leaderboard}
@@ -46,22 +46,33 @@ export default function EventShowcase({
               votingOpen={data.votingOpen}
               votingNotOpenYet={data.votingNotOpenYet}
               onSelect={selectDesign}
+              mobileLimit={5}
               scrollable
               className="h-full"
             />
           </div>
-          <Card className="gap-0 overflow-hidden p-0 shadow-none">
-            <CardHeader className="flex shrink-0 flex-row items-center justify-between gap-2 px-6 pt-5 pb-4">
-              <h3 className="font-mono text-lg font-medium tracking-[0.18em] text-muted-foreground uppercase">
-                Designs so far
-              </h3>
-              <span className="font-mono text-lg tabular-nums text-muted-foreground">{data.designs.length}</span>
+          <Card className="gap-0 overflow-hidden p-0 shadow-none lg:h-[44rem] lg:min-h-0">
+            <CardHeader className="shrink-0 gap-1 px-6 pt-5 pb-4">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-mono text-lg font-medium tracking-[0.18em] text-muted-foreground uppercase">
+                  Designs so far
+                </h3>
+                <span className="font-mono text-lg tabular-nums text-muted-foreground">{data.designs.length}</span>
+              </div>
+              {data.designs.length > 1 ? (
+                <p className="text-xs text-muted-foreground lg:hidden">Swipe to see all {data.designs.length}</p>
+              ) : null}
             </CardHeader>
-            <CardContent className="px-5 pb-5">
+            <CardContent className="min-w-0 px-5 pb-5 lg:flex-1 lg:min-h-0 lg:overflow-y-auto overscroll-contain">
               {data.designs.length ? (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-5 pb-2 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-x-visible lg:px-0 lg:snap-none xl:grid-cols-4">
                   {data.designs.map((design) => (
-                    <DesignCard key={design.printCode} design={design} onSelect={selectDesign} />
+                    <div
+                      key={design.printCode}
+                      className="w-[44%] shrink-0 snap-start sm:w-[30%] lg:w-auto"
+                    >
+                      <DesignCard design={design} onSelect={selectDesign} />
+                    </div>
                   ))}
                 </div>
               ) : (

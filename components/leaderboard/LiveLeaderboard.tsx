@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, Heart } from "lucide-react";
 import type { TvRanked } from "@/convex/tv";
 import type { MyStanding } from "@/convex/votes";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import Swatch from "@/components/tv/Swatch";
 import { useRankMotion } from "./useRankMotion";
 
@@ -20,6 +22,7 @@ export default function LiveLeaderboard({
   onSelect,
   mineDisplayName,
   scrollable = false,
+  mobileLimit,
   className,
 }: {
   rows: TvRanked[];
@@ -32,8 +35,10 @@ export default function LiveLeaderboard({
   onSelect?: (printCode: string) => void;
   mineDisplayName?: string;
   scrollable?: boolean;
+  mobileLimit?: number;
   className?: string;
 }) {
+  const [showAllMobile, setShowAllMobile] = useState(false);
   const { register, changes } = useRankMotion(rows);
   const topVotes = Math.max(1, ...rows.map((row) => row.votes));
   const tv = variant === "tv";
@@ -51,7 +56,7 @@ export default function LiveLeaderboard({
         className={cn(
           "h-full min-h-0 gap-0 border border-border ring-0 shadow-none",
           tv ? "rounded-2xl px-6 py-4" : "rounded-xl px-4 py-5 sm:px-6",
-          scrollable && "overflow-hidden"
+          scrollable && "overflow-hidden max-lg:overflow-visible"
         )}
       >
         <header className={cn("flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between", tv ? "mb-3" : "mb-5")}>
@@ -104,10 +109,11 @@ export default function LiveLeaderboard({
             className={cn(
               "flex min-h-0 flex-col",
               tv && "overflow-hidden",
-              scrollable && "flex-1 overflow-y-auto overscroll-contain"
+              scrollable &&
+                "flex-1 overflow-y-auto overscroll-contain max-lg:flex-none max-lg:overflow-visible"
             )}
           >
-            {rows.map((row) => {
+            {rows.map((row, index) => {
               const change = changes.get(row.printCode);
               const barWidth = `${(row.votes / topVotes) * 100}%`;
               const isMine = mine?.entries.some((entry) => entry.printCode === row.printCode) ?? false;
@@ -120,7 +126,11 @@ export default function LiveLeaderboard({
                     tv ? "h-[64px] gap-4 px-3" : "h-14 gap-2 px-1 sm:gap-3 sm:px-2",
                     change?.votesDelta && change.votesDelta > 0 && "rank-flash",
                     change?.isNew && "animate-in fade-in slide-in-from-bottom-3",
-                    isMine && "z-10 rounded-lg bg-brand/5 ring-2 ring-brand/70"
+                    isMine && "z-10 rounded-lg bg-brand/5 ring-2 ring-brand/70",
+                    mobileLimit !== undefined &&
+                      !showAllMobile &&
+                      index >= mobileLimit &&
+                      "max-lg:hidden"
                   )}
                 >
                   <span
@@ -213,6 +223,18 @@ export default function LiveLeaderboard({
             })}
           </ol>
         )}
+        {mobileLimit !== undefined && rows.length > mobileLimit ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-expanded={showAllMobile}
+            onClick={() => setShowAllMobile((expanded) => !expanded)}
+            className="mt-2 w-full lg:hidden"
+          >
+            {showAllMobile ? `Show top ${mobileLimit}` : `Show all ${rows.length}`}
+          </Button>
+        ) : null}
         {pinnedEntry ? (
           <div className={cn("mt-3 border-t border-border pt-3", tv && "mt-4 pt-4")}>
             <p className={cn("mb-1 text-xs font-medium text-muted-foreground", tv && "text-sm")}>Your entry</p>
