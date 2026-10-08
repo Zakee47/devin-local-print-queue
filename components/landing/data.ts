@@ -3,7 +3,7 @@ import { EVENT_HOME } from "@/lib/event";
 export const SITE_TITLE = "Devin Local";
 export const SITE_DESCRIPTION =
   "Devin Local is Cognition's series of co-working sessions for engineers, founders, designers and operators.";
-export const OG_IMAGE = "/landing/og.png";
+export const OG_IMAGE = "/landing/og.jpg";
 
 export const LUMA_CALENDAR = "https://luma.com/Cognition-london";
 export const RECAP_YOUTUBE_ID = "l_PUj9FA5Gs";
