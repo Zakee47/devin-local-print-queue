@@ -46,7 +46,6 @@ export default function EventShowcase({
               votingOpen={data.votingOpen}
               votingNotOpenYet={data.votingNotOpenYet}
               onSelect={selectDesign}
-              mobileLimit={5}
               scrollable
               className="h-full"
             />
