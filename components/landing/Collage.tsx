@@ -4,9 +4,6 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { COLLAGE, SLOTS_DESKTOP, SLOTS_MOBILE, type Slot } from "./data";
 
-// Closing section: 35 event photos scattered over a tall dark area. Each
-// photo drifts at its own speed as you scroll past (the centre copy is
-// sticky), which reads as depth. Reduced motion / `?static` disables the drift.
 export default function Collage() {
   const section = useRef<HTMLElement>(null);
   const [slots, setSlots] = useState<Slot[]>(SLOTS_DESKTOP);
@@ -27,55 +24,86 @@ export default function Collage() {
       matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (still) return;
     let raf = 0;
+    let listening = false;
+    const photoElements = Array.from(sec.querySelectorAll<HTMLElement>(".dl-ph"));
     const tick = () => {
       raf = 0;
-      const progress = -sec.getBoundingClientRect().top;
-      sec.querySelectorAll<HTMLElement>(".dl-ph").forEach((el) => {
-        const speed = Number(el.dataset.speed);
-        el.style.transform = `translateY(${(-progress * speed).toFixed(1)}px)`;
+      const rect = sec.getBoundingClientRect();
+      const progress = Math.max(
+        0,
+        Math.min(1, (innerHeight - rect.top) / (rect.height + innerHeight)),
+      );
+      photoElements.forEach((photo) => {
+        const speed = Number(photo.dataset.speed);
+        const offset = speed * 200 * (1 - 2 * progress);
+        photo.style.transform = `translate3d(0, ${offset.toFixed(1)}px, 0)`;
       });
     };
     const onScroll = () => {
       if (!raf) raf = requestAnimationFrame(tick);
     };
-    tick();
-    addEventListener("scroll", onScroll, { passive: true });
-    addEventListener("resize", onScroll);
-    return () => {
+    const attach = () => {
+      if (listening) return;
+      listening = true;
+      addEventListener("scroll", onScroll, { passive: true });
+      addEventListener("resize", onScroll);
+      onScroll();
+    };
+    const detach = () => {
+      if (!listening) return;
+      listening = false;
       removeEventListener("scroll", onScroll);
       removeEventListener("resize", onScroll);
-      if (raf) cancelAnimationFrame(raf);
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
+    };
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) attach();
+      else detach();
+    });
+    observer.observe(sec);
+    return () => {
+      observer.disconnect();
+      detach();
     };
   }, [slots]);
 
   return (
     <section className="dl-closing dl-dark" id="closing" data-tone="dark" ref={section}>
       <div className="center">
-        <h2 data-reveal>
-          See you at
-          <br />
-          the next one
-        </h2>
-        <p className="sub" data-reveal style={{ ["--d" as string]: "0.1s" }}>
-          Bigger, better, and closer than ever. Next stop: Devin Local near you.
-        </p>
-        <a
-          className="dl-btn dl-btn-y"
-          href="https://luma.com/Cognition-london"
-          data-reveal
-          style={{ ["--d" as string]: "0.2s" }}
-        >
-          Join our next event
-        </a>
+        <div className="copy">
+          <h2 data-reveal>
+            See you at
+            <br />
+            the next one
+          </h2>
+          <p className="sub" data-reveal style={{ ["--d" as string]: "0.1s" }}>
+            Bigger, better, and closer than ever. Next stop: Devin Local near you.
+          </p>
+          <a
+            className="dl-btn dl-btn-y"
+            href="https://luma.com/Cognition-london"
+            data-reveal
+            style={{ ["--d" as string]: "0.2s" }}
+          >
+            Join our next event
+          </a>
+        </div>
       </div>
-      {slots.map((s, i) => {
-        const photo = COLLAGE[i % COLLAGE.length];
+      {slots.map((slot, index) => {
+        const photo = COLLAGE[index % COLLAGE.length];
         return (
           <div
-            key={`${photo}-${i}`}
-            className={`dl-ph${i % 7 === 3 ? " brown" : ""}`}
-            style={{ left: `${s[0]}%`, top: `${s[1]}%`, ["--w" as string]: `${s[3]}px` }}
-            data-speed={s[2]}
+            key={`${photo}-${index}`}
+            className={`dl-ph${index % 7 === 3 ? " brown" : ""}`}
+            data-speed={slot[2]}
+            style={{
+              left: `${slot[0]}%`,
+              top: `${slot[1]}%`,
+              ["--w" as string]: `${slot[3]}px`,
+            }}
           >
             <Image
               src={`/landing/collage/${photo}-600.webp`}
@@ -84,6 +112,7 @@ export default function Collage() {
               height={337}
               sizes="(max-width: 900px) 140px, 260px"
               loading="lazy"
+              fetchPriority="low"
               unoptimized
             />
           </div>
