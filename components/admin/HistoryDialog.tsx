@@ -20,12 +20,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateTime } from "@/lib/datetime";
 
 type RestoreInfo = { ok: boolean; reason?: string };
-
-function time(ms: number) {
-  return new Date(ms).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
-}
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -100,7 +97,7 @@ export default function HistoryDialog({
           <div className="flex flex-col gap-5">
             {deleted || data.deletedAt ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3">
-                <p className="text-sm">Deleted {time(data.deletedAt ?? 0)}</p>
+                <p className="text-sm">Deleted {formatDateTime(data.deletedAt ?? 0)}</p>
                 <Button
                   type="button"
                   size="sm"
@@ -166,7 +163,7 @@ export default function HistoryDialog({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">v{version.version}</span>
-                      <Badge variant="outline">{version.why} · {time(version.archivedAt)}</Badge>
+                      <Badge variant="outline">{version.why} · {formatDateTime(version.archivedAt)}</Badge>
                     </div>
                     <p className="truncate text-sm">{version.originalFileName}</p>
                     <p className="text-xs text-muted-foreground">
@@ -216,7 +213,7 @@ export default function HistoryDialog({
               <h3 className="text-sm font-semibold">Audit trail</h3>
               {data.audit.length ? data.audit.map((row) => (
                 <div key={row._id} className="flex flex-wrap gap-x-2 text-xs">
-                  <time className="text-muted-foreground">{time(row.at)}</time>
+                  <time className="text-muted-foreground">{formatDateTime(row.at)}</time>
                   <span className="font-medium">{row.actor}</span>
                   <span>{row.action}</span>
                   {row.detail ? <span className="text-muted-foreground">{row.detail}</span> : null}

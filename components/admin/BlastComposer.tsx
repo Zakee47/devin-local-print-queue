@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { formatDateTime } from "@/lib/datetime";
 import { MAX_BLAST_MESSAGE_LENGTH } from "@/lib/event";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,12 +21,6 @@ import { errorMessage } from "@/lib/errors";
 import { SETTINGS_HELP } from "@/lib/settings-help";
 import SettingHelp from "@/components/admin/SettingHelp";
 
-function formatTime(timestamp: number) {
-  const date = new Date(timestamp);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 export default function BlastComposer() {
   const settings = useQuery(api.settings.get);
   const update = useMutation(api.settings.update);
@@ -38,7 +33,7 @@ export default function BlastComposer() {
   const liveStatus = settings.announcement
     ? settings.announcementUpdatedAt === undefined
       ? "Live now"
-      : `Live now · sent ${formatTime(settings.announcementUpdatedAt)}`
+      : `Live now · sent ${formatDateTime(settings.announcementUpdatedAt)}`
     : "No active blast";
 
   async function save(announcement: string | null, successMessage: string) {

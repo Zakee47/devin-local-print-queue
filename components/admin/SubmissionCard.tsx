@@ -19,6 +19,7 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import ModelPreview from "@/components/ModelPreview";
 import { swatchFor } from "@/lib/colours";
+import { formatDateTime } from "@/lib/datetime";
 import { formatDimensions } from "@/lib/dimensions";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -36,10 +37,6 @@ export function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function formatTime(ms: number) {
-  return new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 }
 
 function PrinterSelect({
@@ -180,7 +177,16 @@ export default function SubmissionCard({
             <span className="font-mono uppercase">
               {row.kind} · {formatBytes(row.sizeBytes)}
             </span>
-            <span>Submitted {formatTime(row._creationTime)}</span>
+            <span>Submitted {formatDateTime(row._creationTime)}</span>
+            {row.queuedAt !== undefined ? <span>Queued {formatDateTime(row.queuedAt)}</span> : null}
+            {row.printingAt !== undefined ? <span>Printing {formatDateTime(row.printingAt)}</span> : null}
+            {row.doneAt !== undefined ? <span>Done {formatDateTime(row.doneAt)}</span> : null}
+            {row.rejectedAt !== undefined ? (
+              <span>
+                {row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"}{" "}
+                {formatDateTime(row.rejectedAt)}
+              </span>
+            ) : null}
           </div>
           {row.colour ? (
             row.printersWithColour.length > 0 ? (
@@ -220,7 +226,7 @@ export default function SubmissionCard({
                   ? `Replaced by participant (v${row.participantNotice.version}), needs re-approval`
                   : row.participantNotice.kind === "withdrawn"
                     ? "Withdrawn by participant: print request removed"
-                    : `Restored by owner (v${row.participantNotice.version}), needs re-approval · ${formatTime(row.participantNotice.at)}`}
+                    : `Restored by owner (v${row.participantNotice.version}), needs re-approval · ${formatDateTime(row.participantNotice.at)}`}
               </AlertDescription>
             </Alert>
           ) : null}

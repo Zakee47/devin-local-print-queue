@@ -10,7 +10,7 @@ import { api } from "@/convex/_generated/api";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
-import LiveLeaderboard from "@/components/leaderboard/LiveLeaderboard";
+import EventShowcase from "@/components/showcase/EventShowcase";
 import DevinPlaybookCard from "@/components/participant/DevinPlaybookCard";
 import HeroKeychains from "@/components/HeroKeychains";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -24,13 +24,13 @@ import { cn } from "@/lib/utils";
 import { errorMessage } from "@/lib/errors";
 
 const HERO_BUTTON =
-  "h-12 min-w-44 gap-2 px-7 text-base has-data-[icon=inline-start]:pl-6 sm:h-11 sm:min-w-0 sm:px-4.5 sm:text-[15px]";
+  "h-auto min-h-12 min-w-44 max-w-full gap-2 px-7 text-base whitespace-normal has-data-[icon=inline-start]:pl-6 sm:h-11 sm:min-h-0 sm:min-w-0 sm:max-w-none sm:px-4.5 sm:text-[15px] sm:whitespace-nowrap";
 
 export default function Home() {
   const [username, setUsername] = useState("");
   const { authReady, signedIn, canQuery } = useViewerAuth();
   const status = useQuery(api.participants.viewerStatus, canQuery ? {} : "skip");
-  const liveLeaderboard = useQuery(api.tv.leaderboard);
+  const showcase = useQuery(api.tv.showcase);
   const myStanding = useQuery(api.votes.myStanding, canQuery ? {} : "skip");
   const register = useMutation(api.participants.register);
   const usernameError = username ? validateUsername(username) : null;
@@ -39,7 +39,7 @@ export default function Home() {
     <div className="flex min-h-screen flex-col">
       <SiteHeader width="wide" showSignIn={false} />
       <main id="main-content" className="flex w-full flex-col py-16 sm:py-20">
-        <div className="mx-auto grid w-full max-w-3xl px-4 sm:px-6 lg:max-w-6xl lg:grid-cols-[minmax(0,40rem)_minmax(0,24rem)] lg:justify-start lg:gap-x-6">
+        <div className="mx-auto grid w-full max-w-3xl grid-cols-[minmax(0,1fr)] px-4 sm:px-6 lg:max-w-6xl lg:grid-cols-[minmax(0,40rem)_minmax(0,24rem)] lg:justify-start lg:gap-x-6">
           <div className="lg:col-start-1">
             <p className="eyebrow text-muted-foreground">{EVENT_NAME}</p>
             <h1 className="mt-6 font-heading text-5xl leading-[0.98] font-semibold tracking-[-0.03em] text-balance sm:text-6xl">
@@ -145,21 +145,13 @@ export default function Home() {
         </section>
       </main>
       <div className="flex-1">
-        <div className="mx-auto w-full max-w-3xl px-4 pb-16 sm:px-6">
-          {liveLeaderboard === undefined ? (
-            <Skeleton className="h-80 rounded-xl" />
+        {showcase === undefined ? (
+          <div className="mx-auto mt-12 w-full max-w-6xl px-4 pb-16 sm:px-6">
+            <Skeleton className="h-96 rounded-xl" />
+          </div>
           ) : (
-            <LiveLeaderboard
-              variant="page"
-              rows={liveLeaderboard.leaderboard}
-              totalVotes={liveLeaderboard.totalVotes}
-              totalLikes={liveLeaderboard.totalLikes}
-              mine={myStanding}
-              votingOpen={liveLeaderboard.votingOpen}
-              votingNotOpenYet={liveLeaderboard.votingNotOpenYet}
-            />
+            <EventShowcase data={showcase} mine={myStanding} />
           )}
-        </div>
       </div>
       <SiteFooter width="wide" />
     </div>

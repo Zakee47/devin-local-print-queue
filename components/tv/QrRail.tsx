@@ -2,6 +2,7 @@
 
 import { Fragment } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { EVENT_HOME } from "@/lib/event";
 import { TRY_DEVIN_URL, displayUrl, useSiteUrl } from "./links";
 
 const QR_SIZE = 216;
@@ -41,9 +42,10 @@ function QrCard({ label, hint, url }: { label: string; hint: string; url: string
 // Always-visible right-hand rail with the two scan targets.
 export default function QrRail() {
   const siteUrl = useSiteUrl();
+  const eventUrl = siteUrl ? `${siteUrl}${EVENT_HOME}` : "";
   return (
     <aside className="flex h-full flex-col justify-center gap-6 border-l border-border bg-background px-6 py-8">
-      <QrCard label="Enter, track & vote" hint="Vote on designs to win a 3D printer" url={siteUrl} />
+      <QrCard label="Enter, track & vote" hint="Vote on designs to win a 3D printer" url={eventUrl} />
       <QrCard label="Try Devin" hint="The AI software engineer" url={TRY_DEVIN_URL} />
     </aside>
   );

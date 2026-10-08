@@ -72,6 +72,24 @@ export type TvDesigns = {
   totalLikes: number;
   collage: TvCollageItem[];
 };
+export type ShowcaseDesign = {
+  printCode: string;
+  title: string;
+  displayName: string;
+  colour: string | null;
+  previewUrl: string | null;
+  rank: number | null;
+  votes: number;
+  likes: number;
+};
+export type Showcase = {
+  votingOpen: boolean;
+  votingNotOpenYet: boolean;
+  leaderboard: TvRanked[];
+  totalVotes: number;
+  totalLikes: number;
+  designs: ShowcaseDesign[];
+};
 
 export type TvBoard =
   | {
@@ -168,7 +186,8 @@ async function liveRanking(
   ctx: QueryCtx,
   entries: Doc<"submissions">[],
   reactions: Map<Id<"submissions">, ReactionCounts>,
-  nameOf: (id: Id<"participants">) => Promise<string>
+  nameOf: (id: Id<"participants">) => Promise<string>,
+  limit = LEADERBOARD_LIMIT
 ): Promise<TvLive> {
   const { tally } = await tallyVotes(ctx);
   const rows = entries.map((s) => ({
@@ -181,7 +200,7 @@ async function liveRanking(
   const totalLikes = rows.reduce((total, row) => total + row.likes, 0);
   const leaderboard = await Promise.all(
     rankRows(rows.filter((row) => row.votes > 0 || row.likes > 0))
-      .slice(0, LEADERBOARD_LIMIT)
+      .slice(0, limit)
       .map(async (row): Promise<TvRanked> => ({
         rank: row.rank,
         printCode: row.printCode,
@@ -322,6 +341,41 @@ export const leaderboard = query({
       ...(await liveRanking(ctx, entries, reactions, makeNamer(ctx))),
       votingOpen: settings.votingOpen,
       votingNotOpenYet: votingNotOpenYet(settings),
+    };
+  },
+});
+
+// Public, unauthenticated view of every current design and its live standing.
+export const showcase = query({
+  args: {},
+  handler: async (ctx): Promise<Showcase> => {
+    const { settings, nameOf, entries, reactions } = await loadTvData(ctx);
+    const live = await liveRanking(ctx, entries, reactions, nameOf, entries.length);
+    const rankedByCode = new Map(live.leaderboard.map((row) => [row.printCode, row]));
+    const designs = await Promise.all(
+      [...entries]
+        .sort((a, b) => a.printCode.localeCompare(b.printCode))
+        .map(async (submission): Promise<ShowcaseDesign> => {
+          const ranked = rankedByCode.get(submission.printCode);
+          return {
+            printCode: submission.printCode,
+            title: submission.title,
+            displayName: await nameOf(submission.participantId),
+            colour: submission.colour ?? null,
+            previewUrl: await previewUrlOf(ctx, submission),
+            rank: ranked?.rank ?? null,
+            votes: ranked?.votes ?? 0,
+            likes: ranked?.likes ?? 0,
+          };
+        })
+    );
+    return {
+      votingOpen: settings.votingOpen,
+      votingNotOpenYet: votingNotOpenYet(settings),
+      leaderboard: live.leaderboard,
+      totalVotes: live.totalVotes,
+      totalLikes: live.totalLikes,
+      designs,
     };
   },
 });

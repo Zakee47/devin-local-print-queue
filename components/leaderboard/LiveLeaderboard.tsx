@@ -17,6 +17,10 @@ export default function LiveLeaderboard({
   votingOpen,
   votingNotOpenYet,
   mine,
+  onSelect,
+  mineDisplayName,
+  scrollable = false,
+  className,
 }: {
   rows: TvRanked[];
   totalVotes: number;
@@ -25,6 +29,10 @@ export default function LiveLeaderboard({
   votingOpen?: boolean;
   votingNotOpenYet?: boolean;
   mine?: MyStanding;
+  onSelect?: (printCode: string) => void;
+  mineDisplayName?: string;
+  scrollable?: boolean;
+  className?: string;
 }) {
   const { register, changes } = useRankMotion(rows);
   const topVotes = Math.max(1, ...rows.map((row) => row.votes));
@@ -37,12 +45,13 @@ export default function LiveLeaderboard({
   return (
     <section
       aria-labelledby="leaderboard-heading"
-      className={cn("min-h-0", tv && "h-full")}
+      className={cn("min-h-0", tv && "h-full", className)}
     >
       <Card
         className={cn(
           "h-full min-h-0 gap-0 border border-border ring-0 shadow-none",
-          tv ? "rounded-2xl px-6 py-4" : "rounded-xl px-4 py-5 sm:px-6"
+          tv ? "rounded-2xl px-6 py-4" : "rounded-xl px-4 py-5 sm:px-6",
+          scrollable && "overflow-hidden max-lg:overflow-visible"
         )}
       >
         <header className={cn("flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between", tv ? "mb-3" : "mb-5")}>
@@ -91,7 +100,14 @@ export default function LiveLeaderboard({
             .
           </p>
         ) : (
-          <ol className={cn("flex min-h-0 flex-col", tv && "overflow-hidden")}>
+          <ol
+            className={cn(
+              "flex min-h-0 flex-col",
+              tv && "overflow-hidden",
+              scrollable &&
+                "flex-1 overflow-y-auto lg:overscroll-contain max-lg:flex-none max-lg:max-h-[19.5rem]"
+            )}
+          >
             {rows.map((row) => {
               const change = changes.get(row.printCode);
               const barWidth = `${(row.votes / topVotes) * 100}%`;
@@ -185,6 +201,14 @@ export default function LiveLeaderboard({
                       {row.votes === 1 ? "vote" : "votes"}
                     </span>
                   </span>
+                  {onSelect ? (
+                    <button
+                      type="button"
+                      aria-label={`View ${row.title} by ${row.displayName}`}
+                      onClick={() => onSelect(row.printCode)}
+                      className="absolute inset-0 z-20 rounded-lg transition-colors hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    />
+                  ) : null}
                 </li>
               );
             })}
@@ -229,6 +253,14 @@ export default function LiveLeaderboard({
                   {pinnedEntry.votes === 1 ? "vote" : "votes"}
                 </span>
               </span>
+              {onSelect ? (
+                <button
+                  type="button"
+                  aria-label={`View ${pinnedEntry.title} by ${mineDisplayName ?? "you"}`}
+                  onClick={() => onSelect(pinnedEntry.printCode)}
+                  className="absolute inset-0 z-20 rounded-lg transition-colors hover:bg-foreground/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                />
+              ) : null}
             </div>
           </div>
         ) : null}
