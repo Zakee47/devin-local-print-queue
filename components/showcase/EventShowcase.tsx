@@ -35,7 +35,7 @@ export default function EventShowcase({
           </h2>
         </div>
         <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-          <div className="lg:sticky lg:top-20 lg:h-[calc(100vh-6rem)] lg:max-h-[calc(100vh-6rem)]">
+          <div className="lg:h-[44rem] lg:max-h-[44rem]">
             <LiveLeaderboard
               variant="page"
               rows={data.leaderboard}
