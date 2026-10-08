@@ -972,15 +972,6 @@ html:has(.dl) {
   color: rgba(245, 246, 236, 0.8);
   font-size: 18px;
 }
-.dl-closing .copy::before {
-  content: "";
-  position: absolute;
-  inset: -12px -16px;
-  z-index: -1;
-  background: var(--ink);
-  filter: blur(12px);
-  pointer-events: none;
-}
 .dl-ph {
   position: absolute;
   width: var(--w, 240px);
@@ -1243,7 +1234,8 @@ html:has(.dl) {
     --w: 140px !important;
   }
   .dl-closing .center::before {
-    display: none;
+    width: 420px;
+    height: 460px;
   }
   .dl-closing .copy {
     max-width: calc(100% - 32px);
