@@ -921,6 +921,7 @@ html:has(.dl) {
   background: var(--ink);
   color: var(--cream);
   overflow: clip;
+  container-type: inline-size;
 }
 .dl-closing .center {
   position: sticky;
@@ -935,9 +936,15 @@ html:has(.dl) {
   z-index: 2;
   pointer-events: none;
 }
-.dl-closing .center > * {
-  pointer-events: auto;
+.dl-closing .copy {
   position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: fit-content;
+  text-align: center;
+  pointer-events: auto;
 }
 .dl-closing .center::before {
   content: "";
@@ -966,24 +973,16 @@ html:has(.dl) {
 }
 .dl-closing .track {
   position: relative;
-  display: grid;
-  column-gap: 1vw;
-  min-height: 2300px;
-  margin: -100vh -3vw 0;
-}
-.dl-closing .lane {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-width: 0;
-  will-change: transform;
+  width: 100%;
+  margin: -100vh 0 0;
 }
 .dl-ph {
-  flex: 0 0 auto;
+  position: absolute;
   aspect-ratio: 3 / 2;
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  will-change: transform;
   opacity: 0.92;
   background: #1a1a16;
 }
@@ -1231,13 +1230,21 @@ html:has(.dl) {
     grid-template-columns: minmax(0, 1fr);
     gap: 28px;
   }
-  .dl-closing .track {
-    min-height: 2600px;
-    column-gap: 2vw;
-  }
   .dl-closing .center::before {
-    width: 420px;
-    height: 460px;
+    display: none;
+  }
+  .dl-closing .copy {
+    max-width: calc(100% - 32px);
+    isolation: isolate;
+  }
+  .dl-closing .copy::before {
+    content: "";
+    position: absolute;
+    inset: -12px -16px;
+    z-index: -1;
+    background: var(--ink);
+    filter: blur(12px);
+    pointer-events: none;
   }
   .dl-footer .dl-wrap {
     grid-template-columns: minmax(0, 1fr);
@@ -1263,7 +1270,7 @@ html:has(.dl) {
 .dl.static .dl-hero video,
 .dl.static .dl-otter img,
 .dl.static .dl-nav,
-.dl.static .dl-closing .lane {
+.dl.static .dl-closing .dl-ph {
   animation: none !important;
   transform: none !important;
 }
@@ -1280,7 +1287,7 @@ html:has(.dl) {
   .dl-hero video,
   .dl-otter img,
   .dl-nav,
-  .dl-closing .lane {
+  .dl-closing .dl-ph {
     animation: none !important;
     transform: none !important;
   }

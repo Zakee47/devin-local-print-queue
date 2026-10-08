@@ -2,16 +2,16 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { LANES_DESKTOP, LANES_MOBILE, type Lane } from "./data";
+import { SCATTER_DESKTOP, SCATTER_MOBILE, type Scatter } from "./data";
 
 // Reduced motion and `?static` keep the closing photos still.
 export default function Collage() {
   const section = useRef<HTMLElement>(null);
-  const [lanes, setLanes] = useState<Lane[]>(LANES_DESKTOP);
+  const [track, setTrack] = useState<Scatter[]>(SCATTER_DESKTOP);
 
   useEffect(() => {
     const mq = matchMedia("(max-width: 900px)");
-    const apply = () => setLanes(mq.matches ? LANES_MOBILE : LANES_DESKTOP);
+    const apply = () => setTrack(mq.matches ? SCATTER_MOBILE : SCATTER_DESKTOP);
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
@@ -19,14 +19,16 @@ export default function Collage() {
 
   useEffect(() => {
     const sec = section.current;
-    if (!sec) return;
+    const trackElement = sec?.querySelector<HTMLElement>(".track");
+    if (!sec || !trackElement) return;
     const still =
       new URLSearchParams(location.search).has("static") ||
       matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (still) return;
     let raf = 0;
     let listening = false;
-    const laneElements = Array.from(sec.querySelectorAll<HTMLElement>(".lane"));
+    let trackWidth = trackElement.getBoundingClientRect().width;
+    const photoElements = Array.from(sec.querySelectorAll<HTMLElement>(".dl-ph"));
     const tick = () => {
       raf = 0;
       const rect = sec.getBoundingClientRect();
@@ -34,27 +36,31 @@ export default function Collage() {
         0,
         Math.min(1, (innerHeight - rect.top) / (rect.height + innerHeight)),
       );
-      laneElements.forEach((lane) => {
-        const range = Number(lane.dataset.range);
-        const offset = range * (1 - 2 * progress);
-        lane.style.transform = `translate3d(0, ${offset.toFixed(1)}px, 0)`;
+      photoElements.forEach((photo) => {
+        const range = Number(photo.dataset.range);
+        const offset = range * (1 - 2 * progress) * (trackWidth / 100);
+        photo.style.transform = `translate3d(0, ${offset.toFixed(2)}px, 0)`;
       });
     };
     const onScroll = () => {
       if (!raf) raf = requestAnimationFrame(tick);
     };
+    const onResize = () => {
+      trackWidth = trackElement.getBoundingClientRect().width;
+      onScroll();
+    };
     const attach = () => {
       if (listening) return;
       listening = true;
       addEventListener("scroll", onScroll, { passive: true });
-      addEventListener("resize", onScroll);
+      addEventListener("resize", onResize);
       onScroll();
     };
     const detach = () => {
       if (!listening) return;
       listening = false;
       removeEventListener("scroll", onScroll);
-      removeEventListener("resize", onScroll);
+      removeEventListener("resize", onResize);
       if (raf) {
         cancelAnimationFrame(raf);
         raf = 0;
@@ -69,65 +75,61 @@ export default function Collage() {
       observer.disconnect();
       detach();
     };
-  }, [lanes]);
+  }, [track]);
+
+  const mobile = track === SCATTER_MOBILE;
+  const bottomPadding = mobile ? 8.33333 : 5.52047;
+  const trackHeight =
+    Math.max(...track.map((photo) => photo.y + (photo.w * 2) / 3)) + bottomPadding;
 
   return (
     <section className="dl-closing dl-dark" id="closing" data-tone="dark" ref={section}>
       <div className="center">
-        <h2 data-reveal>
-          See you at
-          <br />
-          the next one
-        </h2>
-        <p className="sub" data-reveal style={{ ["--d" as string]: "0.1s" }}>
-          Bigger, better, and closer than ever. Next stop: Devin Local near you.
-        </p>
-        <a
-          className="dl-btn dl-btn-y"
-          href="https://luma.com/Cognition-london"
-          data-reveal
-          style={{ ["--d" as string]: "0.2s" }}
-        >
-          Join our next event
-        </a>
+        <div className="copy">
+          <h2 data-reveal>
+            See you at
+            <br />
+            the next one
+          </h2>
+          <p className="sub" data-reveal style={{ ["--d" as string]: "0.1s" }}>
+            Bigger, better, and closer than ever. Next stop: Devin Local near you.
+          </p>
+          <a
+            className="dl-btn dl-btn-y"
+            href="https://luma.com/Cognition-london"
+            data-reveal
+            style={{ ["--d" as string]: "0.2s" }}
+          >
+            Join our next event
+          </a>
+        </div>
       </div>
       <div
         className="track"
         aria-hidden="true"
-        style={{ gridTemplateColumns: `repeat(${lanes.length}, minmax(0, 1fr))` }}
+        style={{ height: `${trackHeight}cqw` }}
       >
-        {lanes.map((lane, laneIndex) => (
+        {track.map((photo, index) => (
           <div
-            key={laneIndex}
-            className="lane"
-            data-range={lane.range}
-            style={{ paddingTop: `${lane.pad}vh`, gap: `${lane.gap}vh` }}
+            key={photo.id}
+            className={`dl-ph${index % 7 === 3 ? " brown" : ""}`}
+            data-range={photo.range}
+            style={{
+              left: `${photo.x}%`,
+              top: `${photo.y}cqw`,
+              width: `${photo.w}cqw`,
+            }}
           >
-            {lane.photos.map((photo, photoIndex) => {
-              const globalIndex =
-                lanes
-                  .slice(0, laneIndex)
-                  .reduce((count, previousLane) => count + previousLane.photos.length, 0) +
-                photoIndex;
-              return (
-                <div
-                  key={photo.id}
-                  className={`dl-ph${globalIndex % 7 === 3 ? " brown" : ""}`}
-                  style={{ width: `${photo.scale}%`, alignSelf: photo.align }}
-                >
-                  <Image
-                    src={`/landing/collage/${photo.id}-600.webp`}
-                    alt=""
-                    width={600}
-                    height={337}
-                    sizes="(max-width: 900px) 130px, 220px"
-                    loading="lazy"
-                    fetchPriority="low"
-                    unoptimized
-                  />
-                </div>
-              );
-            })}
+            <Image
+              src={`/landing/collage/${photo.id}-600.webp`}
+              alt=""
+              width={600}
+              height={400}
+              sizes="(max-width: 900px) 150px, 260px"
+              loading="lazy"
+              fetchPriority="low"
+              unoptimized
+            />
           </div>
         ))}
       </div>

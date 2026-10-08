@@ -5,8 +5,9 @@ import {
   ABOUT_PHOTOS,
   COLLAGE,
   LONDON_EVENT_HREF,
-  LANES_DESKTOP,
-  LANES_MOBILE,
+  COPY_COLUMN_DESKTOP,
+  SCATTER_DESKTOP,
+  SCATTER_MOBILE,
   NAV_ITEMS,
 } from "@/components/landing/data";
 import { SOCIAL_POSTS } from "@/components/landing/social-posts";
@@ -15,26 +16,48 @@ import { EVENT_HOME } from "@/lib/event";
 const pub = (p: string) => join(process.cwd(), "public", p);
 
 describe("landing page data", () => {
-  it("ships every collage photo and assigns each desktop photo to one lane", () => {
+  it("ships every collage photo and places all desktop photos once", () => {
     expect(COLLAGE).toHaveLength(35);
-    expect(LANES_DESKTOP).toHaveLength(7);
-    expect(LANES_MOBILE).toHaveLength(3);
-    const desktopIds = LANES_DESKTOP.flatMap((lane) => lane.photos.map((photo) => photo.id));
-    const mobileIds = LANES_MOBILE.flatMap((lane) => lane.photos.map((photo) => photo.id));
+    const desktopIds = SCATTER_DESKTOP.map((photo) => photo.id);
+    const mobileIds = SCATTER_MOBILE.map((photo) => photo.id);
     expect(desktopIds).toHaveLength(COLLAGE.length);
     expect(new Set(desktopIds).size).toBe(COLLAGE.length);
     expect([...desktopIds].sort()).toEqual([...COLLAGE].sort());
     expect(mobileIds).toHaveLength(18);
     expect(new Set(mobileIds).size).toBe(mobileIds.length);
     expect(mobileIds.every((id) => COLLAGE.slice(0, 18).includes(id))).toBe(true);
-    for (const lane of [...LANES_DESKTOP, ...LANES_MOBILE]) {
-      expect(lane.photos.length).toBeGreaterThan(0);
-      for (const photo of lane.photos) {
-        expect(photo.scale).toBeGreaterThanOrEqual(50);
-        expect(photo.scale).toBeLessThanOrEqual(100);
-      }
+    for (const photo of SCATTER_DESKTOP) {
+      expect(photo.w).toBeGreaterThanOrEqual(8);
+      expect(photo.w).toBeLessThanOrEqual(40);
+      expect(photo.x + photo.w <= COPY_COLUMN_DESKTOP.left || photo.x >= COPY_COLUMN_DESKTOP.right).toBe(true);
+    }
+    for (const photo of SCATTER_MOBILE) {
+      expect(photo.w).toBeGreaterThanOrEqual(25);
+      expect(photo.w).toBeLessThanOrEqual(60);
+      expect(photo.x).toBeGreaterThanOrEqual(0);
+      expect(photo.x + photo.w).toBeLessThanOrEqual(100);
     }
     for (const id of COLLAGE) expect(existsSync(pub(`landing/collage/${id}-600.webp`))).toBe(true);
+  });
+
+  it("keeps desktop and mobile scatter photos from overlapping through the full motion", () => {
+    for (const photos of [SCATTER_DESKTOP, SCATTER_MOBILE]) {
+      for (let i = 0; i < photos.length; i += 1) {
+        for (let j = i + 1; j < photos.length; j += 1) {
+          const a = photos[i];
+          const b = photos[j];
+          if (a.x >= b.x + b.w || b.x >= a.x + a.w) continue;
+          for (let step = 0; step <= 100; step += 1) {
+            const progress = step / 100;
+            const aTop = a.y + a.range * (1 - 2 * progress);
+            const bTop = b.y + b.range * (1 - 2 * progress);
+            const aBottom = aTop + (a.w * 2) / 3;
+            const bBottom = bTop + (b.w * 2) / 3;
+            expect(aTop < bBottom && aBottom > bTop, `${a.id} overlaps ${b.id} at ${progress}`).toBe(false);
+          }
+        }
+      }
+    }
   });
 
   it("ships both sizes of the four about photos", () => {
