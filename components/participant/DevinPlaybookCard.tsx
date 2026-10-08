@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import Image from "next/image";
 import { Copy, Download, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -109,14 +108,10 @@ export default function DevinPlaybookCard({
               />
             }
           >
-            <Image
-              src="/devin-white.png"
-              alt=""
+            <span
               aria-hidden
-              width={16}
-              height={16}
               data-icon="inline-start"
-              className="size-4"
+              className="inline-block size-4 shrink-0 bg-current [mask-image:url(/devin-logo.png)] [mask-position:center] [mask-repeat:no-repeat] [mask-size:contain]"
             />
             Start in Devin
             <ExternalLink data-icon="inline-end" />
