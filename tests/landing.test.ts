@@ -5,9 +5,9 @@ import {
   ABOUT_PHOTOS,
   COLLAGE,
   LONDON_EVENT_HREF,
+  LANES_DESKTOP,
+  LANES_MOBILE,
   NAV_ITEMS,
-  SLOTS_DESKTOP,
-  SLOTS_MOBILE,
 } from "@/components/landing/data";
 import { SOCIAL_POSTS } from "@/components/landing/social-posts";
 import { EVENT_HOME } from "@/lib/event";
@@ -15,10 +15,25 @@ import { EVENT_HOME } from "@/lib/event";
 const pub = (p: string) => join(process.cwd(), "public", p);
 
 describe("landing page data", () => {
-  it("ships every collage photo and fills every desktop slot", () => {
+  it("ships every collage photo and assigns each desktop photo to one lane", () => {
     expect(COLLAGE).toHaveLength(35);
-    expect(SLOTS_DESKTOP).toHaveLength(COLLAGE.length);
-    expect(SLOTS_MOBILE.length).toBeLessThanOrEqual(COLLAGE.length);
+    expect(LANES_DESKTOP).toHaveLength(7);
+    expect(LANES_MOBILE).toHaveLength(3);
+    const desktopIds = LANES_DESKTOP.flatMap((lane) => lane.photos.map((photo) => photo.id));
+    const mobileIds = LANES_MOBILE.flatMap((lane) => lane.photos.map((photo) => photo.id));
+    expect(desktopIds).toHaveLength(COLLAGE.length);
+    expect(new Set(desktopIds).size).toBe(COLLAGE.length);
+    expect([...desktopIds].sort()).toEqual([...COLLAGE].sort());
+    expect(mobileIds).toHaveLength(18);
+    expect(new Set(mobileIds).size).toBe(mobileIds.length);
+    expect(mobileIds.every((id) => COLLAGE.slice(0, 18).includes(id))).toBe(true);
+    for (const lane of [...LANES_DESKTOP, ...LANES_MOBILE]) {
+      expect(lane.photos.length).toBeGreaterThan(0);
+      for (const photo of lane.photos) {
+        expect(photo.scale).toBeGreaterThanOrEqual(50);
+        expect(photo.scale).toBeLessThanOrEqual(100);
+      }
+    }
     for (const id of COLLAGE) expect(existsSync(pub(`landing/collage/${id}-600.webp`))).toBe(true);
   });
 

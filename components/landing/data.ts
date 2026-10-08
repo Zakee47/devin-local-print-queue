@@ -62,20 +62,140 @@ export const COLLAGE = [
   "DSC03572", "DSC03651", "DSC03691", "DSC03696", "DSC03766", "DSC03771", "DSC03811",
 ];
 
-// Collage slots: [left %, top %, scroll speed, width px]. Hand-tuned so the
-// centre stays readable and the bottom row fills the section.
-export type Slot = [number, number, number, number];
-export const SLOTS_DESKTOP: Slot[] = [
-  [-3, 2, 0.27, 240], [14, 2, 0.27, 200], [29, 2, 0.18, 260], [52, -1, 0.1, 220], [65, -2, 0.2, 180], [86, 1, 0.29, 260],
-  [4, 13, 0.22, 260], [16, 12, 0.09, 200], [73, 12, 0.25, 220],
-  [-5, 28, 0.19, 180], [14, 28, 0.17, 260], [70, 26, 0.24, 220], [88, 27, 0.19, 180],
-  [-1, 44, 0.25, 240], [16, 42, 0.17, 180], [39, 40, 0.13, 180], [54, 43, 0.3, 240], [72, 40, 0.2, 200], [93, 42, 0.15, 220],
-  [12, 55, 0.24, 180], [28, 57, 0.26, 200], [51, 58, 0.12, 260], [65, 55, 0.17, 240], [82, 57, 0.17, 200],
-  [-1, 70, 0.27, 260], [18, 68, 0.13, 240], [39, 72, 0.22, 180], [51, 69, 0.13, 220], [90, 68, 0.1, 200],
-  [-2, 83, 0.08, 220], [13, 86, 0.18, 260], [31, 86, 0.11, 240], [47, 83, 0.15, 200], [70, 86, 0.13, 200], [83, 86, 0.12, 240],
+// One lane = one grid column of the closing track. Photos in a lane are stacked
+// in normal flow, so they never overlap. The lane moves as one unit by ±range px.
+export type Lane = {
+  pad: number;
+  gap: number;
+  range: number;
+  photos: { id: string; scale: number; align: "start" | "center" | "end" }[];
+};
+
+export const LANES_DESKTOP: Lane[] = [
+  {
+    pad: 3,
+    gap: 20,
+    range: 145,
+    photos: [
+      { id: "DSC03244", scale: 88, align: "start" },
+      { id: "DSC03253", scale: 100, align: "center" },
+      { id: "DSC03263", scale: 82, align: "end" },
+      { id: "DSC03267", scale: 94, align: "start" },
+      { id: "DSC03269", scale: 86, align: "center" },
+    ],
+  },
+  {
+    pad: 13,
+    gap: 24,
+    range: 115,
+    photos: [
+      { id: "DSC03277", scale: 78, align: "end" },
+      { id: "DSC03297", scale: 92, align: "start" },
+      { id: "DSC03298", scale: 82, align: "center" },
+      { id: "DSC03308", scale: 96, align: "end" },
+      { id: "DSC03311", scale: 80, align: "start" },
+    ],
+  },
+  {
+    pad: 25,
+    gap: 27,
+    range: 70,
+    photos: [
+      { id: "DSC03334", scale: 64, align: "center" },
+      { id: "DSC03343", scale: 72, align: "end" },
+      { id: "DSC03345", scale: 58, align: "start" },
+      { id: "DSC03352", scale: 68, align: "center" },
+      { id: "DSC03355", scale: 62, align: "end" },
+    ],
+  },
+  {
+    pad: 34,
+    gap: 29,
+    range: 50,
+    photos: [
+      { id: "DSC03368", scale: 56, align: "start" },
+      { id: "DSC03369", scale: 64, align: "center" },
+      { id: "DSC03392", scale: 58, align: "end" },
+      { id: "DSC03402", scale: 62, align: "start" },
+      { id: "DSC03409", scale: 54, align: "center" },
+    ],
+  },
+  {
+    pad: 30,
+    gap: 28,
+    range: 60,
+    photos: [
+      { id: "DSC03412", scale: 60, align: "end" },
+      { id: "DSC03432", scale: 68, align: "center" },
+      { id: "DSC03446", scale: 56, align: "start" },
+      { id: "DSC03465", scale: 64, align: "end" },
+      { id: "DSC03476", scale: 58, align: "center" },
+    ],
+  },
+  {
+    pad: 16,
+    gap: 23,
+    range: 120,
+    photos: [
+      { id: "DSC03487", scale: 84, align: "start" },
+      { id: "DSC03488", scale: 76, align: "end" },
+      { id: "DSC03527", scale: 96, align: "center" },
+      { id: "DSC03572", scale: 82, align: "start" },
+      { id: "DSC03651", scale: 90, align: "end" },
+    ],
+  },
+  {
+    pad: 6,
+    gap: 19,
+    range: 155,
+    photos: [
+      { id: "DSC03691", scale: 92, align: "center" },
+      { id: "DSC03696", scale: 84, align: "start" },
+      { id: "DSC03766", scale: 100, align: "end" },
+      { id: "DSC03771", scale: 78, align: "center" },
+      { id: "DSC03811", scale: 94, align: "start" },
+    ],
+  },
 ];
-export const SLOTS_MOBILE: Slot[] = [
-  [-6, 1, 0.19, 130], [60, 2, 0.22, 130], [2, 11, 0.21, 150], [66, 11, 0.29, 150], [-6, 22, 0.11, 130], [60, 25, 0.13, 140],
-  [2, 35, 0.22, 140], [66, 33, 0.12, 140], [-6, 47, 0.2, 140], [60, 44, 0.13, 150], [2, 57, 0.25, 140], [66, 56, 0.2, 130],
-  [-6, 68, 0.13, 150], [60, 66, 0.25, 140], [2, 77, 0.24, 140], [66, 79, 0.28, 140], [-6, 89, 0.21, 150], [60, 90, 0.23, 150],
+
+export const LANES_MOBILE: Lane[] = [
+  {
+    pad: 4,
+    gap: 23,
+    range: 115,
+    photos: [
+      { id: "DSC03244", scale: 94, align: "start" },
+      { id: "DSC03253", scale: 100, align: "center" },
+      { id: "DSC03263", scale: 84, align: "end" },
+      { id: "DSC03267", scale: 96, align: "start" },
+      { id: "DSC03269", scale: 88, align: "center" },
+      { id: "DSC03277", scale: 100, align: "end" },
+    ],
+  },
+  {
+    pad: 30,
+    gap: 29,
+    range: 45,
+    photos: [
+      { id: "DSC03297", scale: 58, align: "center" },
+      { id: "DSC03298", scale: 64, align: "end" },
+      { id: "DSC03308", scale: 52, align: "start" },
+      { id: "DSC03311", scale: 62, align: "center" },
+      { id: "DSC03334", scale: 56, align: "end" },
+      { id: "DSC03343", scale: 60, align: "start" },
+    ],
+  },
+  {
+    pad: 15,
+    gap: 24,
+    range: 110,
+    photos: [
+      { id: "DSC03345", scale: 92, align: "end" },
+      { id: "DSC03352", scale: 82, align: "center" },
+      { id: "DSC03355", scale: 100, align: "start" },
+      { id: "DSC03368", scale: 86, align: "end" },
+      { id: "DSC03369", scale: 96, align: "center" },
+      { id: "DSC03392", scale: 88, align: "start" },
+    ],
+  },
 ];

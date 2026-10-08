@@ -2,18 +2,16 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { COLLAGE, SLOTS_DESKTOP, SLOTS_MOBILE, type Slot } from "./data";
+import { LANES_DESKTOP, LANES_MOBILE, type Lane } from "./data";
 
-// Closing section: 35 event photos scattered over a tall dark area. Each
-// photo drifts at its own speed as you scroll past (the centre copy is
-// sticky), which reads as depth. Reduced motion / `?static` disables the drift.
+// Reduced motion and `?static` keep the closing photos still.
 export default function Collage() {
   const section = useRef<HTMLElement>(null);
-  const [slots, setSlots] = useState<Slot[]>(SLOTS_DESKTOP);
+  const [lanes, setLanes] = useState<Lane[]>(LANES_DESKTOP);
 
   useEffect(() => {
     const mq = matchMedia("(max-width: 900px)");
-    const apply = () => setSlots(mq.matches ? SLOTS_MOBILE : SLOTS_DESKTOP);
+    const apply = () => setLanes(mq.matches ? LANES_MOBILE : LANES_DESKTOP);
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
@@ -27,26 +25,51 @@ export default function Collage() {
       matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (still) return;
     let raf = 0;
+    let listening = false;
+    const laneElements = Array.from(sec.querySelectorAll<HTMLElement>(".lane"));
     const tick = () => {
       raf = 0;
-      const progress = -sec.getBoundingClientRect().top;
-      sec.querySelectorAll<HTMLElement>(".dl-ph").forEach((el) => {
-        const speed = Number(el.dataset.speed);
-        el.style.transform = `translateY(${(-progress * speed).toFixed(1)}px)`;
+      const rect = sec.getBoundingClientRect();
+      const progress = Math.max(
+        0,
+        Math.min(1, (innerHeight - rect.top) / (rect.height + innerHeight)),
+      );
+      laneElements.forEach((lane) => {
+        const range = Number(lane.dataset.range);
+        const offset = range * (1 - 2 * progress);
+        lane.style.transform = `translate3d(0, ${offset.toFixed(1)}px, 0)`;
       });
     };
     const onScroll = () => {
       if (!raf) raf = requestAnimationFrame(tick);
     };
-    tick();
-    addEventListener("scroll", onScroll, { passive: true });
-    addEventListener("resize", onScroll);
-    return () => {
+    const attach = () => {
+      if (listening) return;
+      listening = true;
+      addEventListener("scroll", onScroll, { passive: true });
+      addEventListener("resize", onScroll);
+      onScroll();
+    };
+    const detach = () => {
+      if (!listening) return;
+      listening = false;
       removeEventListener("scroll", onScroll);
       removeEventListener("resize", onScroll);
-      if (raf) cancelAnimationFrame(raf);
+      if (raf) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      }
     };
-  }, [slots]);
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) attach();
+      else detach();
+    });
+    observer.observe(sec);
+    return () => {
+      observer.disconnect();
+      detach();
+    };
+  }, [lanes]);
 
   return (
     <section className="dl-closing dl-dark" id="closing" data-tone="dark" ref={section}>
@@ -68,27 +91,46 @@ export default function Collage() {
           Join our next event
         </a>
       </div>
-      {slots.map((s, i) => {
-        const photo = COLLAGE[i % COLLAGE.length];
-        return (
+      <div
+        className="track"
+        aria-hidden="true"
+        style={{ gridTemplateColumns: `repeat(${lanes.length}, minmax(0, 1fr))` }}
+      >
+        {lanes.map((lane, laneIndex) => (
           <div
-            key={`${photo}-${i}`}
-            className={`dl-ph${i % 7 === 3 ? " brown" : ""}`}
-            style={{ left: `${s[0]}%`, top: `${s[1]}%`, ["--w" as string]: `${s[3]}px` }}
-            data-speed={s[2]}
+            key={laneIndex}
+            className="lane"
+            data-range={lane.range}
+            style={{ paddingTop: `${lane.pad}vh`, gap: `${lane.gap}vh` }}
           >
-            <Image
-              src={`/landing/collage/${photo}-600.webp`}
-              alt=""
-              width={600}
-              height={337}
-              sizes="(max-width: 900px) 140px, 260px"
-              loading="lazy"
-              unoptimized
-            />
+            {lane.photos.map((photo, photoIndex) => {
+              const globalIndex =
+                lanes
+                  .slice(0, laneIndex)
+                  .reduce((count, previousLane) => count + previousLane.photos.length, 0) +
+                photoIndex;
+              return (
+                <div
+                  key={photo.id}
+                  className={`dl-ph${globalIndex % 7 === 3 ? " brown" : ""}`}
+                  style={{ width: `${photo.scale}%`, alignSelf: photo.align }}
+                >
+                  <Image
+                    src={`/landing/collage/${photo.id}-600.webp`}
+                    alt=""
+                    width={600}
+                    height={337}
+                    sizes="(max-width: 900px) 130px, 220px"
+                    loading="lazy"
+                    fetchPriority="low"
+                    unoptimized
+                  />
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+        ))}
+      </div>
       <div className="fade" />
     </section>
   );
