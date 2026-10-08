@@ -915,13 +915,13 @@ html:has(.dl) {
   text-underline-offset: 3px;
 }
 
-/* closing collage: each lane moves as a unit behind the pinned copy */
+/* closing collage: photos drift at different speeds behind the pinned copy */
 .dl-closing {
   position: relative;
   background: var(--ink);
   color: var(--cream);
+  min-height: 1800px;
   overflow: clip;
-  container-type: inline-size;
 }
 .dl-closing .center {
   position: sticky;
@@ -939,6 +939,7 @@ html:has(.dl) {
 .dl-closing .copy {
   position: relative;
   z-index: 1;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -971,13 +972,18 @@ html:has(.dl) {
   color: rgba(245, 246, 236, 0.8);
   font-size: 18px;
 }
-.dl-closing .track {
-  position: relative;
-  width: 100%;
-  margin: -100vh 0 0;
+.dl-closing .copy::before {
+  content: "";
+  position: absolute;
+  inset: -12px -16px;
+  z-index: -1;
+  background: var(--ink);
+  filter: blur(12px);
+  pointer-events: none;
 }
 .dl-ph {
   position: absolute;
+  width: var(--w, 240px);
   aspect-ratio: 3 / 2;
   border-radius: 10px;
   overflow: hidden;
@@ -1230,21 +1236,17 @@ html:has(.dl) {
     grid-template-columns: minmax(0, 1fr);
     gap: 28px;
   }
+  .dl-closing {
+    min-height: 1300px;
+  }
+  .dl-ph {
+    --w: 140px !important;
+  }
   .dl-closing .center::before {
     display: none;
   }
   .dl-closing .copy {
     max-width: calc(100% - 32px);
-    isolation: isolate;
-  }
-  .dl-closing .copy::before {
-    content: "";
-    position: absolute;
-    inset: -12px -16px;
-    z-index: -1;
-    background: var(--ink);
-    filter: blur(12px);
-    pointer-events: none;
   }
   .dl-footer .dl-wrap {
     grid-template-columns: minmax(0, 1fr);
