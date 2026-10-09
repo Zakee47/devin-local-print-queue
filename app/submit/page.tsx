@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, LogIn } from "lucide-react";
-import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { MyStanding } from "@/convex/votes";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
+import EventSignInButton from "@/components/EventSignInButton";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import DevinPlaybookCard from "@/components/participant/DevinPlaybookCard";
@@ -192,12 +192,12 @@ export default function SubmitPage() {
                   <CardDescription>Use the email you registered with on Luma.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <SignInButton mode="modal">
+                  <EventSignInButton>
                     <Button variant="brand" size="lg" className="w-full">
                       <LogIn data-icon="inline-start" />
                       Sign in
                     </Button>
-                  </SignInButton>
+                  </EventSignInButton>
                 </CardContent>
               </Card>
             ) : submissions === undefined || settings === undefined ? (

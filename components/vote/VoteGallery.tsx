@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Heart, Info, LayoutGrid, Layers, Lock, LogIn, RotateCcw, ShieldAlert, Trophy, Undo2, X } from "lucide-react";
-import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { DroppedVote, GalleryEntry, MyStanding } from "@/convex/votes";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
+import EventSignInButton from "@/components/EventSignInButton";
 import { EVENT_HOME, MAX_VOTES_PER_PARTICIPANT, votingNotOpenYet, type Reaction } from "@/lib/event";
 import { DECK_FILTERS, filterCounts, matchesFilter, type DeckFilter } from "@/lib/deck";
 import VoteButton, { type VoteButtonState } from "@/components/vote/VoteButton";
@@ -292,12 +292,12 @@ export default function VoteGallery() {
           <Skeleton className="h-16 max-w-xl rounded-xl" />
         ) : !signedIn ? (
           <div className="flex flex-wrap items-center gap-3">
-            <SignInButton mode="modal">
+            <EventSignInButton>
               <Button variant="brand">
                 <LogIn data-icon="inline-start" />
                 Sign in to vote
               </Button>
-            </SignInButton>
+            </EventSignInButton>
             <span className="text-sm text-muted-dim">Anyone can browse. Every registered guest can vote.</span>
           </div>
         ) : !ballot ? (

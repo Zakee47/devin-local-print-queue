@@ -1,9 +1,9 @@
 "use client";
 
 import { ArrowLeftRight, Check, Clock, Lock, LogIn, Vote } from "lucide-react";
-import { SignInButton } from "@clerk/nextjs";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { GalleryEntry } from "@/convex/votes";
+import EventSignInButton from "@/components/EventSignInButton";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -45,12 +45,12 @@ export default function VoteButton({
   switch (state.kind) {
     case "signed_out":
       return (
-        <SignInButton mode="modal">
+        <EventSignInButton>
           <Button variant="outline" size="lg" className={base}>
             <LogIn data-icon="inline-start" />
             Sign in to vote
           </Button>
-        </SignInButton>
+        </EventSignInButton>
       );
     case "unregistered":
       return null;

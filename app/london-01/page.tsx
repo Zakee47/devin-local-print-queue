@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowRight, Printer, ShieldAlert } from "lucide-react";
-import { SignInButton } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
+import EventSignInButton from "@/components/EventSignInButton";
 import LumaMark from "@/components/LumaMark";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
@@ -59,12 +59,12 @@ export default function Home() {
                 <Skeleton className="h-12 w-44 rounded-md" />
               ) : !signedIn ? (
                 <div>
-                  <SignInButton mode="modal">
+                  <EventSignInButton>
                     <Button variant="brand" size="lg" className={HERO_BUTTON}>
                       <LumaMark data-icon="inline-start" />
                       Sign in with your Luma email
                     </Button>
-                  </SignInButton>
+                  </EventSignInButton>
                   <p className="mt-3 text-xs text-muted-dim">
                     Use the email you registered with on{" "}
                     <a href={EVENT_URL} className="underline" target="_blank" rel="noreferrer">
