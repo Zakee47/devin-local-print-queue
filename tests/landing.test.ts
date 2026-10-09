@@ -81,7 +81,7 @@ describe("landing page data", () => {
     }
   });
 
-  it("points 'See the event' at the event app route", () => {
+  it("points 'Enter the event' at the event app route", () => {
     expect(LONDON_EVENT_HREF).toBe(EVENT_HOME);
     expect(existsSync(join(process.cwd(), "app", EVENT_HOME.slice(1), "page.tsx"))).toBe(true);
     for (const item of NAV_ITEMS) expect(item.href).toMatch(/^#/);
