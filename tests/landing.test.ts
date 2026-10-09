@@ -17,7 +17,7 @@ const pub = (p: string) => join(process.cwd(), "public", p);
 
 describe("landing page data", () => {
   it("ships every collage photo and has unique desktop and mobile slots", () => {
-    expect(COLLAGE).toHaveLength(35);
+    expect(COLLAGE).toHaveLength(36);
     expect(new Set(COLLAGE).size).toBe(COLLAGE.length);
     expect(SLOTS_DESKTOP).toHaveLength(COLLAGE.length);
     expect(SLOTS_MOBILE).toHaveLength(18);
