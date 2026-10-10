@@ -33,7 +33,7 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -214,7 +214,7 @@ export default function SubmissionCard({
           {variant !== "ticket" ? <p className="text-sm text-muted-foreground">{row.participantName}</p> : null}
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {row.colour ? <span className="inline-flex items-center gap-1"><i className="size-3 rounded-full border border-black/10" style={{ backgroundColor: swatch(row.colour) }} />{row.colour}</span> : null}
-            {variant !== "ticket" && row.dimensionsMm ? <span>{formatDimensions(row.dimensionsMm)} mm</span> : null}
+            {variant !== "ticket" && row.dimensionsMm ? <span>{formatDimensions(row.dimensionsMm)}</span> : null}
             {variant !== "ticket" && row.printer ? <span className={printerPaused ? "text-amber-700 dark:text-amber-300" : ""}>{row.printer}{printerPaused ? " · paused" : ""}</span> : null}
             {variant !== "ticket" ? <span>{row.kind.toUpperCase()} · {formatBytes(row.sizeBytes)}</span> : null}
             {variant !== "ticket" && row.status === "queued" ? <span>queued {timeAgo(row.queuedAt ?? row._creationTime, now)}</span> : null}
@@ -283,11 +283,13 @@ export default function SubmissionCard({
               {(row.status === "submitted" && !approvedForVoting && !withdrawn) || row.status === "queued" || (row.designEntry && !row.designRemoved) ? (
                 <>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel>DANGER ZONE</DropdownMenuLabel>
-                  {(row.status === "submitted" && !approvedForVoting && !withdrawn) || row.status === "queued" ? <DropdownMenuItem variant="destructive" className="flex-wrap" onClick={() => { setRejectKind("review"); setRejecting(true); }}>
-                    <X />Reject… <span className="basis-full pl-6 text-xs text-muted-foreground">Participant sees your comment and can upload a fix.</span>
-                  </DropdownMenuItem> : null}
-                  {row.designEntry && !row.designRemoved ? <DropdownMenuItem variant="destructive" className="flex-wrap" onClick={() => setRemoveOpen(true)}><Trophy />Remove from competition… <span className="basis-full pl-6 text-xs text-muted-foreground">Pulls it from voting, leaderboard and TV. Printing is unaffected.</span></DropdownMenuItem> : null}
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>DANGER ZONE</DropdownMenuLabel>
+                    {(row.status === "submitted" && !approvedForVoting && !withdrawn) || row.status === "queued" ? <DropdownMenuItem variant="destructive" className="flex-wrap" onClick={() => { setRejectKind("review"); setRejecting(true); }}>
+                      <X />Reject… <span className="basis-full pl-6 text-xs text-muted-foreground">Participant sees your comment and can upload a fix.</span>
+                    </DropdownMenuItem> : null}
+                    {row.designEntry && !row.designRemoved ? <DropdownMenuItem variant="destructive" className="flex-wrap" onClick={() => setRemoveOpen(true)}><Trophy />Remove from competition… <span className="basis-full pl-6 text-xs text-muted-foreground">Pulls it from voting, leaderboard and TV. Printing is unaffected.</span></DropdownMenuItem> : null}
+                  </DropdownMenuGroup>
                 </>
               ) : null}
             </DropdownMenuContent>
@@ -321,7 +323,7 @@ export default function SubmissionCard({
             <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Details</h4>
             <dl className="space-y-2 text-sm">
               <div><dt className="text-xs text-muted-foreground">Colour</dt><dd>{row.colour ?? "Any colour"}</dd></div>
-              <div><dt className="text-xs text-muted-foreground">Size</dt><dd>{row.dimensionsMm ? `${formatDimensions(row.dimensionsMm)} mm` : "Unknown"}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Size</dt><dd>{row.dimensionsMm ? formatDimensions(row.dimensionsMm) : "Unknown"}</dd></div>
               <div><dt className="text-xs text-muted-foreground">File</dt><dd className="break-all">{row.originalFileName} · {formatBytes(row.sizeBytes)}</dd></div>
               {!voteOnly ? <div><dt className="text-xs text-muted-foreground">Printers with colour</dt><dd>{row.printersWithColour.join(", ") || "None loaded"}</dd></div> : null}
               <div><dt className="text-xs text-muted-foreground">Voting</dt><dd>{row.designRemoved ? "Removed from voting" : row.designEntry ? "In voting" : "Not entered"}</dd></div>
