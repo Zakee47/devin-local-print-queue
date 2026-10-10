@@ -10,6 +10,7 @@ import schema from "../convex/schema";
 const modules = import.meta.glob("../convex/**/*.ts");
 const admin = { subject: "admin-user", email: "admin@example.com", emailVerified: true };
 const guest = { subject: "guest-user", email: "ada@example.com", emailVerified: true };
+const grace = { subject: "grace-user", email: "grace@example.com", emailVerified: true };
 const previousOwnerEmail = process.env.OWNER_EMAIL;
 
 afterEach(() => {
@@ -188,6 +189,292 @@ describe("state machine", () => {
     expect((await get(a))?.queueOrder).toBe(2);
     await as.mutation(api.queue.move, { id: b, direction: "up" });
     expect((await get(b))?.queueOrder).toBe(1);
+  });
+});
+
+describe("vote-only approval and print restoration", () => {
+  test("approves vote-only rows without changing submitted status and allows a separate print request", async () => {
+    const { t, as, participantId, addSubmission, get } = await setup();
+    const voteOnly = await addSubmission(participantId, {
+      designEntry: true,
+      printRequested: false,
+    });
+    const printRequest = await addSubmission(participantId);
+    await t.run((ctx) =>
+      ctx.db.patch(voteOnly, {
+        participantNotice: { kind: "replaced", version: 2, at: Date.now() },
+      })
+    );
+
+    await as.mutation(api.queue.approveForVoting, { id: voteOnly });
+
+    expect(await get(voteOnly)).toMatchObject({
+      status: "submitted",
+      designEntry: true,
+      printRequested: false,
+      reviewedBy: admin.email,
+    });
+    expect((await get(voteOnly))?.votingApprovedAt).toEqual(expect.any(Number));
+    expect((await get(voteOnly))?.participantNotice).toBeUndefined();
+    await as.mutation(api.queue.approve, { id: printRequest });
+    expect((await get(printRequest))?.status).toBe("queued");
+
+    const audits = await t.run((ctx) => ctx.db.query("auditLog").collect());
+    expect(audits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ action: "queue.approveForVoting", submissionId: voteOnly }),
+      ])
+    );
+  });
+
+  test("rejects approval for voting unless the row is a live vote-only design entry", async () => {
+    const { t, as, participantId, addSubmission } = await setup();
+    const printRequest = await addSubmission(participantId, { designEntry: true });
+    const notDesign = await addSubmission(participantId, { designEntry: false, printRequested: false });
+    const removed = await addSubmission(participantId, {
+      designEntry: true,
+      printRequested: false,
+    });
+    await t.run((ctx) => ctx.db.patch(removed, { designRemoved: true }));
+
+    await expect(as.mutation(api.queue.approveForVoting, { id: printRequest })).rejects.toThrow(
+      /vote-only design/
+    );
+    await expect(as.mutation(api.queue.approveForVoting, { id: notDesign })).rejects.toThrow(
+      /vote-only design/
+    );
+    await expect(as.mutation(api.queue.approveForVoting, { id: removed })).rejects.toThrow(
+      /vote-only design/
+    );
+  });
+
+  test("moving an approved vote-only row back clears its approval and audits the source", async () => {
+    const { t, as, participantId, addSubmission, get } = await setup();
+    const id = await addSubmission(participantId, {
+      designEntry: true,
+      printRequested: false,
+    });
+    await as.mutation(api.queue.approveForVoting, { id });
+
+    await as.mutation(api.queue.moveBack, { id });
+
+    expect(await get(id)).toMatchObject({ status: "submitted", printRequested: false });
+    expect((await get(id))?.votingApprovedAt).toBeUndefined();
+    const audit = await t.run((ctx) =>
+      ctx.db.query("auditLog").collect().then((rows) => rows.find((row) => row.action === "queue.moveBack"))
+    );
+    expect(audit?.detail).toBe("from approved for voting");
+  });
+
+  test("normal print approval and participant changes clear vote-only approval", async () => {
+    const { t, as, participantId, otherId, addSubmission, get } = await setup();
+    const printRequest = await addSubmission(participantId);
+    await t.run((ctx) => ctx.db.patch(printRequest, { votingApprovedAt: 123 }));
+    await as.mutation(api.queue.approve, { id: printRequest });
+    expect((await get(printRequest))?.votingApprovedAt).toBeUndefined();
+
+    const voteOnly = await addSubmission(otherId, {
+      designEntry: true,
+      printRequested: false,
+    });
+    await as.mutation(api.queue.approveForVoting, { id: voteOnly });
+    await t.withIdentity(grace).mutation(api.submissions.setRoles, {
+      id: voteOnly,
+      role: "both",
+    });
+    expect(await get(voteOnly)).toMatchObject({ printRequested: true });
+    expect((await get(voteOnly))?.votingApprovedAt).toBeUndefined();
+
+    const replaced = await addSubmission(otherId, {
+      designEntry: true,
+      printRequested: false,
+    });
+    await as.mutation(api.queue.approveForVoting, { id: replaced });
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["replacement model"])));
+    await t.withIdentity(grace).mutation(api.submissions.replaceFile, {
+      id: replaced,
+      storageId,
+      originalFileName: "replacement.stl",
+      dimensionsMm: { x: 10, y: 10, z: 10 },
+    });
+    expect((await get(replaced))?.votingApprovedAt).toBeUndefined();
+  });
+
+  test("clears vote-only approval when a sibling gains the print request role", async () => {
+    const { t, as, participantId, addSubmission, get } = await setup();
+    const printOnly = await addSubmission(participantId, { designEntry: false });
+    const voteOnly = await addSubmission(participantId, {
+      designEntry: true,
+      printRequested: false,
+    });
+    await as.mutation(api.queue.approveForVoting, { id: voteOnly });
+
+    await t.withIdentity(guest).mutation(api.submissions.setRoles, {
+      id: printOnly,
+      role: "vote",
+    });
+
+    expect(await get(voteOnly)).toMatchObject({ printRequested: true });
+    expect((await get(voteOnly))?.votingApprovedAt).toBeUndefined();
+  });
+
+  test("restores a withdrawn print request and clears its notice", async () => {
+    const { t, as, participantId, addSubmission, get } = await setup();
+    const withdrawn = await addSubmission(participantId, {
+      designEntry: true,
+      printRequested: false,
+    });
+    await t.run((ctx) =>
+      ctx.db.patch(withdrawn, {
+        participantNotice: { kind: "withdrawn", version: 1, at: Date.now() },
+      })
+    );
+    const boardRow = (await as.query(api.queue.board)).find((row) => row._id === withdrawn);
+    expect(boardRow).toMatchObject({
+      printRequestCode: null,
+      restorePrint: { ok: true, movesFrom: null },
+    });
+
+    await as.mutation(api.queue.restorePrintRequest, { id: withdrawn });
+
+    expect(await get(withdrawn)).toMatchObject({ status: "submitted", printRequested: true });
+    expect((await get(withdrawn))?.participantNotice).toBeUndefined();
+    expect(
+      await t.run((ctx) => ctx.db.query("auditLog").collect().then((rows) => rows.at(-1)?.action))
+    ).toBe("queue.restorePrintRequest");
+  });
+
+  test("restoring a withdrawn request transfers it from a submitted sibling and audits both rows", async () => {
+    const { t, as, participantId, addSubmission, get } = await setup();
+    const withdrawn = await addSubmission(participantId, {
+      designEntry: true,
+      printRequested: false,
+    });
+    const sibling = await addSubmission(participantId);
+    const withdrawnCode = (await get(withdrawn))!.printCode;
+    const siblingCode = (await get(sibling))!.printCode;
+    await t.run((ctx) =>
+      ctx.db.patch(withdrawn, {
+        participantNotice: { kind: "withdrawn", version: 1, at: Date.now() },
+      })
+    );
+    expect((await as.query(api.queue.board)).find((row) => row._id === withdrawn)).toMatchObject({
+      printRequestCode: siblingCode,
+      restorePrint: { ok: true, movesFrom: siblingCode },
+    });
+
+    await as.mutation(api.queue.restorePrintRequest, { id: withdrawn });
+
+    expect((await get(withdrawn))?.printRequested).toBe(true);
+    expect((await get(sibling))?.printRequested).toBe(false);
+    const audits = await t.run((ctx) =>
+      ctx.db.query("auditLog").collect().then((rows) =>
+        rows.filter((row) => row.action === "queue.restorePrintRequest")
+      )
+    );
+    expect(audits).toHaveLength(2);
+    expect(audits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ submissionId: withdrawn, detail: `moved from ${siblingCode}` }),
+        expect.objectContaining({ submissionId: sibling, detail: `print moved to ${withdrawnCode}` }),
+      ])
+    );
+  });
+
+  test("rejects restore when another print is in the pipeline and exposes board availability", async () => {
+    const { t, as, participantId, addSubmission, get } = await setup();
+    const withdrawn = await addSubmission(participantId, {
+      designEntry: true,
+      printRequested: false,
+    });
+    const queued = await addSubmission(participantId, { status: "queued" });
+    await t.run((ctx) =>
+      ctx.db.patch(withdrawn, {
+        participantNotice: { kind: "withdrawn", version: 1, at: Date.now() },
+      })
+    );
+
+    const row = (await as.query(api.queue.board)).find((item) => item._id === withdrawn);
+    expect(row).toMatchObject({
+      printRequestCode: (await get(queued))?.printCode,
+      restorePrint: {
+        ok: false,
+        reason: `This participant already has ${(await get(queued))?.printCode} queued`,
+      },
+    });
+    await expect(as.mutation(api.queue.restorePrintRequest, { id: withdrawn })).rejects.toThrow(
+      /already has/
+    );
+  });
+
+  test("review counts exclude withdrawn and approved-for-voting rows", async () => {
+    const { t, as, participantId, otherId, addSubmission } = await setup();
+    const withdrawn = await addSubmission(participantId, { printRequested: false });
+    const approved = await addSubmission(otherId, { designEntry: true, printRequested: false });
+    await addSubmission(participantId, { printRequested: false });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(withdrawn, {
+        participantNotice: { kind: "withdrawn", version: 1, at: Date.now() },
+      });
+    });
+    await as.mutation(api.queue.approveForVoting, { id: approved });
+
+    expect(await as.query(api.queue.counts)).toMatchObject({ review: 1, done: 1 });
+  });
+
+  test("moveTo supports front, middle, and end with one positional audit each", async () => {
+    const { t, as, participantId, otherId, addSubmission, get } = await setup();
+    const extraParticipants = await t.run(async (ctx) =>
+      Promise.all([1, 2].map((index) =>
+        ctx.db.insert("participants", {
+          clerkUserId: `moveTo-user-${index}`,
+          email: `moveTo-${index}@example.com`,
+          name: `Move To ${index}`,
+          displayName: `Move To ${index}`,
+        })
+      ))
+    );
+    const owners = [participantId, otherId, ...extraParticipants];
+    const ids: Id<"submissions">[] = [];
+    for (let i = 0; i < 4; i += 1) {
+      const id = await addSubmission(owners[i]);
+      await as.mutation(api.queue.approve, { id });
+      ids.push(id);
+    }
+    const [a, , c, d] = ids;
+
+    await as.mutation(api.queue.moveTo, { id: d, beforeId: a });
+    expect((await Promise.all(ids.map(get))).map((row) => row?.queueOrder)).toEqual([2, 3, 4, 1]);
+    await as.mutation(api.queue.moveTo, { id: a, beforeId: c });
+    expect((await Promise.all(ids.map(get))).map((row) => row?.queueOrder)).toEqual([3, 2, 4, 1]);
+    await as.mutation(api.queue.moveTo, { id: d });
+    expect((await Promise.all(ids.map(get))).map((row) => row?.queueOrder)).toEqual([2, 1, 3, 4]);
+
+    const audits = await t.run((ctx) =>
+      ctx.db.query("auditLog").collect().then((rows) => rows.filter((row) => row.action === "queue.move"))
+    );
+    expect(audits).toHaveLength(3);
+    expect(audits.map((row) => row.detail)).toEqual(["#4 → #1", "#2 → #3", "#1 → #4"]);
+  });
+
+  test("moveTo rejects non-queued beforeId and no-ops without an audit when already positioned", async () => {
+    const { t, as, participantId, otherId, addSubmission, get } = await setup();
+    const first = await addSubmission(otherId);
+    const second = await addSubmission(participantId);
+    const submitted = await addSubmission(participantId, { printRequested: false });
+    await as.mutation(api.queue.approve, { id: first });
+    await as.mutation(api.queue.approve, { id: second });
+
+    await expect(
+      as.mutation(api.queue.moveTo, { id: second, beforeId: submitted })
+    ).rejects.toThrow(/queued submission/);
+    await as.mutation(api.queue.moveTo, { id: second });
+    expect((await get(first))?.queueOrder).toBe(1);
+    expect((await get(second))?.queueOrder).toBe(2);
+    const audits = await t.run((ctx) =>
+      ctx.db.query("auditLog").collect().then((rows) => rows.filter((row) => row.action === "queue.move"))
+    );
+    expect(audits).toHaveLength(0);
   });
 });
 

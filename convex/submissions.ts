@@ -286,7 +286,10 @@ async function applyOtherRoles(
     const fields = { designEntry: other.vote, printRequested: other.print };
     const patch = other.withdrawsPrint
       ? { ...fields, ...withdrawnFields(currentVersion(current), now, "withdrawn") }
-      : fields;
+      : {
+          ...fields,
+          ...(other.print && !current.printRequested ? { votingApprovedAt: undefined } : {}),
+        };
     await ctx.db.patch(id, patch);
     if (other.withdrawsPrint) {
       await auditParticipant(ctx, participant, "queue.withdrawn", id, "print removed");
@@ -519,7 +522,10 @@ export const setRoles = mutation({
       await ctx.db.patch(id, { ...fields, ...withdrawnFields(currentVersion(submission), Date.now(), "withdrawn") });
       await auditParticipant(ctx, participant, "queue.withdrawn", id, "print removed");
     } else {
-      await ctx.db.patch(id, fields);
+      await ctx.db.patch(id, {
+        ...fields,
+        ...(plan.print && !submission.printRequested ? { votingApprovedAt: undefined } : {}),
+      });
     }
     const moved = plan.others.flatMap((other) => [
       ...(files.find((file) => file.id === other.id)?.vote && plan.vote
@@ -624,6 +630,7 @@ export async function applyFile(
   const patch: Partial<Submission> = {
     ...file,
     version: nextVersion,
+    votingApprovedAt: undefined,
   };
   if (leftQueue) {
     Object.assign(patch, {

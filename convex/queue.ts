@@ -26,6 +26,18 @@ function isPipelineStatus(status: Doc<"submissions">["status"]): status is Pipel
   return PIPELINE.includes(status as PipelineStatus);
 }
 
+function isApprovedForVoting(submission: Doc<"submissions">) {
+  return (
+    submission.status === "submitted" &&
+    !submission.printRequested &&
+    submission.votingApprovedAt !== undefined
+  );
+}
+
+function isWithdrawn(submission: Doc<"submissions">) {
+  return submission.status === "submitted" && submission.participantNotice?.kind === "withdrawn";
+}
+
 function requireKnownPrinter(
   settings: Settings,
   name: string | undefined,
@@ -90,11 +102,19 @@ export const board = query({
     const isOwner = role === "owner";
     const submissions = await ctx.db.query("submissions").collect();
     const participantPrints = new Map<Id<"participants">, ParticipantPrint>();
+    const participantPrintRequests = new Map<Id<"participants">, Doc<"submissions">[]>();
     for (const s of submissions) {
-      if (isDeleted(s) || !isPipelineStatus(s.status)) continue;
-      const current = participantPrints.get(s.participantId);
-      if (!current || PIPELINE_PRIORITY[s.status] < PIPELINE_PRIORITY[current.status]) {
-        participantPrints.set(s.participantId, { printCode: s.printCode, status: s.status });
+      if (isDeleted(s)) continue;
+      if (s.printRequested) {
+        const requests = participantPrintRequests.get(s.participantId) ?? [];
+        requests.push(s);
+        participantPrintRequests.set(s.participantId, requests);
+      }
+      if (isPipelineStatus(s.status)) {
+        const current = participantPrints.get(s.participantId);
+        if (!current || PIPELINE_PRIORITY[s.status] < PIPELINE_PRIORITY[current.status]) {
+          participantPrints.set(s.participantId, { printCode: s.printCode, status: s.status });
+        }
       }
     }
     const participants = new Map<Id<"participants">, Doc<"participants"> | null>();
@@ -110,6 +130,10 @@ export const board = query({
       const oversize = s.dimensionsMm ? !fitsWithin(s.dimensionsMm, settings.maxDimensionsMm) : false;
       const printersWithRequestedColour = printersWithColour(settings.printers, s.colour);
       const matchingPrinters = new Set(printersWithRequestedColour);
+      const siblingPrintRequest = (participantPrintRequests.get(s.participantId) ?? []).find(
+        (request) => request._id !== s._id
+      );
+      const pipelinePrint = participantPrints.get(s.participantId);
       const currentPrinter = settings.printers.find(
         ({ name }) => name.trim().toLowerCase() === s.printer?.trim().toLowerCase()
       );
@@ -122,6 +146,18 @@ export const board = query({
         participantUsername,
         participantName,
         ...(isOwner ? { participantEmail: participant?.email ?? "" } : {}),
+        printRequestCode: siblingPrintRequest?.printCode ?? null,
+        restorePrint: isWithdrawn(s)
+          ? pipelinePrint
+            ? {
+                ok: false,
+                reason: `This participant already has ${pipelinePrint.printCode} ${pipelinePrint.status}`,
+              }
+            : {
+                ok: true,
+                movesFrom: siblingPrintRequest?.printCode ?? null,
+              }
+          : null,
         printerOutOfService: currentPrinter?.outOfService ?? false,
         printersWithColour: printersWithRequestedColour,
         printerOptions: [
@@ -167,11 +203,20 @@ export const counts = query({
     }
     return {
       review: submissions.filter(
-        (s) => s.status === "submitted" && !isDeleted(s) && !participantsWithPrint.has(s.participantId)
+        (s) =>
+          s.status === "submitted" &&
+          !isDeleted(s) &&
+          !isWithdrawn(s) &&
+          !isApprovedForVoting(s) &&
+          !participantsWithPrint.has(s.participantId)
       ).length,
       queued: await count("queued"),
       printing: await count("printing"),
-      done: await count("done"),
+      done: submissions.filter(
+        (submission) =>
+          !isDeleted(submission) &&
+          (submission.status === "done" || isApprovedForVoting(submission))
+      ).length,
     };
   },
 });
@@ -231,6 +276,7 @@ export const approve = mutation({
       status: "queued",
       queueOrder: await nextQueueOrder(ctx),
       queuedAt: Date.now(),
+      votingApprovedAt: undefined,
       reviewedBy: actor,
       rejectionReason: undefined,
       rejectionKind: undefined,
@@ -238,6 +284,24 @@ export const approve = mutation({
       ...printRequestPatch(submission, true),
     });
     await audit(ctx, actor, "queue.approve", id);
+  },
+});
+
+export const approveForVoting = mutation({
+  args: { id: v.id("submissions") },
+  handler: async (ctx, { id }) => {
+    const actor = await requireAdmin(ctx);
+    const submission = await load(ctx, id);
+    expectStatus(submission, "submitted");
+    if (submission.printRequested || !isDesignEntry(submission) || submission.designRemoved) {
+      throw new ConvexError(`${submission.printCode} isn't a vote-only design`);
+    }
+    await ctx.db.patch(id, {
+      votingApprovedAt: Date.now(),
+      reviewedBy: actor,
+      participantNotice: undefined,
+    });
+    await audit(ctx, actor, "queue.approveForVoting", id);
   },
 });
 
@@ -408,7 +472,15 @@ export const moveBack = mutation({
   handler: async (ctx, { id }) => {
     const actor = await requireAdmin(ctx);
     const submission = await load(ctx, id);
+    let detail = `from ${submission.status}`;
     switch (submission.status) {
+      case "submitted":
+        if (!isApprovedForVoting(submission)) {
+          throw new ConvexError(`${submission.printCode} is already awaiting review`);
+        }
+        await ctx.db.patch(id, { votingApprovedAt: undefined });
+        detail = "from approved for voting";
+        break;
       case "done":
         await ctx.db.patch(id, { status: "printing", doneAt: undefined });
         break;
@@ -445,7 +517,62 @@ export const moveBack = mutation({
       default:
         throw new ConvexError(`${submission.printCode} is already awaiting review`);
     }
-    await audit(ctx, actor, "queue.moveBack", id, `from ${submission.status}`);
+    await audit(ctx, actor, "queue.moveBack", id, detail);
+  },
+});
+
+export const restorePrintRequest = mutation({
+  args: { id: v.id("submissions") },
+  handler: async (ctx, { id }) => {
+    const actor = await requireAdmin(ctx);
+    const submission = await load(ctx, id);
+    if (
+      submission.status !== "submitted" ||
+      submission.printRequested ||
+      submission.participantNotice?.kind !== "withdrawn"
+    ) {
+      throw new ConvexError(`${submission.printCode} has no withdrawn print request to restore`);
+    }
+
+    const siblings = await ctx.db
+      .query("submissions")
+      .withIndex("by_participant", (q) => q.eq("participantId", submission.participantId))
+      .collect();
+    const activePrint = siblings.find(
+      (s) =>
+        s._id !== id &&
+        !isDeleted(s) &&
+        (s.status === "queued" || s.status === "printing" || s.status === "done")
+    );
+    if (activePrint) {
+      throw new ConvexError(`This participant already has ${activePrint.printCode} ${activePrint.status}`);
+    }
+
+    const submittedPrintRequest = siblings.find(
+      (s) => s._id !== id && !isDeleted(s) && s.status === "submitted" && s.printRequested
+    );
+    if (submittedPrintRequest) {
+      await ctx.db.patch(submittedPrintRequest._id, printRequestPatch(submittedPrintRequest, false));
+      await audit(
+        ctx,
+        actor,
+        "queue.restorePrintRequest",
+        submittedPrintRequest._id,
+        `print moved to ${submission.printCode}`
+      );
+    }
+    await ctx.db.patch(id, {
+      ...printRequestPatch(submission, true),
+      votingApprovedAt: undefined,
+      participantNotice: undefined,
+    });
+    await audit(
+      ctx,
+      actor,
+      "queue.restorePrintRequest",
+      id,
+      submittedPrintRequest ? `moved from ${submittedPrintRequest.printCode}` : undefined
+    );
   },
 });
 
@@ -505,6 +632,49 @@ export const move = mutation({
     await ctx.db.patch(id, { queueOrder: neighbour.queueOrder });
     await ctx.db.patch(neighbour._id, { queueOrder: order });
     await audit(ctx, actor, "queue.move", id, direction);
+  },
+});
+
+export const moveTo = mutation({
+  args: {
+    id: v.id("submissions"),
+    beforeId: v.optional(v.id("submissions")),
+  },
+  handler: async (ctx, { id, beforeId }) => {
+    const actor = await requireAdmin(ctx);
+    const submission = await load(ctx, id);
+    expectStatus(submission, "queued");
+    const queued = await ctx.db
+      .query("submissions")
+      .withIndex("by_status_queueOrder", (q) => q.eq("status", "queued"))
+      .collect()
+      .then((rows) => rows.filter((row) => !isDeleted(row)));
+    queued.sort(
+      (a, b) =>
+        (a.queueOrder ?? 0) - (b.queueOrder ?? 0) ||
+        a._creationTime - b._creationTime
+    );
+    const oldIndex = queued.findIndex((row) => row._id === id);
+    if (oldIndex < 0) throw new ConvexError(`${submission.printCode} is not in the queue`);
+    if (beforeId === id) return;
+    const beforeIndex = beforeId === undefined ? -1 : queued.findIndex((row) => row._id === beforeId);
+    if (beforeId !== undefined && beforeIndex < 0) {
+      throw new ConvexError("Move target must be a queued submission");
+    }
+    const next = queued.filter((row) => row._id !== id);
+    const newIndex = beforeId === undefined
+      ? next.length
+      : next.findIndex((row) => row._id === beforeId);
+    next.splice(newIndex, 0, submission);
+    if (oldIndex === newIndex) return;
+
+    for (const [index, row] of next.entries()) {
+      const queueOrder = index + 1;
+      if (row.queueOrder !== queueOrder) {
+        await ctx.db.patch(row._id, { queueOrder });
+      }
+    }
+    await audit(ctx, actor, "queue.move", id, `#${oldIndex + 1} → #${newIndex + 1}`);
   },
 });
 

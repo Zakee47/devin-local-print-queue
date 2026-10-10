@@ -61,27 +61,27 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "queue",
       title: "The print queue",
-      body: "Prints move through the tabs: Needs review → Queued → Printing → Done, with Rejected on its own tab. All shows every stage at once.",
+      body: "Prints move through the tabs: Needs review → Queued → Printing → Done, with Rejected and Withdrawn on their own tabs. Every stage shows them all, grouped by stage.",
     },
     {
       art: "review",
       title: "Approve or reject",
-      body: "Check the badge first: No print yet, or Already printed with their earlier print code. Approve sends a print to the back of the queue. When you reject, write a clear comment: the participant sees it and can upload a fixed file.",
+      body: "Check the badge first: No print yet, or Already printed with their earlier print code. Approve sends a print to the back of the queue, and Approve for voting sends a vote-only design straight to Done. When you reject, write a clear comment: the participant sees it and can upload a fixed file.",
     },
     {
       art: "filters",
       title: "Filters and load",
-      body: "Filter by colour and printer, and tap several to combine them. Watch the load strip for a printer with a backlog.",
+      body: "Press + Add filter to narrow by colour then printer, or the other way round. Tap × on a pill to drop it. The printer cards at the top show each printer's queue, loaded colours and whether it's paused.",
     },
     {
       art: "colour",
       title: "Assign printers",
-      body: "Each queued card lists printers with that colour loaded first. Or tick several cards and choose Assign to one printer, or Spread evenly to share them across printers with the right colour. Show all printers lets you override the colour match.",
+      body: "Each queued card lists printers with that colour loaded first, then other printers if you need to override. Or tick several cards and choose Assign to one printer, or Spread evenly to share them across printers with the right colour.",
     },
     {
       art: "printing",
       title: "On the printer",
-      body: "Press Start printing. When it comes off, mark it done, or mark the print failed with a reason. Use the arrows to reorder the queue, and Move back to undo a step.",
+      body: "Press Start printing. When it comes off, mark it done, or mark the print failed with a reason. Drag a queued card by its handle to reorder the queue, and use Move back to undo a step.",
     },
     {
       art: "download",
@@ -91,7 +91,7 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "changed",
       title: "Changed by participants",
-      body: "Watch this list for replaced or withdrawn prints. They leave the queue, and a replaced print needs approving again.",
+      body: "Watch this list for replaced or withdrawn prints. Withdrawn prints move to the Withdrawn tab, where Restore print request undoes an accident.",
     },
     {
       art: "settings",

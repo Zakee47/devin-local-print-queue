@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
-import { Download, Inbox, Pause } from "lucide-react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { Download, GripVertical, Inbox, Pause, Printer } from "lucide-react";
+import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -10,59 +13,38 @@ import { useSwatch } from "@/lib/use-swatch";
 import { inServicePrinters, printersWithColour } from "@/lib/printers";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import SubmissionCard, { type BoardRow } from "@/components/admin/SubmissionCard";
+import QueueFilters from "@/components/admin/QueueFilters";
 import HistoryDialog from "@/components/admin/HistoryDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
 import { errorMessage } from "@/lib/errors";
+import { applyFilters, beforeIdAfterDrop, type FilterPill } from "@/components/admin/queue-view";
 
-type Column = "all" | "review" | "queued" | "printing" | "done" | "rejected";
+type Column = "all" | "review" | "queued" | "printing" | "done" | "rejected" | "withdrawn";
 type PrinterOption = { name: string; label: string };
-
-const ANY_COLOUR = "__any_colour__";
-const NOT_ASSIGNED = "__not_assigned__";
-const SHOW_ALL_PRINTERS_KEY = "admin.showAllPrinters";
-const SHOW_ALL_PRINTERS_EVENT = "admin-show-all-printers-change";
-
-function subscribeToShowAllPrinters(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  window.addEventListener(SHOW_ALL_PRINTERS_EVENT, onChange);
-  return () => {
-    window.removeEventListener("storage", onChange);
-    window.removeEventListener(SHOW_ALL_PRINTERS_EVENT, onChange);
-  };
-}
-
-function getShowAllPrintersSnapshot() {
-  return window.localStorage.getItem(SHOW_ALL_PRINTERS_KEY) === "true";
-}
-
-function getServerShowAllPrintersSnapshot() {
-  return false;
-}
-
-function saveShowAllPrinters(value: boolean) {
-  window.localStorage.setItem(SHOW_ALL_PRINTERS_KEY, String(value));
-  window.dispatchEvent(new Event(SHOW_ALL_PRINTERS_EVENT));
-}
+type PrinterChoices = { matching: PrinterOption[]; other: PrinterOption[] };
 
 function columns(rows: BoardRow[]): Record<Column, BoardRow[]> {
   const byTime = (a: BoardRow, b: BoardRow) => a._creationTime - b._creationTime;
   const of = (status: BoardRow["status"]) => rows.filter((r) => r.status === status);
+  const submitted = of("submitted");
+  const withdrawn = submitted.filter((r) => r.participantNotice?.kind === "withdrawn");
+  const votingApproved = submitted.filter((r) => !r.printRequested && r.votingApprovedAt !== undefined);
   return {
     all: [...rows].sort((a, b) => b._creationTime - a._creationTime),
-    review: of("submitted").sort(
+    review: submitted.filter((r) => r.participantNotice?.kind !== "withdrawn" && r.votingApprovedAt === undefined).sort(
       (a, b) => Number(a.participantPrint !== null) - Number(b.participantPrint !== null) || byTime(a, b)
     ),
     queued: of("queued").sort((a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0)),
     printing: of("printing").sort((a, b) => (a.printingAt ?? 0) - (b.printingAt ?? 0)),
-    done: of("done").sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0)),
+    done: [...of("done"), ...votingApproved].sort((a, b) => (b.doneAt ?? b.votingApprovedAt ?? 0) - (a.doneAt ?? a.votingApprovedAt ?? 0)),
     rejected: of("rejected").sort((a, b) => (b.rejectedAt ?? 0) - (a.rejectedAt ?? 0)),
+    withdrawn: withdrawn.sort((a, b) => (b.participantNotice?.at ?? 0) - (a.participantNotice?.at ?? 0)),
   };
 }
 
@@ -91,13 +73,34 @@ function printingGroups(rows: BoardRow[], printerOrder: string[]) {
 }
 
 const TABS: { value: Column; label: string; empty: string }[] = [
-  { value: "all", label: "All", empty: "No submissions." },
+  { value: "all", label: "Every stage", empty: "No submissions." },
   { value: "review", label: "Needs review", empty: "Nothing waiting for review." },
   { value: "queued", label: "Queued", empty: "Approve a submission to queue it." },
   { value: "printing", label: "Printing", empty: "Nothing on the printers." },
   { value: "done", label: "Done", empty: "No finished prints yet." },
   { value: "rejected", label: "Rejected", empty: "No rejected files." },
+  { value: "withdrawn", label: "Withdrawn", empty: "No withdrawn print requests." },
 ];
+
+function SortableCard({ id, printCode, children }: {
+  id: BoardRow["_id"];
+  printCode: string;
+  children: (handle: ReactNode, style: { ref: (node: HTMLLIElement | null) => void; style: CSSProperties }, dragging: boolean) => ReactNode;
+}) {
+  const sortable = useSortable({ id });
+  const style = {
+    ref: sortable.setNodeRef,
+    style: {
+      transform: CSS.Transform.toString(sortable.transform),
+      transition: sortable.transition,
+    },
+  };
+  return <>{children(
+    <Button type="button" size="icon-xs" variant="ghost" aria-label={`Drag to reorder ${printCode}`} title="Drag to reorder" {...sortable.attributes} {...sortable.listeners}><GripVertical /></Button>,
+    style,
+    sortable.isDragging
+  )}</>;
+}
 
 export default function QueueBoard() {
   const rows = useQuery(api.queue.board);
@@ -112,12 +115,14 @@ export default function QueueBoard() {
   const swatch = useSwatch();
   const [downloading, setDownloading] = useState(false);
   const [activeTab, setActiveTab] = useState<Column | "deleted">("review");
-  const [colourFilters, setColourFilters] = useState<string[]>([]);
-  const [printerFilters, setPrinterFilters] = useState<string[]>([]);
-  const showAllPrinters = useSyncExternalStore(
-    subscribeToShowAllPrinters,
-    getShowAllPrintersSnapshot,
-    getServerShowAllPrintersSnapshot
+  const [filterPills, setFilterPills] = useState<FilterPill[]>([]);
+  const [queuedView, setQueuedView] = useState<"list" | "printer">("list");
+  const [optimisticQueueIds, setOptimisticQueueIds] = useState<BoardRow["_id"][] | null>(null);
+  const moveTo = useMutation(api.queue.moveTo);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const [selectedIds, setSelectedIds] = useState<BoardRow["_id"][]>([]);
   const [onePrinter, setOnePrinter] = useState("");
@@ -129,7 +134,10 @@ export default function QueueBoard() {
     const queued = new Set(rows.filter((row) => row.status === "queued").map((row) => row._id));
     let cancelled = false;
     queueMicrotask(() => {
-      if (!cancelled) setSelectedIds((selected) => selected.filter((id) => queued.has(id)));
+      if (!cancelled) {
+        setOptimisticQueueIds(null);
+        setSelectedIds((selected) => selected.filter((id) => queued.has(id)));
+      }
     });
     return () => {
       cancelled = true;
@@ -147,6 +155,10 @@ export default function QueueBoard() {
   }
 
   const fullColumns = columns(rows);
+  if (optimisticQueueIds) {
+    const order = new Map(optimisticQueueIds.map((id, index) => [id, index]));
+    fullColumns.queued.sort((a, b) => (order.get(a._id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b._id) ?? Number.MAX_SAFE_INTEGER));
+  }
   const fullQueue = fullColumns.queued;
   const queuePosition = new Map(fullQueue.map((row, index) => [row._id, index + 1]));
   const queuedIds = new Set(fullQueue.map((row) => row._id));
@@ -164,21 +176,13 @@ export default function QueueBoard() {
   const printerOptions = [...configuredPrinters, ...otherPrinters].filter(
     (printer, index, all) => all.findIndex((candidate) => candidate.toLowerCase() === printer.toLowerCase()) === index
   );
-  const filteredRows = rows.filter((row) => {
-    const colourMatches =
-      colourFilters.length === 0 ||
-      (row.colour
-        ? colourFilters.some((colour) => colour !== ANY_COLOUR && colour.toLowerCase() === row.colour!.toLowerCase())
-        : colourFilters.includes(ANY_COLOUR));
-    const printerMatches =
-      printerFilters.length === 0 ||
-      (row.printer
-        ? printerFilters.some((printer) => printer !== NOT_ASSIGNED && printer.toLowerCase() === row.printer!.toLowerCase())
-        : printerFilters.includes(NOT_ASSIGNED));
-    return colourMatches && printerMatches;
-  });
+  const filteredRows = applyFilters(rows, filterPills);
   const filtered = columns(filteredRows);
-  const reviewCount = filtered.review.filter((row) => row.participantPrint === null).length;
+  if (optimisticQueueIds) {
+    const order = new Map(optimisticQueueIds.map((id, index) => [id, index]));
+    filtered.queued.sort((a, b) => (order.get(a._id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b._id) ?? Number.MAX_SAFE_INTEGER));
+  }
+  const reviewCount = filtered.review.length;
   const printerGroups = printingGroups(filtered.printing, configuredPrinters);
   const inService = inServicePrinters(printerSettings);
   const printerLoads = new Map(
@@ -191,36 +195,26 @@ export default function QueueBoard() {
     ])
   );
   const notAssignedQueued = rows.filter((row) => row.status === "queued" && !row.printer).length;
-  const hasFilters = colourFilters.length > 0 || printerFilters.length > 0;
+  const hasFilters = filterPills.length > 0;
   const allShownQueued = filtered.queued;
 
-  function toggleFilter(current: string[], value: string, set: (next: string[]) => void) {
-    set(current.includes(value) ? current.filter((item) => item !== value) : [...current, value]);
-  }
-
-  function choicesFor(row: BoardRow): PrinterOption[] {
+  function choicesFor(row: BoardRow): PrinterChoices {
     const matches = new Set(printersWithColour(printerSettings, row.colour));
-    const options =
-      showAllPrinters || (row.colour && matches.size === 0)
-        ? inService
-        : inService.filter(({ name }) => matches.has(name));
-    return options.map(({ name }) => {
-      const loaded =
-        row.colour != null &&
-        printerSettings
-          .find((printer) => printer.name === name)
-          ?.colours.some((colour) => colour.toLowerCase() === row.colour!.toLowerCase());
+    const optionFor = ({ name }: { name: string }): PrinterOption => {
       const load = printerLoads.get(name);
       const label = [
         name,
-        row.colour && loaded ? `${row.colour} loaded` : "",
         `${load?.queued ?? 0} queued`,
         load?.printing ? `${load.printing} printing` : "",
       ]
         .filter(Boolean)
         .join(" · ");
       return { name, label };
-    });
+    };
+    return {
+      matching: row.colour ? inService.filter(({ name }) => matches.has(name)).map(optionFor) : [],
+      other: inService.filter(({ name }) => !matches.has(name)).map(optionFor),
+    };
   }
 
   async function downloadAllQueued() {
@@ -262,19 +256,17 @@ export default function QueueBoard() {
     return filtered[tab].length;
   }
 
-  function renderCards(cardRows: BoardRow[], options: { status?: boolean; selectable?: boolean } = {}) {
+  function renderCards(cardRows: BoardRow[], options: { status?: boolean; selectable?: boolean; sortable?: boolean; variant?: "full" | "ticket" } = {}) {
     return (
       <ul className="flex flex-col gap-3">
         {cardRows.map((row) => {
           const position = queuePosition.get(row._id);
-          const queueIndex = position === undefined ? undefined : position - 1;
-          return (
+          const makeCard = (dragHandle?: ReactNode, dragStyle?: { ref: (node: HTMLLIElement | null) => void; style: CSSProperties }, isDragging = false) => (
             <SubmissionCard
               key={row._id}
               row={row}
               position={row.status === "queued" ? position : undefined}
-              isFirst={queueIndex === 0}
-              isLast={queueIndex !== undefined && queueIndex === fullQueue.length - 1}
+              queueOrder={fullQueue.map((queued) => queued._id)}
               isOwner={isOwner}
               showStatusBadge={options.status}
               showSelection={options.selectable}
@@ -290,14 +282,38 @@ export default function QueueBoard() {
                 });
               }}
               printerOptions={choicesFor(row)}
+              dragHandle={dragHandle}
+              dragStyle={dragStyle}
+              isDragging={isDragging}
+              variant={options.variant}
             />
           );
+          return options.sortable
+            ? <SortableCard key={row._id} id={row._id} printCode={row.printCode}>{(handle, style, dragging) => makeCard(handle, style, dragging)}</SortableCard>
+            : makeCard();
         })}
       </ul>
     );
   }
 
   const activePrintersForSpread = inService.map((printer) => printer.name).filter((name) => spreadPrinters.includes(name));
+
+  function handleDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
+    const activeId = active.id as BoardRow["_id"];
+    const overId = over.id as BoardRow["_id"];
+    const fullIds = fullQueue.map((row) => row._id);
+    const visibleIds = filtered.queued.map((row) => row._id);
+    const beforeId = beforeIdAfterDrop(fullIds, visibleIds, activeId, overId);
+    const next = fullIds.filter((id) => id !== activeId);
+    const insertAt = beforeId ? next.indexOf(beforeId) : next.length;
+    next.splice(Math.max(0, insertAt), 0, activeId);
+    setOptimisticQueueIds(next);
+    void moveTo({ id: activeId, ...(beforeId ? { beforeId } : {}) }).catch((error) => {
+      setOptimisticQueueIds(null);
+      toast.error(errorMessage(error, "Queue reorder failed"));
+    });
+  }
 
   return (
     <Tabs
@@ -307,119 +323,28 @@ export default function QueueBoard() {
       }}
     >
       <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-card p-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-sm font-medium">Filter submissions</span>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="show-all-printers"
-              checked={showAllPrinters}
-              onCheckedChange={(checked) => saveShowAllPrinters(checked === true)}
-            />
-            <label htmlFor="show-all-printers" className="text-sm">Show all printers</label>
-            {hasFilters ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setColourFilters([]);
-                  setPrinterFilters([]);
-                }}
-              >
-                Clear filters
-              </Button>
-            ) : null}
-          </div>
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs text-muted-foreground">Colour</span>
-          <ToggleGroup multiple value={colourFilters} onValueChange={setColourFilters} className="flex flex-wrap justify-start">
-            <ToggleGroupItem value={ANY_COLOUR} aria-label="Any colour" className="h-8 px-2 text-xs">
-              Any colour
-            </ToggleGroupItem>
-            {colourOptions.map((colour) => (
-              <ToggleGroupItem key={colour.toLowerCase()} value={colour} aria-label={colour} className="h-8 gap-1.5 px-2 text-xs">
-                <span aria-hidden className="size-3 rounded-full ring-1 ring-foreground/20" style={{ backgroundColor: swatch(colour) }} />
-                {colour}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </div>
-        <div className="flex flex-col gap-2">
-          <span className="text-xs text-muted-foreground">Printer</span>
-          <ToggleGroup multiple value={printerFilters} onValueChange={setPrinterFilters} className="flex flex-wrap justify-start">
-            <ToggleGroupItem value={NOT_ASSIGNED} aria-label="Not assigned" className="h-8 px-2 text-xs">
-              Not assigned
-            </ToggleGroupItem>
-            {printerOptions.map((name) => {
-              const printer = printerSettings.find((item) => item.name.toLowerCase() === name.toLowerCase());
-              return (
-                <ToggleGroupItem
-                  key={name.toLowerCase()}
-                  value={name}
-                  aria-label={printer?.outOfService ? `${name} · paused` : name}
-                  className={`h-8 gap-1.5 px-2 text-xs${
-                    printer?.outOfService
-                      ? " text-amber-900 border-amber-300 bg-amber-50 aria-pressed:ring-2 aria-pressed:ring-amber-500/60 aria-pressed:bg-amber-50 aria-pressed:text-amber-900 dark:text-amber-200 dark:border-amber-900 dark:bg-amber-950/40 dark:aria-pressed:bg-amber-950/40 dark:aria-pressed:text-amber-200"
-                      : ""
-                  }`}
-                >
-                  {printer?.outOfService ? (
-                    <>
-                      <Pause aria-hidden className="size-3" />
-                      <span>{name} · paused</span>
-                    </>
-                  ) : (
-                    name
-                  )}
-                </ToggleGroupItem>
-              );
-            })}
-          </ToggleGroup>
-        </div>
-        <div className="flex flex-col gap-2 border-t border-border pt-3">
-          <span className="text-xs text-muted-foreground">Printer load · unfiltered queue</span>
-          <div className="flex flex-wrap gap-2">
-            {printerSettings.map((printer) => {
-              const load = printerLoads.get(printer.name)!;
-              const isSelected = printerFilters.includes(printer.name);
-              return (
-                <Button
-                  key={printer.name}
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  aria-pressed={isSelected}
-                  className={
-                    printer.outOfService
-                      ? "text-amber-900 border-amber-300 bg-amber-50 aria-pressed:ring-2 aria-pressed:ring-amber-500/60 aria-pressed:bg-amber-50 aria-pressed:text-amber-900 dark:text-amber-200 dark:border-amber-900 dark:bg-amber-950/40 dark:aria-pressed:bg-amber-950/40 dark:aria-pressed:text-amber-200"
-                      : "aria-pressed:bg-muted aria-pressed:text-foreground"
-                  }
-                  onClick={() => toggleFilter(printerFilters, printer.name, setPrinterFilters)}
-                >
-                  {printer.outOfService ? (
-                    <>
-                      <Pause aria-hidden className="size-3" />
-                      <span>{printer.name} · paused</span>
-                    </>
-                  ) : (
-                    printer.name
-                  )}
-                  {" · "}
-                  {load.queued} queued · {load.printing} printing
-                </Button>
-              );
-            })}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              aria-pressed={printerFilters.includes(NOT_ASSIGNED)}
-              className="aria-pressed:bg-muted aria-pressed:text-foreground"
-              onClick={() => toggleFilter(printerFilters, NOT_ASSIGNED, setPrinterFilters)}
-            >
-              Not assigned · {notAssignedQueued} queued
-            </Button>
+        <p className="text-xs font-medium text-muted-foreground">Printer load · whole queue, not filtered</p>
+        <div className="flex snap-x gap-2 overflow-x-auto md:grid md:grid-cols-3 xl:grid-cols-5">
+          {printerSettings.map((printer) => {
+            const load = printerLoads.get(printer.name)!;
+            const queued = filtered.queued.filter((row) => row.printer === printer.name).length;
+            const printing = filtered.printing.filter((row) => row.printer === printer.name).length;
+            return <div key={printer.name} className={`min-w-44 snap-start rounded-lg border bg-card p-2 ${printer.outOfService ? "border-amber-300 dark:border-amber-900" : "border-border"}`}>
+              <p className="flex items-center gap-1 text-sm font-medium">
+                {printer.outOfService
+                  ? <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><Pause className="size-3" />{printer.name} · paused</span>
+                  : <><Printer className="size-3.5 text-muted-foreground" />{printer.name}</>}
+              </p>
+              <p className="text-xs text-muted-foreground"><span className="font-mono text-base tabular-nums">{load.queued}</span> queued · <span className="font-mono text-base tabular-nums">{load.printing}</span> printing</p>
+              {hasFilters ? <p className="text-xs text-muted-foreground">{queued + printing} match filters</p> : null}
+              <div className={`mt-1 flex flex-wrap gap-1 ${printer.outOfService ? "opacity-50 grayscale" : ""}`}>{printer.colours.map((colour) => <i key={colour} title={colour} className="size-3 rounded-full border" style={{ backgroundColor: swatch(colour) }} />)}</div>
+            </div>;
+          })}
+          <div className="min-w-44 snap-start rounded-lg border border-border bg-card p-2">
+            <p className="text-sm font-medium">Not assigned</p>
+            <p className="text-xs text-muted-foreground"><span className="font-mono text-base tabular-nums">{notAssignedQueued}</span> queued</p>
+            <p className="text-xs text-muted-foreground">needs a printer</p>
+            {hasFilters ? <p className="text-xs text-muted-foreground">{filtered.queued.filter((row) => !row.printer).length} match filters</p> : null}
           </div>
         </div>
       </div>
@@ -449,6 +374,9 @@ export default function QueueBoard() {
           {downloading ? "Downloading..." : `Download all queued (${filtered.queued.length})`}
         </Button>
       </div>
+      <div className="mt-3">
+        <QueueFilters rows={rows} pills={filterPills} onChange={setFilterPills} colours={colourOptions} printers={printerOptions} pausedPrinters={printerSettings.filter((printer) => printer.outOfService).map((printer) => printer.name)} swatch={swatch} />
+      </div>
 
       {withdrawals?.length ? (
         <Alert className="mt-4">
@@ -469,6 +397,15 @@ export default function QueueBoard() {
         const cardRows = filtered[tab.value];
         return (
           <TabsContent key={tab.value} value={tab.value} className="mt-4">
+            {tab.value === "queued" || tab.value === "printing" ? (
+              <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+                {tab.value === "queued" && queuedView === "list" ? <Button type="button" size="sm" variant="outline" disabled={allShownQueued.length === 0} onClick={() => setSelectedIds([...new Set([...selectedQueuedIds, ...allShownQueued.map((row) => row._id)])])}>Select all shown</Button> : null}
+                <div className="flex gap-1">
+                  <Button size="sm" variant={queuedView === "list" ? "secondary" : "outline"} onClick={() => setQueuedView("list")}>List</Button>
+                  <Button size="sm" variant={queuedView === "printer" ? "secondary" : "outline"} onClick={() => setQueuedView("printer")}>By printer</Button>
+                </div>
+              </div>
+            ) : null}
             {cardRows.length === 0 ? (
               <Empty className="border border-dashed border-border-strong py-14">
                 <EmptyHeader>
@@ -477,7 +414,7 @@ export default function QueueBoard() {
                   <EmptyDescription>{tab.empty}</EmptyDescription>
                 </EmptyHeader>
               </Empty>
-            ) : tab.value === "printing" ? (
+            ) : tab.value === "printing" && queuedView === "list" ? (
               <div className="flex flex-col gap-4">
                 {printerGroups.map(({ printer, rows: groupRows }) => (
                   <section key={printer ?? "no-printer"} className="flex flex-col gap-2">
@@ -489,28 +426,38 @@ export default function QueueBoard() {
                 ))}
               </div>
             ) : tab.value === "all" ? (
-              renderCards(cardRows, { status: true })
+              <div className="flex flex-col gap-6">
+                {TABS.filter((stage) => stage.value !== "all").map((stage) => {
+                  const stageRows = filtered[stage.value];
+                  return stageRows.length ? <section key={stage.value} className="flex flex-col gap-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{stage.label} · {stageRows.length}</h3>
+                    {stage.value === "printing"
+                      ? <div className="flex flex-col gap-3">{printerGroups.map(({ printer, rows: groupRows }) => <section key={printer ?? "no-printer"}><h4 className="mb-2 text-xs text-muted-foreground">{printer ?? "No printer set"} · {groupRows.length}</h4>{renderCards(groupRows, { status: true })}</section>)}</div>
+                      : renderCards(stageRows, { status: true })}
+                  </section> : null;
+                })}
+              </div>
             ) : (
               <>
-                {tab.value === "queued" ? (
-                  <div className="mb-3 flex justify-end">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={allShownQueued.length === 0}
-                      onClick={() =>
-                        setSelectedIds([
-                          ...new Set([...selectedQueuedIds, ...allShownQueued.map((row) => row._id)]),
-                        ])
-                      }
-                    >
-                      Select all shown
-                    </Button>
+                {(tab.value === "queued" || tab.value === "printing") && queuedView === "printer" ? (
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {printerSettings.map((printer) => {
+                      const group = cardRows.filter((row) => row.printer === printer.name);
+                      return <section key={printer.name} className={`min-w-0 rounded-xl border p-3 ${printer.outOfService ? "border-amber-300 dark:border-amber-900" : "border-border"}`}>
+                        <h3 className={`mb-2 flex items-center gap-1 text-sm font-semibold ${printer.outOfService ? "text-amber-900 dark:text-amber-200" : ""}`}>{printer.outOfService ? <Pause className="size-3.5" /> : null}{printer.name} · {group.length}</h3>
+                        {renderCards(group, { variant: "ticket" })}
+                      </section>;
+                    })}
+                    {tab.value === "queued" ? <section className="min-w-0 rounded-xl border border-border p-3"><h3 className="mb-2 text-sm font-semibold">Not assigned · {cardRows.filter((row) => !row.printer).length}</h3>{renderCards(cardRows.filter((row) => !row.printer), { variant: "ticket" })}</section> : null}
                   </div>
-                ) : null}
-                {renderCards(cardRows, { selectable: tab.value === "queued" })}
-                {tab.value === "queued" && selectedVisible > 0 ? (
+                ) : tab.value === "queued" && queuedView === "list" ? (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={cardRows.map((row) => row._id)} strategy={verticalListSortingStrategy}>
+                      {renderCards(cardRows, { selectable: true, sortable: true })}
+                    </SortableContext>
+                  </DndContext>
+                ) : renderCards(cardRows, { selectable: tab.value === "queued" })}
+                {tab.value === "queued" && queuedView === "list" && selectedVisible > 0 ? (
                   <div className="sticky bottom-3 z-20 mt-4 flex flex-col gap-3 rounded-xl border border-brand/50 bg-background/95 p-3 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <strong>{selectedVisible} selected</strong>

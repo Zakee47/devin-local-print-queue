@@ -77,6 +77,7 @@ export default defineSchema({
     reviewedBy: v.optional(v.string()),
     // Sort key within the print queue; set when status becomes "queued".
     queueOrder: v.optional(v.number()),
+    votingApprovedAt: v.optional(v.number()),
     queuedAt: v.optional(v.number()),
     printingAt: v.optional(v.number()),
     // Name of the printer staff put this job on; optional.
