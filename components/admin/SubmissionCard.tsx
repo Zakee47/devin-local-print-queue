@@ -18,7 +18,7 @@ import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import ModelPreview from "@/components/ModelPreview";
-import { swatchFor } from "@/lib/colours";
+import { useSwatch } from "@/lib/use-swatch";
 import { formatDateTime } from "@/lib/datetime";
 import { formatDimensions } from "@/lib/dimensions";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { NativeSelect } from "@/components/ui/native-select";
+import { Checkbox } from "@/components/ui/checkbox";
 import RejectDialog from "@/components/admin/RejectDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
 import HistoryDialog from "@/components/admin/HistoryDialog";
@@ -39,26 +40,40 @@ export function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+type PrinterOption = { name: string; label: string };
+
 function PrinterSelect({
   row,
   value,
   disabled,
   onChange,
+  options,
 }: {
   row: BoardRow;
   value: string;
   disabled?: boolean;
   onChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  options?: PrinterOption[];
 }) {
+  const choices =
+    options ??
+    row.printerOptions.map((name) => ({
+      name,
+      label: row.colour && row.printersWithColour.includes(name) ? `${name} · ${row.colour} loaded` : name,
+    }));
+  const currentMissing = row.printer && !choices.some(({ name }) => name === row.printer);
   return (
     <NativeSelect aria-label="Printer" size="sm" value={value} disabled={disabled} onChange={onChange}>
       <option value="">Printer: not set</option>
-      {row.printer && !row.printerOptions.includes(row.printer) ? (
-        <option value={row.printer}>{row.printer}</option>
+      {currentMissing ? (
+        <option value={row.printer!}>
+          {row.printer}
+          {row.printerOutOfService ? " (out of service)" : ""}
+        </option>
       ) : null}
-      {row.printerOptions.map((name) => (
+      {choices.map(({ name, label }) => (
         <option key={name} value={name}>
-          {row.colour && row.printersWithColour.includes(name) ? `${name} · ${row.colour} loaded` : name}
+          {label}
         </option>
       ))}
     </NativeSelect>
@@ -71,13 +86,24 @@ export default function SubmissionCard({
   isFirst,
   isLast,
   isOwner = false,
+  showStatusBadge = false,
+  showSelection = false,
+  selected = false,
+  onSelectionChange,
+  printerOptions,
 }: {
   row: BoardRow;
   position?: number;
   isFirst?: boolean;
   isLast?: boolean;
   isOwner?: boolean;
+  showStatusBadge?: boolean;
+  showSelection?: boolean;
+  selected?: boolean;
+  onSelectionChange?: (checked: boolean) => void;
+  printerOptions?: PrinterOption[];
 }) {
+  const swatch = useSwatch();
   const approve = useMutation(api.queue.approve);
   const startPrinting = useMutation(api.queue.startPrinting);
   const setPrinter = useMutation(api.queue.setPrinter);
@@ -91,7 +117,6 @@ export default function SubmissionCard({
   const [rejecting, setRejecting] = useState(false);
   const [rejectKind, setRejectKind] = useState<"review" | "print_failed">("review");
   const [busy, setBusy] = useState(false);
-  const [printerChoice, setPrinterChoice] = useState("");
 
   const alreadyHasPrint = row.participantPrint !== null && row.participantPrint.printCode !== row.printCode;
 
@@ -116,6 +141,13 @@ export default function SubmissionCard({
     >
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
         <div className="flex shrink-0 items-center gap-3 sm:w-32 sm:flex-col sm:items-start">
+          {showSelection && row.status === "queued" ? (
+            <Checkbox
+              aria-label={`Select ${row.printCode}`}
+              checked={selected}
+              onCheckedChange={(value) => onSelectionChange?.(value === true)}
+            />
+          ) : null}
           {position !== undefined ? (
             <span className="font-mono text-xs text-muted-dim">#{position}</span>
           ) : null}
@@ -137,6 +169,19 @@ export default function SubmissionCard({
             )
           ) : null}
           <div className="flex flex-wrap gap-x-2 gap-y-1 sm:flex-col">
+            {showStatusBadge ? (
+              <Badge variant="outline">
+                {row.status === "submitted"
+                  ? "Needs review"
+                  : row.status === "queued"
+                    ? `Queued #${position ?? "—"}`
+                    : row.status === "printing"
+                      ? "Printing"
+                      : row.status === "done"
+                        ? "Done"
+                        : "Rejected"}
+              </Badge>
+            ) : null}
             <Badge variant={row.designEntry && !row.designRemoved ? "default" : "outline"}>
               <Trophy aria-hidden="true" />
               {row.designRemoved
@@ -162,7 +207,7 @@ export default function SubmissionCard({
               <span
                 aria-hidden
                 className="size-3 rounded-full ring-1 ring-foreground/20"
-                style={{ background: swatchFor(row.colour) }}
+                style={{ background: swatch(row.colour) }}
               />
               {row.colour ?? "Any colour"}
             </span>
@@ -172,6 +217,9 @@ export default function SubmissionCard({
                 <Printer aria-hidden="true" />
                 {row.printer}
               </Badge>
+            ) : null}
+            {row.printerOutOfService && row.printer ? (
+              <Badge variant="destructive">{row.printer} out of service — reassign</Badge>
             ) : null}
             {row.oversize ? <Badge variant="destructive">Over size limit</Badge> : null}
             <span className="font-mono uppercase">
@@ -246,6 +294,7 @@ export default function SubmissionCard({
               row={row}
               value={row.printer ?? ""}
               disabled={busy}
+              options={printerOptions}
               onChange={(event) => {
                 const printer = event.currentTarget.value;
                 void run("printer updated", () =>
@@ -278,15 +327,21 @@ export default function SubmissionCard({
             <>
               <PrinterSelect
                 row={row}
-                value={printerChoice}
+                value={row.printer ?? ""}
                 disabled={busy}
-                onChange={(event) => setPrinterChoice(event.currentTarget.value)}
+                options={printerOptions}
+                onChange={(event) => {
+                  const printer = event.currentTarget.value;
+                  void run("printer updated", () =>
+                    setPrinter({ id: row._id, printer: printer || undefined })
+                  );
+                }}
               />
               <Button
                 size="sm"
                 disabled={busy}
                 onClick={() =>
-                  run("printing", () => startPrinting({ id: row._id, printer: printerChoice || undefined }))
+                  run("printing", () => startPrinting({ id: row._id }))
                 }
               >
                 <Printer data-icon="inline-start" />
@@ -399,7 +454,7 @@ export default function SubmissionCard({
             url={row.fileUrl}
             previewUrl={row.previewUrl}
             kind={row.kind}
-            colour={swatchFor(row.colour)}
+            colour={swatch(row.colour)}
             alt={row.title}
             className="mx-auto max-h-80 max-w-80"
           />

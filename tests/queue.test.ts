@@ -72,6 +72,37 @@ async function setup() {
   return { t, as: t.withIdentity(admin), ...ids, addSubmission, get };
 }
 
+describe("colour demand", () => {
+  test("counts submitted and queued rows by colour, including vote-only rows, but excludes terminal and deleted rows", async () => {
+    const { t, participantId, otherId, addSubmission } = await setup();
+    const first = await addSubmission(participantId, { colour: "Crimson Red" });
+    await addSubmission(otherId, { colour: "crimson red", printRequested: false });
+    await addSubmission(participantId, { colour: "Red" });
+    const queued = await addSubmission(otherId, { colour: "CRIMSON RED" });
+    await addSubmission(participantId, { colour: "Gold", status: "printing" });
+    await addSubmission(otherId, { colour: "Silver", status: "done" });
+    await addSubmission(participantId, { colour: "Blue", status: "rejected" });
+    const deleted = await addSubmission(otherId, { colour: "Gold", status: "queued" });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(first, { colour: undefined });
+      await ctx.db.patch(queued, { status: "queued", queueOrder: 1 });
+      await ctx.db.patch(deleted, { deletedAt: Date.now() });
+    });
+
+    const demand = await t.query(api.submissions.colourDemand, {});
+    expect(demand).toEqual(
+      expect.arrayContaining([
+        { colour: null, waiting: 1 },
+        { colour: "crimson red", waiting: 2 },
+        { colour: "Red", waiting: 1 },
+      ])
+    );
+    expect(demand.map(({ colour }) => colour)).not.toContain("Gold");
+    expect(demand.map(({ colour }) => colour)).not.toContain("Silver");
+    expect(demand.map(({ colour }) => colour)).not.toContain("Blue");
+  });
+});
+
 describe("state machine", () => {
   test.each([
     { name: "legacy row", designEntry: undefined, expectedDesignEntry: false },
@@ -209,7 +240,15 @@ describe("printer assignments", () => {
     ).rejects.toThrow(/Unknown printer/);
   });
 
-  test("setPrinter updates printing and done jobs, clears blank values, and enforces access and status", async () => {
+  test("startPrinting uses the saved printer", async () => {
+    const { as, participantId, addSubmission, get } = await setup();
+    const assigned = await addSubmission(participantId, { status: "queued" });
+    await as.mutation(api.queue.setPrinter, { id: assigned, printer: "Ultimaker" });
+    await as.mutation(api.queue.startPrinting, { id: assigned });
+    expect(await get(assigned)).toMatchObject({ status: "printing", printer: "Ultimaker" });
+  });
+
+  test("setPrinter updates queued, printing and done jobs, clears blank values, and enforces access", async () => {
     const { t, as, participantId, otherId, addSubmission, get } = await setup();
     const printing = await addSubmission(participantId, { status: "printing" });
     await as.mutation(api.queue.setPrinter, { id: printing, printer: " muon 1 " });
@@ -222,7 +261,12 @@ describe("printer assignments", () => {
     expect((await get(done))?.printer).toBe("Creality");
 
     const queued = await addSubmission(participantId, { status: "queued" });
-    await expect(as.mutation(api.queue.setPrinter, { id: queued, printer: "Creality" })).rejects.toThrow();
+    await as.mutation(api.queue.setPrinter, { id: queued, printer: "Creality" });
+    expect((await get(queued))?.printer).toBe("Creality");
+    const submitted = await addSubmission(otherId, { status: "submitted" });
+    await expect(
+      as.mutation(api.queue.setPrinter, { id: submitted, printer: "Creality" })
+    ).rejects.toThrow(/expected queued or printing or done/);
     await expect(
       t.withIdentity(guest).mutation(api.queue.setPrinter, { id: printing, printer: "Creality" })
     ).rejects.toThrow();
@@ -232,7 +276,37 @@ describe("printer assignments", () => {
       "Muon 1",
       "cleared",
       "Creality",
+      "Creality",
     ]);
+  });
+
+  test("out-of-service printers are rejected except for an unchanged current assignment", async () => {
+    const { as, participantId, otherId, addSubmission, get } = await setup();
+    const assigned = await addSubmission(participantId, { status: "queued" });
+    await as.mutation(api.queue.setPrinter, { id: assigned, printer: "Muon 1" });
+    await as.mutation(api.settings.update, {
+      printers: [
+        { name: "Muon 1", colours: ["Red"], outOfService: true },
+        { name: "Creality", colours: ["Red"] },
+      ],
+    });
+
+    await as.mutation(api.queue.setPrinter, { id: assigned, printer: "muon 1" });
+    await expect(as.mutation(api.queue.startPrinting, { id: assigned })).rejects.toThrow(
+      "Muon 1 is out of service — pick another printer"
+    );
+
+    const queued = await addSubmission(otherId, { status: "queued" });
+    await expect(
+      as.mutation(api.queue.setPrinter, { id: queued, printer: "Muon 1" })
+    ).rejects.toThrow("Muon 1 is out of service — pick another printer");
+    await expect(
+      as.mutation(api.queue.startPrinting, { id: queued, printer: "Muon 1" })
+    ).rejects.toThrow("Muon 1 is out of service — pick another printer");
+    await expect(
+      as.mutation(api.queue.assignPrinters, { ids: [queued], printers: ["Muon 1"], mode: "one" })
+    ).rejects.toThrow("Muon 1 is out of service — pick another printer");
+    expect((await get(assigned))?.printer).toBe("Muon 1");
   });
 
   test("moving a printing job back to queued clears its printer", async () => {
@@ -276,6 +350,116 @@ describe("printer assignments", () => {
       printersWithColour: ["Muon 1"],
       printerOptions: ["Muon 1", "Creality", "Ultimaker", "Muon 2"],
     });
+  });
+
+  test("board excludes out-of-service printers from options and flags existing assignments", async () => {
+    const { t, as, participantId, addSubmission } = await setup();
+    await as.mutation(api.settings.update, {
+      printers: [
+        { name: "Creality", colours: ["Gold"] },
+        { name: "Muon 1", colours: ["Gold"], outOfService: true },
+      ],
+    });
+    const id = await addSubmission(participantId, { status: "queued", colour: "Gold" });
+    await t.run((ctx) => ctx.db.patch(id, { printer: "Muon 1" }));
+    const [row] = await as.query(api.queue.board);
+    expect(row).toMatchObject({
+      printer: "Muon 1",
+      printerOutOfService: true,
+      printersWithColour: ["Creality"],
+      printerOptions: ["Creality"],
+    });
+  });
+
+  test("assignPrinters one ignores colour and leaves queue order unchanged", async () => {
+    const { t, as, participantId, addSubmission, get } = await setup();
+    await as.mutation(api.settings.update, {
+      printers: [{ name: "Blue printer", colours: ["Blue"] }],
+    });
+    const id = await addSubmission(participantId, { status: "queued", colour: "Gold" });
+    await t.run((ctx) => ctx.db.patch(id, { queueOrder: 17 }));
+
+    const result = await as.mutation(api.queue.assignPrinters, {
+      ids: [id],
+      printers: [" Blue printer ", "blue printer"],
+      mode: "one",
+    });
+    expect(result).toMatchObject({
+      assigned: [{ id, printCode: "KC-001", printer: "Blue printer" }],
+      skipped: [],
+    });
+    expect(await get(id)).toMatchObject({ printer: "Blue printer", queueOrder: 17, status: "queued" });
+    const audit = await t.run((ctx) => ctx.db.query("auditLog").collect());
+    expect(audit.filter((row) => row.action === "queue.setPrinter").at(-1)?.detail).toBe(
+      "Blue printer (bulk)"
+    );
+  });
+
+  test("assignPrinters spread respects loaded colours and balances existing load", async () => {
+    const { t, as, participantId, addSubmission, get } = await setup();
+    await as.mutation(api.settings.update, {
+      printers: [
+        { name: "A", colours: ["Gold"] },
+        { name: "B", colours: [" gold "] },
+        { name: "C", colours: ["GOLD"] },
+      ],
+    });
+    const alreadyOnA = await Promise.all(
+      Array.from({ length: 4 }, () => addSubmission(participantId, { status: "queued", colour: "Gold" }))
+    );
+    for (const id of alreadyOnA) await as.mutation(api.queue.setPrinter, { id, printer: "A" });
+
+    const selected = await Promise.all(
+      Array.from({ length: 4 }, () => addSubmission(participantId, { status: "queued", colour: "Gold" }))
+    );
+    await Promise.all(selected.map((id, index) => t.run((ctx) => ctx.db.patch(id, { queueOrder: index + 5 }))));
+    const queueOrders = await Promise.all(selected.map(async (id) => (await get(id))?.queueOrder));
+    const result = await as.mutation(api.queue.assignPrinters, {
+      ids: selected,
+      printers: ["A", "B", "C"],
+      mode: "spread",
+    });
+
+    expect(result.assigned.map(({ printer }) => printer)).toEqual(["B", "C", "B", "C"]);
+    expect(result.skipped).toEqual([]);
+    expect(await Promise.all(selected.map(async (id) => (await get(id))?.queueOrder))).toEqual(queueOrders);
+    const audits = await t.run((ctx) => ctx.db.query("auditLog").collect());
+    expect(audits.filter((row) => row.detail?.endsWith("(bulk)"))).toHaveLength(4);
+  });
+
+  test("assignPrinters spread skips unmatched colours and sends Any colour to any chosen printer", async () => {
+    const { t, as, participantId, otherId, addSubmission } = await setup();
+    await as.mutation(api.settings.update, {
+      printers: [
+        { name: "Blue printer", colours: ["Sky Blue"] },
+        { name: "Gold printer", colours: ["Gold"] },
+      ],
+    });
+    const skipped = await addSubmission(participantId, { status: "queued", colour: "Crimson Red" });
+    const anyColour = await addSubmission(otherId, { status: "queued" });
+    await t.run((ctx) => ctx.db.patch(anyColour, { colour: undefined }));
+    await as.mutation(api.queue.assignPrinters, {
+      ids: [skipped, anyColour],
+      printers: ["Blue printer"],
+      mode: "spread",
+    }).then((result) => {
+      expect(result).toMatchObject({
+        assigned: [{ id: anyColour, printer: "Blue printer" }],
+        skipped: [{ id: skipped, printCode: "KC-001" }],
+      });
+    });
+  });
+
+  test("assignPrinters rejects non-queued submissions with the print code", async () => {
+    const { as, participantId, addSubmission } = await setup();
+    const submitted = await addSubmission(participantId, { status: "submitted" });
+    await expect(
+      as.mutation(api.queue.assignPrinters, {
+        ids: [submitted],
+        printers: ["Creality"],
+        mode: "one",
+      })
+    ).rejects.toThrow("KC-001 is submitted, expected queued");
   });
 });
 

@@ -3,11 +3,13 @@ export type Tour = "participant" | "staff";
 export type TutorialArt =
   | "upload"
   | "roles"
+  | "colour"
   | "journey"
   | "voting"
   | "changes"
   | "help"
   | "queue"
+  | "filters"
   | "download"
   | "review"
   | "printing"
@@ -27,6 +29,11 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
       art: "roles",
       title: "Choose Vote, Print or Both",
       body: "Vote enters your design in the competition straight away, and the winner takes home a 3D printer. Print asks staff to print it for you once they approve it. You can have one of each.",
+    },
+    {
+      art: "colour",
+      title: "Pick a colour, or Any colour",
+      body: "Each colour shows how many prints are waiting for it. Not fussy? Pick Any colour or a quieter shade and you'll print sooner. Colours depend on what's loaded and aren't guaranteed.",
     },
     {
       art: "journey",
@@ -56,6 +63,11 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
       body: "Prints move through the tabs: Needs review → Queued → Printing → Done. Rejected files have their own tab.",
     },
     {
+      art: "filters",
+      title: "Filters and printers",
+      body: "Use All to see every stage. Filter by colour and printer, watch the load strip for a backlog, and mark a printer out of service in Settings when it's down.",
+    },
+    {
       art: "download",
       title: "Download files",
       body: "Files are named with the print code, name, colour and title, like KC-007_ada-lovelace_red_rocket.3mf, so they sort by print code.",
@@ -68,7 +80,7 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "printing",
       title: "On the printer",
-      body: "Pick a printer and press Start printing. When it comes off, mark it done, or mark the print failed with a reason.",
+      body: "Assign each queued print to a printer, or tick several and bulk assign, then press Start printing. When it comes off, mark it done, or mark the print failed with a reason.",
     },
     {
       art: "changed",

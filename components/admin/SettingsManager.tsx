@@ -8,10 +8,12 @@ import { api } from "@/convex/_generated/api";
 import {
   COLOUR_DISCLAIMER,
   MAX_BLAST_MESSAGE_LENGTH,
+  type ColourCode,
   type Dimensions,
   type Printer,
 } from "@/lib/event";
-import { swatchFor } from "@/lib/colours";
+import { useSwatch } from "@/lib/use-swatch";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -85,8 +87,10 @@ function cleanPrinters(printers: Printer[], palette: string[]): Printer[] {
 export default function SettingsManager() {
   const settings = useQuery(api.settings.get);
   const update = useMutation(api.settings.update);
+  const swatch = useSwatch();
   const now = useNow();
   const [newColour, setNewColour] = useState("");
+  const [newColourHex, setNewColourHex] = useState("#888888");
   const [maxMb, setMaxMb] = useState<string | null>(null);
   const [deadlineInput, setDeadlineInput] = useState<string | null>(null);
   const [announcementInput, setAnnouncementInput] = useState<string | null>(null);
@@ -299,6 +303,24 @@ export default function SettingsManager() {
                     <X />
                   </Button>
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Checkbox
+                    id={`printer-${index}-out-of-service`}
+                    checked={printer.outOfService === true}
+                    onCheckedChange={(value) =>
+                      savePrinters(
+                        currentPrinters.map((item, i) =>
+                          i === index ? { ...item, outOfService: value === true } : item
+                        ),
+                        `${printer.name} status saved`
+                      )
+                    }
+                  />
+                  <FieldLabel htmlFor={`printer-${index}-out-of-service`} className="font-normal">
+                    Out of service
+                  </FieldLabel>
+                  {printer.outOfService ? <Badge variant="destructive">Out of service</Badge> : null}
+                </div>
                 {colours.length > 0 ? (
                   <FieldSet>
                     <FieldLegend variant="label" className="flex items-center gap-1">
@@ -337,7 +359,7 @@ export default function SettingsManager() {
                               <span
                                 aria-hidden="true"
                                 className="size-3 rounded-full ring-1 ring-foreground/20"
-                                style={{ background: swatchFor(colour) }}
+                                style={{ background: swatch(colour) }}
                               />
                               {colour}
                             </FieldLabel>
@@ -465,13 +487,41 @@ export default function SettingsManager() {
       >
         <ul className="mb-4 divide-y divide-border border-y border-border">
           {colours.map((colour, index) => (
-            <li key={colour} className="flex min-h-11 items-center gap-3 px-1 py-1.5">
+            <li key={colour} className="flex min-h-11 flex-wrap items-center gap-3 px-1 py-1.5">
               <span
                 aria-hidden="true"
                 className="size-4 rounded-full ring-1 ring-foreground/20"
-                style={{ background: swatchFor(colour) }}
+                style={{ background: swatch(colour) }}
               />
               <span className="flex-1 text-sm">{colour}</span>
+              {(() => {
+                const code = settings.colourCodes?.find(
+                  (item) => item.name.toLowerCase() === colour.toLowerCase()
+                );
+                const effective = swatch(colour);
+                const inputValue = /^#[0-9a-f]{6}$/i.test(effective) ? effective : "#888888";
+                return (
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <input
+                      aria-label={`${colour} colour code`}
+                      type="color"
+                      value={code?.hex ?? inputValue}
+                      onChange={(event) => {
+                        const nextCode: ColourCode = { name: colour, hex: event.target.value };
+                        const nextCodes = [
+                          ...(settings.colourCodes ?? []).filter(
+                            (item) => item.name.toLowerCase() !== colour.toLowerCase()
+                          ),
+                          nextCode,
+                        ];
+                        void save({ colourCodes: nextCodes }, `${colour} colour code saved`);
+                      }}
+                      className="size-8 cursor-pointer rounded border border-border bg-transparent p-0.5"
+                    />
+                    <code>{code?.hex ?? effective}</code>
+                  </label>
+                );
+              })()}
               <Button
                 type="button"
                 size="icon-sm"
@@ -518,27 +568,52 @@ export default function SettingsManager() {
             if (colours.some((colour) => colour.toLowerCase() === name.toLowerCase())) {
               return toast.error(`${name} is already in the palette`);
             }
-            savePalette([...colours, name], `${name} added`);
+            const nextColours = [...colours, name];
+            const nextPrinters = cleanPrinters(currentPrinters, nextColours);
+            setPrintersDraft(nextPrinters);
+            void save(
+              {
+                colours: nextColours,
+                printers: nextPrinters,
+                colourCodes: [
+                  ...(settings.colourCodes ?? []).filter(
+                    (item) => item.name.toLowerCase() !== name.toLowerCase()
+                  ),
+                  { name, hex: newColourHex },
+                ],
+              },
+              `${name} added`
+            );
             setNewColour("");
+            setNewColourHex("#888888");
           }}
         >
-          <Field className="max-w-sm">
+          <Field className="max-w-xl">
             <FieldLabel htmlFor="new-colour">Add a colour</FieldLabel>
-            <InputGroup>
-              <InputGroupInput
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
                 id="new-colour"
                 value={newColour}
                 onChange={(event) => setNewColour(event.target.value)}
                 placeholder="Silk gold"
+                className="max-w-xs"
               />
-              <InputGroupAddon align="inline-end">
-                <InputGroupButton type="submit" variant="default" size="xs" disabled={!newColour.trim()}>
-                  <Plus data-icon="inline-start" />
-                  Add
-                </InputGroupButton>
-              </InputGroupAddon>
-            </InputGroup>
-            <FieldDescription>Common names (red, blue…) get a swatch; any CSS colour works too.</FieldDescription>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  aria-label="New colour hex code"
+                  type="color"
+                  value={newColourHex}
+                  onChange={(event) => setNewColourHex(event.target.value)}
+                  className="size-8 cursor-pointer rounded border border-border bg-transparent p-0.5"
+                />
+                <code>{newColourHex}</code>
+              </label>
+              <Button type="submit" variant="default" size="sm" disabled={!newColour.trim()}>
+                <Plus data-icon="inline-start" />
+                Add
+              </Button>
+            </div>
+            <FieldDescription>Choose the exact hex colour shown for this palette name.</FieldDescription>
           </Field>
         </form>
       </Section>

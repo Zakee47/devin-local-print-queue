@@ -3,11 +3,14 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { viewerRole, requireAdmin } from "./admins";
 import { downloadFileName } from "../lib/files";
-import { MAX_SUBMISSIONS_PER_PARTICIPANT, type Printer } from "../lib/event";
+import { MAX_SUBMISSIONS_PER_PARTICIPANT } from "../lib/event";
+import { inServicePrinters, printersWithColour } from "../lib/printers";
 import { fitsWithin } from "../lib/dimensions";
 import { readSettings, type Settings } from "./settings";
 import { previewUrlOf } from "./submissions";
 import { currentVersion, isActive, isDeleted, isDesignEntry, printRequestPatch } from "./entries";
+
+export { printersWithColour } from "../lib/printers";
 
 type PipelineStatus = "queued" | "printing" | "done";
 type ParticipantPrint = { printCode: string; status: PipelineStatus };
@@ -23,21 +26,23 @@ function isPipelineStatus(status: Doc<"submissions">["status"]): status is Pipel
   return PIPELINE.includes(status as PipelineStatus);
 }
 
-export function printersWithColour(printers: Printer[], colour?: string): string[] {
-  const requested = colour?.trim().toLowerCase();
-  if (!requested) return printers.map(({ name }) => name);
-  return printers
-    .filter(({ colours }) => colours.some((loaded) => loaded.trim().toLowerCase() === requested))
-    .map(({ name }) => name);
-}
-
-function requireKnownPrinter(settings: Settings, name: string | undefined): string | undefined {
+function requireKnownPrinter(
+  settings: Settings,
+  name: string | undefined,
+  currentPrinter?: string
+): string | undefined {
   const trimmed = name?.trim();
   if (!trimmed) return undefined;
   const printer = settings.printers.find(
     ({ name: configuredName }) => configuredName.trim().toLowerCase() === trimmed.toLowerCase()
   );
   if (!printer) throw new ConvexError(`Unknown printer "${trimmed}"`);
+  if (
+    printer.outOfService &&
+    printer.name.trim().toLowerCase() !== currentPrinter?.trim().toLowerCase()
+  ) {
+    throw new ConvexError(`${printer.name} is out of service — pick another printer`);
+  }
   return printer.name;
 }
 
@@ -105,6 +110,9 @@ export const board = query({
       const oversize = s.dimensionsMm ? !fitsWithin(s.dimensionsMm, settings.maxDimensionsMm) : false;
       const printersWithRequestedColour = printersWithColour(settings.printers, s.colour);
       const matchingPrinters = new Set(printersWithRequestedColour);
+      const currentPrinter = settings.printers.find(
+        ({ name }) => name.trim().toLowerCase() === s.printer?.trim().toLowerCase()
+      );
       rows.push({
         ...s,
         version: currentVersion(s),
@@ -114,10 +122,13 @@ export const board = query({
         participantUsername,
         participantName,
         ...(isOwner ? { participantEmail: participant?.email ?? "" } : {}),
+        printerOutOfService: currentPrinter?.outOfService ?? false,
         printersWithColour: printersWithRequestedColour,
         printerOptions: [
           ...printersWithRequestedColour,
-          ...settings.printers.filter(({ name }) => !matchingPrinters.has(name)).map(({ name }) => name),
+          ...inServicePrinters(settings.printers)
+            .filter(({ name }) => !matchingPrinters.has(name))
+            .map(({ name }) => name),
         ],
         oversize,
         fileUrl: await ctx.storage.getUrl(s.storageId),
@@ -234,8 +245,9 @@ export const startPrinting = mutation({
   args: { id: v.id("submissions"), printer: v.optional(v.string()) },
   handler: async (ctx, { id, printer }) => {
     const actor = await requireAdmin(ctx);
-    expectStatus(await load(ctx, id), "queued");
-    const resolved = requireKnownPrinter(await readSettings(ctx), printer);
+    const submission = await load(ctx, id);
+    expectStatus(submission, "queued");
+    const resolved = requireKnownPrinter(await readSettings(ctx), printer ?? submission.printer);
     await ctx.db.patch(id, { status: "printing", printingAt: Date.now(), printer: resolved });
     await audit(ctx, actor, "queue.startPrinting", id, resolved);
   },
@@ -246,10 +258,93 @@ export const setPrinter = mutation({
   handler: async (ctx, { id, printer }) => {
     const actor = await requireAdmin(ctx);
     const submission = await load(ctx, id);
-    expectStatus(submission, "printing", "done");
-    const resolved = requireKnownPrinter(await readSettings(ctx), printer);
+    expectStatus(submission, "queued", "printing", "done");
+    const resolved = requireKnownPrinter(await readSettings(ctx), printer, submission.printer);
     await ctx.db.patch(id, { printer: resolved });
     await audit(ctx, actor, "queue.setPrinter", id, resolved ?? "cleared");
+  },
+});
+
+export const assignPrinters = mutation({
+  args: {
+    ids: v.array(v.id("submissions")),
+    printers: v.array(v.string()),
+    mode: v.union(v.literal("one"), v.literal("spread")),
+  },
+  handler: async (ctx, { ids, printers, mode }) => {
+    const actor = await requireAdmin(ctx);
+    if (ids.length < 1 || ids.length > 200) {
+      throw new ConvexError("Select between 1 and 200 prints");
+    }
+    const uniqueIds = [...new Set(ids)];
+    const submissions = await Promise.all(uniqueIds.map((id) => load(ctx, id)));
+    for (const submission of submissions) expectStatus(submission, "queued");
+
+    const settings = await readSettings(ctx);
+    const chosen: { name: string; colours: string[]; outOfService?: boolean }[] = [];
+    const seenPrinters = new Set<string>();
+    for (const name of printers) {
+      if (!name.trim()) throw new ConvexError("Choose a configured printer");
+      const resolved = requireKnownPrinter(settings, name);
+      if (!resolved) continue;
+      const key = resolved.toLowerCase();
+      if (seenPrinters.has(key)) continue;
+      seenPrinters.add(key);
+      const configured = settings.printers.find((printer) => printer.name === resolved);
+      if (configured) chosen.push(configured);
+    }
+    if (mode === "one" && chosen.length !== 1) {
+      throw new ConvexError("Choose exactly one in-service printer");
+    }
+
+    const selectedIds = new Set(uniqueIds);
+    const loadByPrinter = new Map(chosen.map(({ name }) => [name.toLowerCase(), 0]));
+    if (mode === "spread" && chosen.length > 0) {
+      const existing = await ctx.db.query("submissions").collect();
+      for (const submission of existing) {
+        if (
+          isDeleted(submission) ||
+          selectedIds.has(submission._id) ||
+          (submission.status !== "queued" && submission.status !== "printing") ||
+          !submission.printer
+        ) {
+          continue;
+        }
+        const key = submission.printer.trim().toLowerCase();
+        if (loadByPrinter.has(key)) loadByPrinter.set(key, loadByPrinter.get(key)! + 1);
+      }
+    }
+
+    const assigned: { id: Id<"submissions">; printCode: string; printer: string }[] = [];
+    const skipped: { id: Id<"submissions">; printCode: string }[] = [];
+    const ordered = mode === "spread"
+      ? [...submissions].sort((a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0))
+      : submissions;
+
+    for (const submission of ordered) {
+      let printer: string | undefined;
+      if (mode === "one") {
+        printer = chosen[0].name;
+      } else {
+        const candidates = printersWithColour(chosen, submission.colour);
+        for (const candidate of candidates) {
+          if (printer === undefined || loadByPrinter.get(candidate.toLowerCase())! < loadByPrinter.get(printer.toLowerCase())!) {
+            printer = candidate;
+          }
+        }
+      }
+      if (!printer) {
+        skipped.push({ id: submission._id, printCode: submission.printCode });
+        continue;
+      }
+      await ctx.db.patch(submission._id, { printer });
+      await audit(ctx, actor, "queue.setPrinter", submission._id, `${printer} (bulk)`);
+      assigned.push({ id: submission._id, printCode: submission.printCode, printer });
+      if (mode === "spread") {
+        loadByPrinter.set(printer.toLowerCase(), loadByPrinter.get(printer.toLowerCase())! + 1);
+      }
+    }
+    return { assigned, skipped };
   },
 });
 

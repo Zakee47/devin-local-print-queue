@@ -543,6 +543,32 @@ export const setRoles = mutation({
   },
 });
 
+export const colourDemand = query({
+  args: {},
+  handler: async (ctx) => {
+    const [submitted, queued] = await Promise.all(
+      (["submitted", "queued"] as const).map((status) =>
+        ctx.db
+          .query("submissions")
+          .withIndex("by_status", (q) => q.eq("status", status))
+          .collect()
+      )
+    );
+    const byColour = new Map<string, { colour: string | null; waiting: number }>();
+    for (const submission of [...submitted, ...queued]) {
+      if (isDeleted(submission)) continue;
+      const colour = submission.colour?.trim() || null;
+      const key = colour?.toLowerCase() ?? "";
+      const current = byColour.get(key);
+      if (current) current.waiting += 1;
+      else byColour.set(key, { colour, waiting: 1 });
+    }
+    return [...byColour.values()].sort((a, b) =>
+      (a.colour ?? "").localeCompare(b.colour ?? "")
+    );
+  },
+});
+
 export const update = mutation({
   args: {
     id: v.id("submissions"),
