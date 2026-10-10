@@ -52,11 +52,11 @@ export default function QueueFilters({
         ).join(", ");
         const active = pill.values.length > 0;
         return (
-          <div key={pill.id} className={`flex items-center gap-1 rounded-full border px-2 py-1 ${active ? "border-foreground bg-foreground text-background" : "border-border bg-card"}`}>
+          <div key={pill.id} className={`flex items-center gap-1 rounded-full border px-2 py-1 ${active ? "border-foreground bg-foreground text-background" : "border-dashed border-muted-foreground/40 bg-muted/20 text-muted-foreground"}`}>
             <span className={`font-mono text-xs ${active ? "text-background/70" : "text-muted-foreground"}`}>{index + 1}</span>
             <Popover open={openPillId === pill.id} onOpenChange={(open) => setOpenPillId(open ? pill.id : null)}>
-              <PopoverTrigger render={<Button type="button" variant="ghost" size="sm" className={`h-7 px-2 text-xs ${active ? "text-background hover:bg-background/10 hover:text-background" : ""}`} />}>
-                {label}{selection ? `: ${selection}` : ""}
+              <PopoverTrigger render={<button type="button" className={`rounded-full px-1.5 py-1 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${active ? "text-background" : "text-muted-foreground"}`} />}>
+                {label}: {selection || "choose…"}
               </PopoverTrigger>
               <PopoverContent align="start" className="max-h-80 w-64 overflow-y-auto p-2">
                 <div className="flex flex-col gap-1">
@@ -72,7 +72,7 @@ export default function QueueFilters({
                 </div>
               </PopoverContent>
             </Popover>
-            <Button type="button" size="icon-xs" variant="ghost" className={active ? "text-background hover:bg-background/10 hover:text-background" : ""} aria-label={`Remove ${label.toLowerCase()} filter ${index + 1}`} onClick={() => {
+            <Button type="button" size="icon-xs" variant="ghost" className={active ? "text-background hover:bg-background/10 hover:text-background" : "text-muted-foreground"} aria-label={`Remove ${label.toLowerCase()} filter ${index + 1}`} onClick={() => {
               if (openPillId === pill.id) setOpenPillId(null);
               onChange(pills.filter((item) => item.id !== pill.id));
             }}><X /></Button>

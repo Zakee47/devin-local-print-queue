@@ -440,15 +440,15 @@ export default function QueueBoard() {
             ) : (
               <>
                 {(tab.value === "queued" || tab.value === "printing") && queuedView === "printer" ? (
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="flex gap-4 overflow-x-auto pb-3">
                     {printerSettings.map((printer) => {
                       const group = cardRows.filter((row) => row.printer === printer.name);
-                      return <section key={printer.name} className={`min-w-0 rounded-xl border p-3 ${printer.outOfService ? "border-amber-300 dark:border-amber-900" : "border-border"}`}>
+                      return <section key={printer.name} className={`w-[280px] shrink-0 rounded-xl border p-3 ${printer.outOfService ? "border-amber-300 dark:border-amber-900" : "border-border"}`}>
                         <h3 className={`mb-2 flex items-center gap-1 text-sm font-semibold ${printer.outOfService ? "text-amber-900 dark:text-amber-200" : ""}`}>{printer.outOfService ? <Pause className="size-3.5" /> : null}{printer.name} · {group.length}</h3>
                         {renderCards(group, { variant: "ticket" })}
                       </section>;
                     })}
-                    {tab.value === "queued" ? <section className="min-w-0 rounded-xl border border-border p-3"><h3 className="mb-2 text-sm font-semibold">Not assigned · {cardRows.filter((row) => !row.printer).length}</h3>{renderCards(cardRows.filter((row) => !row.printer), { variant: "ticket" })}</section> : null}
+                    {tab.value === "queued" ? <section className="w-[280px] shrink-0 rounded-xl border border-border p-3"><h3 className="mb-2 text-sm font-semibold">Not assigned · {cardRows.filter((row) => !row.printer).length}</h3>{renderCards(cardRows.filter((row) => !row.printer), { variant: "ticket" })}</section> : null}
                   </div>
                 ) : tab.value === "queued" && queuedView === "list" ? (
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>

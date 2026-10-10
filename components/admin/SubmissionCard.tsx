@@ -51,15 +51,16 @@ type PrinterGroups = { matching: { name: string; label: string }[]; other: { nam
 type DragStyle = { ref?: (node: HTMLLIElement | null) => void; style?: CSSProperties };
 
 function PrinterSelect({
-  row, value, disabled, onChange, options,
+  row, value, disabled, onChange, options, className,
 }: {
   row: BoardRow; value: string; disabled?: boolean;
   onChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
   options: PrinterGroups;
+  className?: string;
 }) {
   const currentUnavailable = Boolean(row.printer && ![...options.matching, ...options.other].some((p) => p.name === row.printer));
   return (
-    <NativeSelect aria-label="Printer" size="sm" value={value} disabled={disabled} onChange={onChange}>
+    <NativeSelect className={className} aria-label="Printer" size="sm" value={value} disabled={disabled} onChange={onChange}>
       <option value="">Printer: not set</option>
       {currentUnavailable ? <option value={row.printer!}>{row.printer} (paused)</option> : null}
       {row.colour ? (
@@ -185,36 +186,37 @@ export default function SubmissionCard({
       style={dragStyle?.style}
       className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-(--shadow-card)", variant === "ticket" && "rounded-lg shadow-none", alreadyHasPrint && "opacity-55 hover:opacity-100", isDragging && "z-10 opacity-70 shadow-xl")}
     >
-      <div className={cn("grid gap-3 p-3 sm:grid-cols-[auto_1fr_auto] sm:items-start sm:gap-4 sm:p-4", variant === "ticket" && "gap-2 p-2 sm:gap-2 sm:p-2")}>
-        <div className="flex items-center gap-2 sm:w-36 sm:flex-col sm:items-start">
-          <div className="flex items-center gap-2">
+      <div className={cn("grid gap-3 p-3 sm:grid-cols-[14rem_minmax(0,1fr)_auto] sm:items-start sm:gap-4 sm:p-4", variant === "ticket" && "grid-cols-1 gap-2 p-3 sm:grid-cols-1 sm:gap-2 sm:p-3")}>
+        <div className={cn("flex min-w-0 flex-col items-start gap-1", variant === "ticket" ? "w-full" : "sm:w-56")}>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{statusLine}</p>
+          <div className="flex items-center gap-2 whitespace-nowrap">
             {dragHandle}
             {showSelection && row.status === "queued" ? (
               <Checkbox aria-label={`Select ${row.printCode}`} checked={selected} onCheckedChange={(v) => onSelectionChange?.(v === true)} />
             ) : null}
-            <span className={cn("font-mono text-3xl font-semibold tracking-tight tabular-nums", variant === "ticket" && "text-2xl")}>{row.printCode}</span>
+            <span className={cn("whitespace-nowrap font-mono text-3xl font-semibold tracking-tight tabular-nums", variant === "ticket" && "text-2xl")}>{row.printCode}</span>
           </div>
-          {variant !== "ticket" && row.version > 1 ? <Badge variant="outline">v{row.version}</Badge> : null}
-          {variant !== "ticket" && showStatusBadge ? <Badge variant="outline">{row.status}</Badge> : null}
-          {variant !== "ticket" && (row.status === "submitted" || row.status === "rejected") ? (
-            <Badge variant={alreadyHasPrint ? "outline" : "secondary"}>{printBadge}</Badge>
-          ) : null}
-          {variant !== "ticket" && voteOnly ? <Badge variant="outline">{approvedForVoting ? "Approved for voting" : "Vote only"}</Badge> : null}
-          {variant !== "ticket" && (row.designRemoved ? <Badge variant="outline">Removed from voting</Badge> : row.designEntry ? <Badge variant="outline">In voting</Badge> : null)}
-          {variant !== "ticket" && row.oversize ? <Badge variant="destructive">Over size limit</Badge> : null}
-          {variant !== "ticket" && position !== undefined ? <span className="font-mono text-xs text-muted-foreground">#{position}</span> : null}
         </div>
 
         <div className="min-w-0">
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{statusLine}</p>
           <div className="flex flex-wrap items-baseline gap-x-2">
             <h3 className="min-w-0 truncate text-base font-semibold">{row.title}</h3>
-            <span className="text-sm text-muted-foreground">@{row.participantUsername}</span>
+            {variant !== "ticket" ? <span className="text-sm text-muted-foreground">@{row.participantUsername}</span> : null}
           </div>
-          {variant !== "ticket" ? <p className="text-sm text-muted-foreground">{row.participantName}</p> : null}
+          <p className="text-sm text-muted-foreground">{variant === "ticket" ? `@${row.participantUsername} · ${row.participantName}` : row.participantName}</p>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {variant !== "ticket" && row.version > 1 ? <Badge variant="outline">v{row.version}</Badge> : null}
+            {variant !== "ticket" && showStatusBadge ? <Badge variant="outline">{row.status}</Badge> : null}
+            {variant !== "ticket" && (row.status === "submitted" || row.status === "rejected") ? (
+              <Badge variant={alreadyHasPrint ? "outline" : "secondary"}>{printBadge}</Badge>
+            ) : null}
+            {variant !== "ticket" && voteOnly ? <Badge variant="outline">{approvedForVoting ? "Approved for voting" : "Vote only"}</Badge> : null}
+            {variant !== "ticket" && (row.designRemoved ? <Badge variant="outline">Removed from voting</Badge> : row.designEntry ? <Badge variant="outline">In voting</Badge> : null)}
+            {variant !== "ticket" && row.oversize ? <Badge variant="destructive">Over size limit</Badge> : null}
+          </div>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {row.colour ? <span className="inline-flex items-center gap-1"><i className="size-3 rounded-full border border-black/10" style={{ backgroundColor: swatch(row.colour) }} />{row.colour}</span> : null}
-            {variant !== "ticket" && row.dimensionsMm ? <span>{formatDimensions(row.dimensionsMm)}</span> : null}
+            {row.dimensionsMm ? <span>{variant === "ticket" && row.colour ? "· " : ""}{formatDimensions(row.dimensionsMm)}</span> : null}
             {variant !== "ticket" && row.printer ? <span className={printerPaused ? "text-amber-700 dark:text-amber-300" : ""}>{row.printer}{printerPaused ? " · paused" : ""}</span> : null}
             {variant !== "ticket" ? <span>{row.kind.toUpperCase()} · {formatBytes(row.sizeBytes)}</span> : null}
             {variant !== "ticket" && row.status === "queued" ? <span>queued {timeAgo(row.queuedAt ?? row._creationTime, now)}</span> : null}
@@ -227,7 +229,11 @@ export default function SubmissionCard({
           </div> : null}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 sm:max-w-72 sm:justify-end">
+        {variant === "ticket" && row.status === "queued" ? (
+          <PrinterSelect className="w-full" row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} onChange={(e) => void run("printer updated", () => setPrinter({ id: row._id, printer: e.currentTarget.value || undefined }))} />
+        ) : null}
+
+        <div className={cn("flex flex-wrap items-center gap-1.5 sm:max-w-72 sm:justify-end", variant === "ticket" && "w-full justify-start sm:max-w-none")}>
           {row.status === "submitted" && !withdrawn && !approvedForVoting ? (
             <>
               {!alreadyHasPrint && (!voteOnly || !row.designRemoved) ? <Button size="sm" disabled={busy} onClick={() => run(voteOnly ? "approved for voting" : "approved", () => voteOnly ? approveForVoting({ id: row._id }) : approve({ id: row._id }))}>
@@ -238,7 +244,7 @@ export default function SubmissionCard({
           ) : null}
           {row.status === "queued" ? (
             <>
-              <PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} onChange={(e) => void run("printer updated", () => setPrinter({ id: row._id, printer: e.currentTarget.value || undefined }))} />
+              {variant !== "ticket" ? <PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} onChange={(e) => void run("printer updated", () => setPrinter({ id: row._id, printer: e.currentTarget.value || undefined }))} /> : null}
               <Button size="sm" disabled={busy || !row.printer || row.printerOutOfService} title={!row.printer ? "Assign a printer first" : row.printerOutOfService ? "Pick another printer first" : undefined} onClick={() => run("printing", () => startPrinting({ id: row._id }))}><Printer data-icon="inline-start" />Start printing</Button>
             </>
           ) : null}
@@ -353,9 +359,47 @@ export default function SubmissionCard({
       </AlertDialog>
       <Dialog open={printerOpen} onOpenChange={setPrinterOpen}><DialogContent><DialogHeader><DialogTitle>Change printer · {row.printCode}</DialogTitle><DialogDescription>Choose a printer for this job.</DialogDescription></DialogHeader><PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} onChange={(e) => { const printer = e.currentTarget.value; void run("printer updated", () => setPrinter({ id: row._id, printer: printer || undefined })).then(() => setPrinterOpen(false)); }} /><DialogFooter><Button variant="outline" onClick={() => setPrinterOpen(false)}>Close</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={positionOpen} onOpenChange={setPositionOpen}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle>Move {row.printCode}</DialogTitle><DialogDescription>Choose a queue position from 1 to {queueOrder.length}.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor={`position-${row._id}`}>Position</FieldLabel><input id={`position-${row._id}`} type="number" min={1} max={queueOrder.length} value={targetPosition} onChange={(e) => setTargetPosition(e.target.value)} className="h-9 rounded-lg border border-input bg-background px-3" /></Field><DialogFooter><Button variant="outline" onClick={() => setPositionOpen(false)}>Cancel</Button><Button disabled={busy || Number(targetPosition) < 1 || Number(targetPosition) > queueOrder.length} onClick={() => void run("moved", () => placeAt(Number(targetPosition))).then(() => setPositionOpen(false))}>Move</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={previewOpen} onOpenChange={(open) => { setPreviewOpen(open); if (open) setPreviewInteracted(false); }}><DialogContent className="max-w-5xl"><DialogHeader><DialogTitle>{row.title}</DialogTitle><DialogDescription>{row.printCode} · {row.originalFileName}</DialogDescription></DialogHeader><div className="flex gap-2"><Button size="sm" variant={previewTab === "image" ? "secondary" : "outline"} onClick={() => setPreviewTab("image")}>Image</Button><Button size="sm" variant={previewTab === "3d" ? "secondary" : "outline"} onClick={() => setPreviewTab("3d")}>3D</Button></div>{previewTab === "image" ? row.previewUrl ? <img src={row.previewUrl} alt={row.title} className="mx-auto max-h-[55vh] object-contain" /> : <p className="p-10 text-center text-muted-foreground">Preview unavailable</p> : row.fileUrl ? <ModelViewer url={row.fileUrl} kind={row.kind} colour={swatch(row.colour)} interactive autoRotate={!previewInteracted} rotation={rotation} zoom={zoom} onRotationChange={(next) => { setPreviewInteracted(true); setRotation(next); }} onZoomChange={(next) => { setPreviewInteracted(true); setZoom(next); }} className="mx-auto max-h-[55vh] max-w-3xl" /> : null}
-        {previewTab === "3d" ? <div className="flex flex-wrap items-center gap-2"><label className="text-xs">X <input aria-label="X rotation" type="range" min="-3.14" max="3.14" step="0.05" value={rotation.x} onChange={(e) => { setPreviewInteracted(true); setRotation({ ...rotation, x: Number(e.target.value) }); }} /></label><label className="text-xs">Y <input aria-label="Y rotation" type="range" min="-3.14" max="3.14" step="0.05" value={rotation.y} onChange={(e) => { setPreviewInteracted(true); setRotation({ ...rotation, y: Number(e.target.value) }); }} /></label><label className="text-xs">Z <input aria-label="Z rotation" type="range" min="-3.14" max="3.14" step="0.05" value={rotation.z} onChange={(e) => { setPreviewInteracted(true); setRotation({ ...rotation, z: Number(e.target.value) }); }} /></label>{[[0, 0, 0, "Front"], [0, Math.PI, 0, "Back"], [0, Math.PI / 2, 0, "Side"], [-Math.PI / 2, 0, 0, "Top"], [-0.35, 0.65, 0, "3/4"]].map(([x, y, z, label]) => <Button key={String(label)} size="xs" variant="outline" onClick={() => { setPreviewInteracted(true); setRotation({ x: Number(x), y: Number(y), z: Number(z) }); }}>{label}</Button>)}<Button size="xs" variant="outline" onClick={() => { setPreviewInteracted(true); setZoom((v) => Math.max(0.5, v / 1.2)); }}>Zoom −</Button><Button size="xs" variant="outline" onClick={() => { setPreviewInteracted(true); setZoom((v) => Math.min(3, v * 1.2)); }}>Zoom +</Button><Button size="xs" variant="ghost" onClick={() => { setPreviewInteracted(true); setRotation({ x: -0.35, y: 0.65, z: 0 }); setZoom(1); }}>Reset</Button><p className="w-full text-xs text-muted-foreground">Drag to rotate · Shift-drag to roll · Scroll to zoom</p></div> : null}
-      </DialogContent></Dialog>
+      <Dialog open={previewOpen} onOpenChange={(open) => { setPreviewOpen(open); if (open) setPreviewInteracted(false); }}>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{row.title}</DialogTitle>
+            <DialogDescription>{row.printCode} · {row.originalFileName}</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Button size="sm" variant={previewTab === "image" ? "secondary" : "outline"} onClick={() => setPreviewTab("image")}>Image</Button>
+            <Button size="sm" variant={previewTab === "3d" ? "secondary" : "outline"} onClick={() => setPreviewTab("3d")}>3D</Button>
+          </div>
+          {previewTab === "image" ? row.previewUrl
+            ? <img src={row.previewUrl} alt={row.title} className="mx-auto max-h-[55vh] object-contain" />
+            : <p className="p-10 text-center text-muted-foreground">Preview unavailable</p>
+            : row.fileUrl
+              ? <ModelViewer url={row.fileUrl} kind={row.kind} colour={swatch(row.colour)} interactive autoRotate={!previewInteracted} rotation={rotation} zoom={zoom} onRotationChange={(next) => { setPreviewInteracted(true); setRotation(next); }} onZoomChange={(next) => { setPreviewInteracted(true); setZoom(next); }} className="mx-auto aspect-auto h-[55vh] min-h-[360px] max-h-[680px] w-full max-w-none" />
+              : null}
+          {previewTab === "3d" ? (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                {(["x", "y", "z"] as const).map((axis) => (
+                  <label key={axis} className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-3 text-sm">
+                    <span>Rotate {axis.toUpperCase()}</span>
+                    <input aria-label={`Rotate ${axis.toUpperCase()}`} className="w-full accent-foreground" type="range" min="-3.14" max="3.14" step="0.05" value={rotation[axis]} onChange={(e) => { setPreviewInteracted(true); setRotation({ ...rotation, [axis]: Number(e.target.value) }); }} />
+                  </label>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[[0, 0, 0, "Front"], [0, Math.PI, 0, "Back"], [0, Math.PI / 2, 0, "Side"], [-Math.PI / 2, 0, 0, "Top"], [-0.35, 0.65, 0, "3/4"]].map(([x, y, z, label]) => (
+                  <Button key={String(label)} size="xs" variant="outline" onClick={() => { setPreviewInteracted(true); setRotation({ x: Number(x), y: Number(y), z: Number(z) }); }}>{label}</Button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="xs" variant="outline" onClick={() => { setPreviewInteracted(true); setZoom((v) => Math.max(0.5, v / 1.2)); }}>Zoom −</Button>
+                <Button size="xs" variant="outline" onClick={() => { setPreviewInteracted(true); setZoom((v) => Math.min(3, v * 1.2)); }}>Zoom +</Button>
+                <Button size="xs" variant="ghost" onClick={() => { setPreviewInteracted(true); setRotation({ x: -0.35, y: 0.65, z: 0 }); setZoom(1); }}>Reset</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Drag to rotate · Shift-drag to roll · Scroll to zoom</p>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </li>
   );
 }
