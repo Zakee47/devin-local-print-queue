@@ -360,13 +360,15 @@ export default function QueueBoard() {
                   aria-label={printer?.outOfService ? `${name} · paused` : name}
                   className={`h-8 gap-1.5 px-2 text-xs${printer?.outOfService ? " border-dashed opacity-60" : ""}`}
                 >
-                  {name}
                   {printer?.outOfService ? (
                     <>
                       <Pause aria-hidden className="size-3" />
+                      {name}
                       <span>· paused</span>
                     </>
-                  ) : null}
+                  ) : (
+                    name
+                  )}
                 </ToggleGroupItem>
               );
             })}
@@ -377,23 +379,33 @@ export default function QueueBoard() {
           <div className="flex flex-wrap gap-2">
             {printerSettings.map((printer) => {
               const load = printerLoads.get(printer.name)!;
+              const isSelected = printerFilters.includes(printer.name);
               return (
                 <Button
                   key={printer.name}
                   type="button"
                   size="sm"
-                  variant={printerFilters.includes(printer.name) ? "default" : "outline"}
-                  className={printer.outOfService ? "border-dashed opacity-60" : undefined}
+                  variant={isSelected ? "default" : "outline"}
+                  className={
+                    printer.outOfService
+                      ? isSelected
+                        ? "border-dashed"
+                        : "border-dashed bg-transparent text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
+                      : undefined
+                  }
                   onClick={() => toggleFilter(printerFilters, printer.name, setPrinterFilters)}
                 >
-                  {printer.name}
                   {printer.outOfService ? (
                     <>
                       <Pause aria-hidden className="size-3" />
-                      · paused
+                      {printer.name}
+                      <span>· paused</span>
                     </>
-                  ) : null}
-                  · {load.queued} queued · {load.printing} printing
+                  ) : (
+                    printer.name
+                  )}
+                  {" · "}
+                  {load.queued} queued · {load.printing} printing
                 </Button>
               );
             })}
