@@ -358,13 +358,16 @@ export default function QueueBoard() {
                   key={name.toLowerCase()}
                   value={name}
                   aria-label={printer?.outOfService ? `${name} · paused` : name}
-                  className={`h-8 gap-1.5 px-2 text-xs${printer?.outOfService ? " border-dashed opacity-60" : ""}`}
+                  className={`h-8 gap-1.5 px-2 text-xs${
+                    printer?.outOfService
+                      ? " text-amber-900 border-amber-300 bg-amber-50 aria-pressed:ring-2 aria-pressed:ring-amber-500/60 aria-pressed:bg-amber-50 aria-pressed:text-amber-900 dark:text-amber-200 dark:border-amber-900 dark:bg-amber-950/40 dark:aria-pressed:bg-amber-950/40 dark:aria-pressed:text-amber-200"
+                      : ""
+                  }`}
                 >
                   {printer?.outOfService ? (
                     <>
                       <Pause aria-hidden className="size-3" />
-                      {name}
-                      <span>· paused</span>
+                      <span>{name} · paused</span>
                     </>
                   ) : (
                     name
@@ -385,21 +388,19 @@ export default function QueueBoard() {
                   key={printer.name}
                   type="button"
                   size="sm"
-                  variant={isSelected ? "default" : "outline"}
+                  variant="outline"
+                  aria-pressed={isSelected}
                   className={
                     printer.outOfService
-                      ? isSelected
-                        ? "border-dashed"
-                        : "border-dashed bg-transparent text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
-                      : undefined
+                      ? "text-amber-900 border-amber-300 bg-amber-50 aria-pressed:ring-2 aria-pressed:ring-amber-500/60 aria-pressed:bg-amber-50 aria-pressed:text-amber-900 dark:text-amber-200 dark:border-amber-900 dark:bg-amber-950/40 dark:aria-pressed:bg-amber-950/40 dark:aria-pressed:text-amber-200"
+                      : "aria-pressed:bg-muted aria-pressed:text-foreground"
                   }
                   onClick={() => toggleFilter(printerFilters, printer.name, setPrinterFilters)}
                 >
                   {printer.outOfService ? (
                     <>
                       <Pause aria-hidden className="size-3" />
-                      {printer.name}
-                      <span>· paused</span>
+                      <span>{printer.name} · paused</span>
                     </>
                   ) : (
                     printer.name
@@ -412,7 +413,9 @@ export default function QueueBoard() {
             <Button
               type="button"
               size="sm"
-              variant={printerFilters.includes(NOT_ASSIGNED) ? "default" : "outline"}
+              variant="outline"
+              aria-pressed={printerFilters.includes(NOT_ASSIGNED)}
+              className="aria-pressed:bg-muted aria-pressed:text-foreground"
               onClick={() => toggleFilter(printerFilters, NOT_ASSIGNED, setPrinterFilters)}
             >
               Not assigned · {notAssignedQueued} queued

@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   Download,
+  Pause,
   Printer,
   TriangleAlert,
   Trophy,
@@ -221,8 +222,9 @@ export default function SubmissionCard({
             {row.printerOutOfService && row.printer ? (
               <Badge
                 variant="outline"
-                className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                className="text-amber-900 border-amber-300 bg-amber-50 dark:text-amber-200 dark:border-amber-900 dark:bg-amber-950/40"
               >
+                <Pause aria-hidden className="size-3" />
                 {row.printer} is paused · reassign
               </Badge>
             ) : null}

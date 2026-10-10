@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Pause, Plus, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Pause, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -393,23 +393,11 @@ export default function SettingsManager() {
                   >
                     Save name
                   </Button>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={`Remove ${printer.name}`}
-                    onClick={() =>
-                      setConfirmation({
-                        type: "remove-printer",
-                        printer: printer.name,
-                        nextPrinters: currentPrinters.filter((_, i) => i !== index),
-                      })
-                    }
-                  >
-                    <X />
-                  </Button>
-                  <div className="flex items-center gap-2">
-                    <FieldLabel htmlFor={`printer-${index}-in-service`} className="font-normal">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <FieldLabel
+                      htmlFor={`printer-${index}-in-service`}
+                      className="font-normal leading-none"
+                    >
                       In service
                     </FieldLabel>
                     <Switch
@@ -436,6 +424,22 @@ export default function SettingsManager() {
                       }}
                     />
                   </div>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    aria-label={`Remove printer ${printer.name}`}
+                    title="Remove printer"
+                    onClick={() =>
+                      setConfirmation({
+                        type: "remove-printer",
+                        printer: printer.name,
+                        nextPrinters: currentPrinters.filter((_, i) => i !== index),
+                      })
+                    }
+                  >
+                    <Trash2 />
+                  </Button>
                 </div>
                 {printer.outOfService ? (
                   <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
@@ -681,6 +685,7 @@ export default function SettingsManager() {
                 variant="ghost"
                 aria-label={`Remove ${colour}`}
                 className="text-muted-foreground"
+                title="Remove colour"
                 onClick={() =>
                   setConfirmation({
                     type: "remove-colour",
@@ -689,7 +694,7 @@ export default function SettingsManager() {
                   })
                 }
               >
-                <X />
+                <Trash2 />
               </Button>
             </li>
           ))}
