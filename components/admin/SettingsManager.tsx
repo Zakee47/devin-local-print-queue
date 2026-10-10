@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
@@ -13,6 +13,7 @@ import {
   type Printer,
 } from "@/lib/event";
 import { useSwatch } from "@/lib/use-swatch";
+import { swatchFor } from "@/lib/colours";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -84,6 +85,43 @@ function cleanPrinters(printers: Printer[], palette: string[]): Printer[] {
   }));
 }
 
+function ColourCodeInput({
+  name,
+  value,
+  onCommit,
+}: {
+  name: string;
+  value: string;
+  onCommit: (hex: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState(value);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const commit = () => {
+      if (input.value.toLowerCase() !== value.toLowerCase()) onCommit(input.value);
+    };
+    input.addEventListener("change", commit);
+    return () => input.removeEventListener("change", commit);
+  }, [onCommit, value]);
+
+  return (
+    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+      <input
+        ref={inputRef}
+        aria-label={`${name} colour code`}
+        type="color"
+        value={preview}
+        onChange={(event) => setPreview(event.currentTarget.value)}
+        className="size-8 cursor-pointer rounded border border-border bg-transparent p-0.5"
+      />
+      <code>{preview}</code>
+    </label>
+  );
+}
+
 export default function SettingsManager() {
   const settings = useQuery(api.settings.get);
   const update = useMutation(api.settings.update);
@@ -91,6 +129,7 @@ export default function SettingsManager() {
   const now = useNow();
   const [newColour, setNewColour] = useState("");
   const [newColourHex, setNewColourHex] = useState("#888888");
+  const [newColourHexTouched, setNewColourHexTouched] = useState(false);
   const [maxMb, setMaxMb] = useState<string | null>(null);
   const [deadlineInput, setDeadlineInput] = useState<string | null>(null);
   const [announcementInput, setAnnouncementInput] = useState<string | null>(null);
@@ -117,6 +156,12 @@ export default function SettingsManager() {
   };
 
   const colours = settings.colours;
+  const suggestedNewColourHex = swatchFor(newColour.trim());
+  const knownNewColourHex = /^#[0-9a-f]{6}$/i.test(suggestedNewColourHex)
+    ? suggestedNewColourHex
+    : null;
+  const defaultNewColourHex = knownNewColourHex ?? "#888888";
+  const displayedNewColourHex = newColourHexTouched ? newColourHex : defaultNewColourHex;
   const currentPrinters = cleanPrinters(printersDraft ?? settings.printers, colours);
   const currentMb = String(Math.round((settings.maxFileBytes / 1024 / 1024) * 10) / 10);
   const deadlineValue = deadlineInput ?? formatLocalDateTime(settings.submissionsDeadline);
@@ -501,25 +546,21 @@ export default function SettingsManager() {
                 const effective = swatch(colour);
                 const inputValue = /^#[0-9a-f]{6}$/i.test(effective) ? effective : "#888888";
                 return (
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <input
-                      aria-label={`${colour} colour code`}
-                      type="color"
-                      value={code?.hex ?? inputValue}
-                      onChange={(event) => {
-                        const nextCode: ColourCode = { name: colour, hex: event.target.value };
-                        const nextCodes = [
-                          ...(settings.colourCodes ?? []).filter(
-                            (item) => item.name.toLowerCase() !== colour.toLowerCase()
-                          ),
-                          nextCode,
-                        ];
-                        void save({ colourCodes: nextCodes }, `${colour} colour code saved`);
-                      }}
-                      className="size-8 cursor-pointer rounded border border-border bg-transparent p-0.5"
-                    />
-                    <code>{code?.hex ?? effective}</code>
-                  </label>
+                  <ColourCodeInput
+                    key={code?.hex ?? inputValue}
+                    name={colour}
+                    value={code?.hex ?? inputValue}
+                    onCommit={(hex) => {
+                      const nextCode: ColourCode = { name: colour, hex };
+                      const nextCodes = [
+                        ...(settings.colourCodes ?? []).filter(
+                          (item) => item.name.toLowerCase() !== colour.toLowerCase()
+                        ),
+                        nextCode,
+                      ];
+                      void save({ colourCodes: nextCodes }, `${colour} colour code saved`);
+                    }}
+                  />
                 );
               })()}
               <Button
@@ -570,22 +611,28 @@ export default function SettingsManager() {
             }
             const nextColours = [...colours, name];
             const nextPrinters = cleanPrinters(currentPrinters, nextColours);
+            const hasKnownSwatch = /^#[0-9a-f]{6}$/i.test(swatchFor(name));
+            const nextCodes = (settings.colourCodes ?? []).filter(
+              (item) => item.name.toLowerCase() !== name.toLowerCase()
+            );
+            if (newColourHexTouched || !hasKnownSwatch) {
+              nextCodes.push({
+                name,
+                hex: newColourHexTouched ? newColourHex : "#888888",
+              });
+            }
             setPrintersDraft(nextPrinters);
             void save(
               {
                 colours: nextColours,
                 printers: nextPrinters,
-                colourCodes: [
-                  ...(settings.colourCodes ?? []).filter(
-                    (item) => item.name.toLowerCase() !== name.toLowerCase()
-                  ),
-                  { name, hex: newColourHex },
-                ],
+                colourCodes: nextCodes,
               },
               `${name} added`
             );
             setNewColour("");
             setNewColourHex("#888888");
+            setNewColourHexTouched(false);
           }}
         >
           <Field className="max-w-xl">
@@ -602,11 +649,14 @@ export default function SettingsManager() {
                 <input
                   aria-label="New colour hex code"
                   type="color"
-                  value={newColourHex}
-                  onChange={(event) => setNewColourHex(event.target.value)}
+                  value={displayedNewColourHex}
+                  onChange={(event) => {
+                    setNewColourHex(event.target.value);
+                    setNewColourHexTouched(true);
+                  }}
                   className="size-8 cursor-pointer rounded border border-border bg-transparent p-0.5"
                 />
-                <code>{newColourHex}</code>
+                <code>{displayedNewColourHex}</code>
               </label>
               <Button type="submit" variant="default" size="sm" disabled={!newColour.trim()}>
                 <Plus data-icon="inline-start" />
