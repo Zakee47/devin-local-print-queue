@@ -293,19 +293,19 @@ describe("printer assignments", () => {
 
     await as.mutation(api.queue.setPrinter, { id: assigned, printer: "muon 1" });
     await expect(as.mutation(api.queue.startPrinting, { id: assigned })).rejects.toThrow(
-      "Muon 1 is out of service — pick another printer"
+      "Muon 1 is paused — pick another printer"
     );
 
     const queued = await addSubmission(otherId, { status: "queued" });
     await expect(
       as.mutation(api.queue.setPrinter, { id: queued, printer: "Muon 1" })
-    ).rejects.toThrow("Muon 1 is out of service — pick another printer");
+    ).rejects.toThrow("Muon 1 is paused — pick another printer");
     await expect(
       as.mutation(api.queue.startPrinting, { id: queued, printer: "Muon 1" })
-    ).rejects.toThrow("Muon 1 is out of service — pick another printer");
+    ).rejects.toThrow("Muon 1 is paused — pick another printer");
     await expect(
       as.mutation(api.queue.assignPrinters, { ids: [queued], printers: ["Muon 1"], mode: "one" })
-    ).rejects.toThrow("Muon 1 is out of service — pick another printer");
+    ).rejects.toThrow("Muon 1 is paused — pick another printer");
     expect((await get(assigned))?.printer).toBe("Muon 1");
   });
 

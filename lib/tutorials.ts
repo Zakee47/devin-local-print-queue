@@ -14,7 +14,8 @@ export type TutorialArt =
   | "review"
   | "printing"
   | "changed"
-  | "tv";
+  | "tv"
+  | "settings";
 
 export type TutorialSlide = { art: TutorialArt; title: string; body: string };
 
@@ -60,12 +61,27 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "queue",
       title: "The print queue",
-      body: "Prints move through the tabs: Needs review → Queued → Printing → Done. Rejected files have their own tab.",
+      body: "Prints move through the tabs: Needs review → Queued → Printing → Done, with Rejected on its own tab. All shows every stage at once.",
+    },
+    {
+      art: "review",
+      title: "Approve or reject",
+      body: "Check the badge first: No print yet, or Already printed with their earlier print code. Approve sends a print to the back of the queue. When you reject, write a clear comment: the participant sees it and can upload a fixed file.",
     },
     {
       art: "filters",
-      title: "Filters and printers",
-      body: "Use All to see every stage. Filter by colour and printer, watch the load strip for a backlog, and mark a printer out of service in Settings when it's down.",
+      title: "Filters and load",
+      body: "Filter by colour and printer, and tap several to combine them. Watch the load strip for a printer with a backlog.",
+    },
+    {
+      art: "colour",
+      title: "Assign printers",
+      body: "Each queued card lists printers with that colour loaded first. Or tick several cards and choose Assign to one printer, or Spread evenly to share them across printers with the right colour. Show all printers lets you override the colour match.",
+    },
+    {
+      art: "printing",
+      title: "On the printer",
+      body: "Press Start printing. When it comes off, mark it done, or mark the print failed with a reason. Use the arrows to reorder the queue, and Move back to undo a step.",
     },
     {
       art: "download",
@@ -73,19 +89,14 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
       body: "Files are named with the print code, name, colour and title, like KC-007_ada-lovelace_red_rocket.3mf, so they sort by print code.",
     },
     {
-      art: "review",
-      title: "Approve or reject",
-      body: "Approve sends a print to the queue. When you reject, write a clear comment: the participant sees it and can upload a fixed file.",
-    },
-    {
-      art: "printing",
-      title: "On the printer",
-      body: "Assign each queued print to a printer, or tick several and bulk assign, then press Start printing. When it comes off, mark it done, or mark the print failed with a reason.",
-    },
-    {
       art: "changed",
       title: "Changed by participants",
       body: "Watch this list for replaced or withdrawn prints. They leave the queue, and a replaced print needs approving again.",
+    },
+    {
+      art: "settings",
+      title: "Settings and blasts",
+      body: "In Settings, pause a printer when it's down, untick a colour when it runs out, and set each colour's exact shade. Use the blast message to tell everyone something on every page.",
     },
     {
       art: "tv",

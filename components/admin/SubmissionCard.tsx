@@ -68,7 +68,7 @@ function PrinterSelect({
       {currentMissing ? (
         <option value={row.printer!}>
           {row.printer}
-          {row.printerOutOfService ? " (out of service)" : ""}
+          {row.printerOutOfService ? " (paused)" : ""}
         </option>
       ) : null}
       {choices.map(({ name, label }) => (
@@ -219,7 +219,12 @@ export default function SubmissionCard({
               </Badge>
             ) : null}
             {row.printerOutOfService && row.printer ? (
-              <Badge variant="destructive">{row.printer} out of service — reassign</Badge>
+              <Badge
+                variant="outline"
+                className="border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+              >
+                {row.printer} is paused · reassign
+              </Badge>
             ) : null}
             {row.oversize ? <Badge variant="destructive">Over size limit</Badge> : null}
             <span className="font-mono uppercase">

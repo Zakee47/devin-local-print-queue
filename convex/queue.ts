@@ -41,7 +41,7 @@ function requireKnownPrinter(
     printer.outOfService &&
     printer.name.trim().toLowerCase() !== currentPrinter?.trim().toLowerCase()
   ) {
-    throw new ConvexError(`${printer.name} is out of service — pick another printer`);
+    throw new ConvexError(`${printer.name} is paused — pick another printer`);
   }
   return printer.name;
 }

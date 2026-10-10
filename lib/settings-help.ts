@@ -53,10 +53,10 @@ export const SETTINGS_HELP = {
   },
   printers: {
     title: "Printers",
-    what: "The printers staff can assign prints to on the queue, including whether each printer is out of service.",
+    what: "The printers staff can assign prints to on the queue, including whether each printer is paused.",
     on: {
       label: "Added:",
-      text: "Staff can pick it for a print on the queue and tick its loaded colours. Mark it out of service when it is down.",
+      text: "Staff can pick it for a print on the queue and tick its loaded colours. Pause it when it is down.",
     },
     off: {
       label: "Removed:",

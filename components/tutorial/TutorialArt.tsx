@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowDownToLine, Check, File, Filter, Info, Printer, Trophy, Tv, Upload } from "lucide-react";
+import { AlertCircle, ArrowDownToLine, Check, File, Filter, Info, MessageSquareText, Pause, Printer, Settings, Trophy, Tv, Upload } from "lucide-react";
 import type { TutorialArt as TutorialArtKey } from "@/lib/tutorials";
 import VoteVsHeartArt from "./VoteVsHeartArt";
 
@@ -181,12 +181,43 @@ function FiltersArt() {
           <Filter aria-hidden className="size-3.5" />
           All · Gold · Muon 1
         </div>
-        <div className="mt-4 flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-[10px]">
-          <span className="font-medium text-foreground">Muon 1 · 4 queued · 1 printing</span>
-          <span className="rounded-full border border-destructive/40 px-2 py-0.5 text-destructive">Out of service</span>
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-dashed border-border bg-background px-3 py-2 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1 font-medium">
+            <Pause aria-hidden className="size-3" />
+            Muon 1 · paused
+          </span>
+          <span>4 queued · 1 printing</span>
         </div>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
           <span className="block h-full w-2/3 rounded-full bg-brand" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsArt() {
+  return (
+    <div className="tour-art flex h-full items-center justify-center p-5">
+      <div className="w-full max-w-[22rem] rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-2 text-xs font-medium">
+            <Settings aria-hidden className="size-4" />
+            Printer settings
+          </span>
+          <span className="flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            <Pause aria-hidden className="size-3" />
+            Paused
+          </span>
+        </div>
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-background p-2">
+          <span aria-hidden className="size-4 rounded-full bg-[#d93636]" />
+          <span className="flex-1 text-[10px]">Red</span>
+          <code className="text-[10px] text-muted-foreground">#d93636</code>
+        </div>
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-[10px] text-muted-foreground">
+          <MessageSquareText aria-hidden className="size-3.5" />
+          Blast message to everyone
         </div>
       </div>
     </div>
@@ -325,5 +356,7 @@ export default function TutorialArt({ art }: { art: TutorialArtKey }) {
       return <ChangedArt />;
     case "tv":
       return <TvArt />;
+    case "settings":
+      return <SettingsArt />;
   }
 }

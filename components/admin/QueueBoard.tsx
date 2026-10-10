@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Download, Inbox } from "lucide-react";
+import { Download, Inbox, Pause } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -10,7 +10,6 @@ import { useSwatch } from "@/lib/use-swatch";
 import { inServicePrinters, printersWithColour } from "@/lib/printers";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -355,9 +354,19 @@ export default function QueueBoard() {
             {printerOptions.map((name) => {
               const printer = printerSettings.find((item) => item.name.toLowerCase() === name.toLowerCase());
               return (
-                <ToggleGroupItem key={name.toLowerCase()} value={name} aria-label={name} className="h-8 gap-1.5 px-2 text-xs">
+                <ToggleGroupItem
+                  key={name.toLowerCase()}
+                  value={name}
+                  aria-label={printer?.outOfService ? `${name} · paused` : name}
+                  className={`h-8 gap-1.5 px-2 text-xs${printer?.outOfService ? " border-dashed opacity-60" : ""}`}
+                >
                   {name}
-                  {printer?.outOfService ? <Badge variant="destructive">Out of service</Badge> : null}
+                  {printer?.outOfService ? (
+                    <>
+                      <Pause aria-hidden className="size-3" />
+                      <span>· paused</span>
+                    </>
+                  ) : null}
                 </ToggleGroupItem>
               );
             })}
@@ -374,10 +383,17 @@ export default function QueueBoard() {
                   type="button"
                   size="sm"
                   variant={printerFilters.includes(printer.name) ? "default" : "outline"}
+                  className={printer.outOfService ? "border-dashed opacity-60" : undefined}
                   onClick={() => toggleFilter(printerFilters, printer.name, setPrinterFilters)}
                 >
-                  {printer.name} · {load.queued} queued · {load.printing} printing
-                  {printer.outOfService ? <Badge variant="destructive">Out of service</Badge> : null}
+                  {printer.name}
+                  {printer.outOfService ? (
+                    <>
+                      <Pause aria-hidden className="size-3" />
+                      · paused
+                    </>
+                  ) : null}
+                  · {load.queued} queued · {load.printing} printing
                 </Button>
               );
             })}
