@@ -38,7 +38,7 @@ import HistoryDialog from "@/components/admin/HistoryDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
 import { errorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { applyFilters, beforeIdAfterDrop, isWithdrawnRow, type FilterPill } from "@/components/admin/queue-view";
+import { applyFilters, beforeIdAfterDrop, isWithdrawnRow, partitionPrinters, type FilterPill } from "@/components/admin/queue-view";
 
 type Column = "all" | "review" | "queued" | "printing" | "done" | "rejected" | "withdrawn";
 type PrinterOption = { name: string; label: string };
@@ -141,6 +141,7 @@ export default function QueueBoard() {
   const [onePrinter, setOnePrinter] = useState("");
   const [spreadPrinters, setSpreadPrinters] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [restoringIds, setRestoringIds] = useState<BoardRow["_id"][]>([]);
 
   const updatePrinterScroll = useCallback(() => {
     const strip = printerStripRef.current;
@@ -247,8 +248,8 @@ export default function QueueBoard() {
   const allShownQueued = filtered.queued;
 
   function choicesFor(row: BoardRow): PrinterChoices {
-    const matches = new Set(printersWithColour(printerSettings, row.colour));
-    const optionFor = ({ name }: { name: string }): PrinterOption => {
+    const parts = partitionPrinters(inService, printersWithColour(printerSettings, row.colour), row.colour);
+    const optionFor = (name: string): PrinterOption => {
       const load = printerLoads.get(name);
       const label = [
         name,
@@ -260,8 +261,8 @@ export default function QueueBoard() {
       return { name, label };
     };
     return {
-      matching: row.colour ? inService.filter(({ name }) => matches.has(name)).map(optionFor) : [],
-      other: inService.filter(({ name }) => !matches.has(name)).map(optionFor),
+      matching: parts.matching.map(optionFor),
+      other: parts.other.map(optionFor),
     };
   }
 
@@ -344,6 +345,7 @@ export default function QueueBoard() {
   }
 
   const activePrintersForSpread = inService.map((printer) => printer.name).filter((name) => spreadPrinters.includes(name));
+  const onePrinterChoice = inService.some((printer) => printer.name === onePrinter) ? onePrinter : "";
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (!over || active.id === over.id) return;
@@ -460,7 +462,7 @@ export default function QueueBoard() {
           <AlertDescription>
             <ul className="flex flex-col gap-1">
               {withdrawals.map((row) => (
-                <li key={row._id}>
+                <li key={row._id} className="break-words [overflow-wrap:anywhere]">
                   <span className="font-mono">{row.printCode}</span> {row.title} · {row.participantUsername} · {row.detail} · {formatDateTime(row.at)}
                 </li>
               ))}
@@ -546,11 +548,11 @@ export default function QueueBoard() {
                     <div className="flex flex-col gap-3 sm:items-end">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-medium">Assign to one printer</span>
-                        <NativeSelect aria-label="Assign selected to one printer" size="sm" value={onePrinter} onChange={(event) => setOnePrinter(event.currentTarget.value)}>
+                        <NativeSelect aria-label="Assign selected to one printer" size="sm" value={onePrinterChoice} onChange={(event) => setOnePrinter(event.currentTarget.value)}>
                           <option value="">Choose printer</option>
                           {inService.map(({ name }) => <option key={name} value={name}>{name}</option>)}
                         </NativeSelect>
-                        <Button type="button" size="sm" disabled={bulkBusy || !onePrinter} onClick={() => void bulkAssign("one", [onePrinter])}>Assign</Button>
+                        <Button type="button" size="sm" disabled={bulkBusy || !onePrinterChoice} onClick={() => void bulkAssign("one", [onePrinterChoice])}>Assign</Button>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-medium">Spread evenly</span>
@@ -603,12 +605,14 @@ export default function QueueBoard() {
                     type="button"
                     size="sm"
                     variant="brand"
-                    disabled={!row.restore.ok}
+                    disabled={!row.restore.ok || restoringIds.includes(row._id)}
                     title={!row.restore.ok ? row.restore.reason : undefined}
                     onClick={() => {
+                      setRestoringIds((ids) => [...ids, row._id]);
                       void restoreSubmission({ id: row._id })
                         .then(() => toast.success(`${row.printCode} restored`))
-                        .catch((error) => toast.error(error instanceof Error ? error.message : "Couldn't restore submission"));
+                        .catch((error) => toast.error(error instanceof Error ? error.message : "Couldn't restore submission"))
+                        .finally(() => setRestoringIds((ids) => ids.filter((id) => id !== row._id)));
                     }}
                   >
                     Restore submission
