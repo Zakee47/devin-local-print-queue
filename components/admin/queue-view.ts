@@ -81,6 +81,19 @@ export function sortBuckets<T extends QueueViewRow>(rows: T[]) {
   return buckets;
 }
 
+export function partitionPrinters(
+  inService: { name: string }[],
+  matchingNames: string[],
+  colour?: string
+): { matching: string[]; other: string[] } {
+  if (!colour) return { matching: [], other: inService.map((printer) => printer.name) };
+  const matching = new Set(matchingNames.map((name) => name.trim().toLowerCase()));
+  return {
+    matching: inService.filter(({ name }) => matching.has(name.trim().toLowerCase())).map(({ name }) => name),
+    other: inService.filter(({ name }) => !matching.has(name.trim().toLowerCase())).map(({ name }) => name),
+  };
+}
+
 export function beforeIdAfterDrop(
   fullOrder: Id<"submissions">[],
   visibleOrder: Id<"submissions">[],
