@@ -306,6 +306,7 @@ export default function QueueBoard() {
                 });
               }}
               printerOptions={choicesFor(row)}
+              settingsPrinters={printerSettings}
               dragHandle={dragHandle}
               dragStyle={dragStyle}
               isDragging={isDragging}

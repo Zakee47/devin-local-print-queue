@@ -49,19 +49,35 @@ export function formatBytes(bytes: number) {
 const ModelViewer = dynamic(() => import("@/components/ModelViewer"), { ssr: false });
 type PrinterGroups = { matching: { name: string; label: string }[]; other: { name: string; label: string }[] };
 type DragStyle = { ref?: (node: HTMLLIElement | null) => void; style?: CSSProperties };
+type PrinterSetting = { name: string; outOfService?: boolean };
 
 function PrinterSelect({
-  row, value, disabled, onChange, options,
+  row, value, disabled, onChange, options, settingsPrinters,
 }: {
   row: BoardRow; value: string; disabled?: boolean;
   onChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
   options: PrinterGroups;
+  settingsPrinters: PrinterSetting[];
 }) {
-  const currentUnavailable = Boolean(row.printer && ![...options.matching, ...options.other].some((p) => p.name === row.printer));
+  const printerName = row.printer?.trim().toLowerCase();
+  const allOptions = [...options.matching, ...options.other];
+  const currentOption = printerName
+    ? allOptions.find((printer) => printer.name.trim().toLowerCase() === printerName)
+    : undefined;
+  const configuredPrinter = printerName
+    ? settingsPrinters.find((printer) => printer.name.trim().toLowerCase() === printerName)
+    : undefined;
+  const currentValue = currentOption?.name ?? configuredPrinter?.name ?? value;
   return (
-    <NativeSelect aria-label="Printer" size="sm" value={value} disabled={disabled} onChange={onChange}>
+    <NativeSelect aria-label="Printer" size="sm" value={currentValue} disabled={disabled} onChange={onChange}>
       <option value="">Printer: not set</option>
-      {currentUnavailable ? <option value={row.printer!}>{row.printer} (paused)</option> : null}
+      {row.printer && !currentOption ? (
+        <option value={currentValue}>
+          {configuredPrinter
+            ? `${configuredPrinter.name}${configuredPrinter.outOfService ? " (paused)" : ""}`
+            : `${row.printer} (not in Settings)`}
+        </option>
+      ) : null}
       {row.colour ? (
         <>
           {options.matching.length ? (
@@ -100,12 +116,13 @@ function timeAgo(at: number, now: number) {
 
 export default function SubmissionCard({
   row, position, isOwner = false, showStatusBadge = false, showSelection = false,
-  selected = false, onSelectionChange, printerOptions, queueOrder = [], onMoveTo,
+  selected = false, onSelectionChange, printerOptions, settingsPrinters, queueOrder = [], onMoveTo,
   dragHandle, dragStyle, isDragging = false,
 }: {
   row: BoardRow; position?: number; isOwner?: boolean; showStatusBadge?: boolean;
   showSelection?: boolean; selected?: boolean; onSelectionChange?: (checked: boolean) => void;
   printerOptions: PrinterGroups; queueOrder?: Id<"submissions">[];
+  settingsPrinters: PrinterSetting[];
   onMoveTo?: (beforeId?: Id<"submissions">) => Promise<void>;
   dragHandle?: ReactNode; dragStyle?: DragStyle; isDragging?: boolean;
 }) {
@@ -165,10 +182,10 @@ export default function SubmissionCard({
 
   const statusLine = row.status === "queued" ? `#${position ?? row.queueOrder ?? "–"} in queue`
     : row.status === "printing" ? `${timeAgo(row.printingAt ?? row._creationTime, now).replace(" ago", "")} on printer`
-      : row.status === "done" ? "Done"
-        : row.status === "rejected" ? row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"
-          : withdrawn ? "Withdrawn"
-            : approvedForVoting ? "Approved for voting"
+      : row.status === "done" ? "done"
+        : row.status === "rejected" ? row.rejectionKind === "print_failed" ? "print failed" : "rejected"
+          : withdrawn ? "withdrawn"
+            : approvedForVoting ? "approved for voting"
               : `waiting ${timeAgo(row._creationTime, now).replace(" ago", "")}`;
   const printerPaused = Boolean(row.printer && row.printerOutOfService);
   const timeline = [
@@ -186,7 +203,7 @@ export default function SubmissionCard({
     >
       <div className="grid gap-3 p-3 sm:grid-cols-[14rem_minmax(0,1fr)_auto] sm:items-start sm:gap-4 sm:p-4">
         <div className="flex min-w-0 flex-col items-start gap-1 sm:w-56">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{statusLine}</p>
+          <p className="font-mono text-xs text-muted-foreground">{statusLine}</p>
           <div className="flex items-center gap-2 whitespace-nowrap">
             {dragHandle}
             {showSelection && row.status === "queued" ? (
@@ -197,12 +214,8 @@ export default function SubmissionCard({
         </div>
 
         <div className="min-w-0">
-          <div className="flex flex-wrap items-baseline gap-x-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="min-w-0 truncate text-base font-semibold">{row.title}</h3>
-            <span className="text-sm text-muted-foreground">@{row.participantUsername}</span>
-          </div>
-          <p className="text-sm text-muted-foreground">{row.participantName}</p>
-          <div className="mt-1 flex flex-wrap gap-1">
             {row.version > 1 ? <Badge variant="outline">v{row.version}</Badge> : null}
             {showStatusBadge ? <Badge variant="outline">{row.status}</Badge> : null}
             {(row.status === "submitted" || row.status === "rejected") ? (
@@ -212,8 +225,18 @@ export default function SubmissionCard({
             {row.designRemoved ? <Badge variant="outline">Removed from voting</Badge> : row.designEntry ? <Badge variant="outline">In voting</Badge> : null}
             {row.oversize ? <Badge variant="destructive">Over size limit</Badge> : null}
           </div>
+          <p className="mt-1 text-sm text-muted-foreground">{row.participantUsername}</p>
+          <p className="text-sm text-muted-foreground">{row.participantName}</p>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {row.colour ? <span className="inline-flex items-center gap-1"><i className="size-3 rounded-full border border-black/10" style={{ backgroundColor: swatch(row.colour) }} />{row.colour}</span> : null}
+            <span className="inline-flex items-center gap-1">
+              <i
+                className="size-3 rounded-full border border-black/10"
+                style={row.colour
+                  ? { backgroundColor: swatch(row.colour) }
+                  : { backgroundImage: "conic-gradient(#e11d48 0deg 90deg, #eab308 90deg 180deg, #16a34a 180deg 270deg, #3b82f6 270deg 360deg)" }}
+              />
+              {row.colour || "Any colour"}
+            </span>
             {row.dimensionsMm ? <span>{formatDimensions(row.dimensionsMm)}</span> : null}
             {row.printer ? <span className={printerPaused ? "text-amber-700 dark:text-amber-300" : ""}>{row.printer}{printerPaused ? " · paused" : ""}</span> : null}
             <span>{row.kind.toUpperCase()} · {formatBytes(row.sizeBytes)}</span>
@@ -227,7 +250,8 @@ export default function SubmissionCard({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 sm:max-w-72 sm:justify-end">
+        <div className="flex flex-col items-end gap-1.5 sm:max-w-[30rem]">
+          <div className="flex w-full flex-wrap items-center justify-end gap-1.5 sm:flex-nowrap">
           {row.status === "submitted" && !withdrawn && !approvedForVoting ? (
             <>
               {!alreadyHasPrint && (!voteOnly || !row.designRemoved) ? <Button size="sm" disabled={busy} onClick={() => run(voteOnly ? "approved for voting" : "approved", () => voteOnly ? approveForVoting({ id: row._id }) : approve({ id: row._id }))}>
@@ -238,7 +262,7 @@ export default function SubmissionCard({
           ) : null}
           {row.status === "queued" ? (
             <>
-              <PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} onChange={(e) => void run("printer updated", () => setPrinter({ id: row._id, printer: e.currentTarget.value || undefined }))} />
+              <PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} settingsPrinters={settingsPrinters} onChange={(e) => void run("printer updated", () => setPrinter({ id: row._id, printer: e.currentTarget.value || undefined }))} />
               <Button size="sm" disabled={busy || !row.printer || row.printerOutOfService} title={!row.printer ? "Assign a printer first" : row.printerOutOfService ? "Pick another printer first" : undefined} onClick={() => run("printing", () => startPrinting({ id: row._id }))}><Printer data-icon="inline-start" />Start printing</Button>
             </>
           ) : null}
@@ -294,6 +318,7 @@ export default function SubmissionCard({
               ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
           <Button size="sm" variant="ghost" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
             Details <ChevronDown className={cn("size-4 transition-transform", expanded && "rotate-180")} />
           </Button>
@@ -327,7 +352,7 @@ export default function SubmissionCard({
               <div><dt className="text-xs text-muted-foreground">File</dt><dd className="break-all">{row.originalFileName} · {formatBytes(row.sizeBytes)}</dd></div>
               {!voteOnly ? <div><dt className="text-xs text-muted-foreground">Printers with colour</dt><dd>{row.printersWithColour.join(", ") || "None loaded"}</dd></div> : null}
               <div><dt className="text-xs text-muted-foreground">Voting</dt><dd>{row.designRemoved ? "Removed from voting" : row.designEntry ? "In voting" : "Not entered"}</dd></div>
-              <div><dt className="text-xs text-muted-foreground">Username</dt><dd>@{row.participantUsername}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">Username</dt><dd>{row.participantUsername}</dd></div>
               <div><dt className="text-xs text-muted-foreground">Name</dt><dd>{row.participantName}</dd></div>
               {isOwner ? <div><dt className="text-xs text-muted-foreground">Email</dt><dd>{row.participantEmail}</dd></div> : null}
             </dl>
@@ -351,7 +376,7 @@ export default function SubmissionCard({
       <AlertDialog open={restoreOpen} onOpenChange={setRestoreOpen}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Restore {row.printCode}&apos;s print request?</AlertDialogTitle><AlertDialogDescription>{row.restorePrint && "movesFrom" in row.restorePrint && row.restorePrint.movesFrom ? `This moves the print request back from ${row.restorePrint.movesFrom}.` : "This restores the participant's withdrawn print request."}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={() => void run("print request restored", () => restorePrintRequest({ id: row._id }))}>Restore print request</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
-      <Dialog open={printerOpen} onOpenChange={setPrinterOpen}><DialogContent><DialogHeader><DialogTitle>Change printer · {row.printCode}</DialogTitle><DialogDescription>Choose a printer for this job.</DialogDescription></DialogHeader><PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} onChange={(e) => { const printer = e.currentTarget.value; void run("printer updated", () => setPrinter({ id: row._id, printer: printer || undefined })).then(() => setPrinterOpen(false)); }} /><DialogFooter><Button variant="outline" onClick={() => setPrinterOpen(false)}>Close</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={printerOpen} onOpenChange={setPrinterOpen}><DialogContent><DialogHeader><DialogTitle>Change printer · {row.printCode}</DialogTitle><DialogDescription>Choose a printer for this job.</DialogDescription></DialogHeader><PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} settingsPrinters={settingsPrinters} onChange={(e) => { const printer = e.currentTarget.value; void run("printer updated", () => setPrinter({ id: row._id, printer: printer || undefined })).then(() => setPrinterOpen(false)); }} /><DialogFooter><Button variant="outline" onClick={() => setPrinterOpen(false)}>Close</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={positionOpen} onOpenChange={setPositionOpen}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle>Move {row.printCode}</DialogTitle><DialogDescription>Choose a queue position from 1 to {queueOrder.length}.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor={`position-${row._id}`}>Position</FieldLabel><input id={`position-${row._id}`} type="number" min={1} max={queueOrder.length} value={targetPosition} onChange={(e) => setTargetPosition(e.target.value)} className="h-9 rounded-lg border border-input bg-background px-3" /></Field><DialogFooter><Button variant="outline" onClick={() => setPositionOpen(false)}>Cancel</Button><Button disabled={busy || Number(targetPosition) < 1 || Number(targetPosition) > queueOrder.length} onClick={() => void run("moved", () => placeAt(Number(targetPosition))).then(() => setPositionOpen(false))}>Move</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={previewOpen} onOpenChange={(open) => { setPreviewOpen(open); if (open) setPreviewInteracted(false); }}>
         <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl sm:max-w-3xl">
