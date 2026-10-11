@@ -51,16 +51,15 @@ type PrinterGroups = { matching: { name: string; label: string }[]; other: { nam
 type DragStyle = { ref?: (node: HTMLLIElement | null) => void; style?: CSSProperties };
 
 function PrinterSelect({
-  row, value, disabled, onChange, options, className,
+  row, value, disabled, onChange, options,
 }: {
   row: BoardRow; value: string; disabled?: boolean;
   onChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
   options: PrinterGroups;
-  className?: string;
 }) {
   const currentUnavailable = Boolean(row.printer && ![...options.matching, ...options.other].some((p) => p.name === row.printer));
   return (
-    <NativeSelect className={className} aria-label="Printer" size="sm" value={value} disabled={disabled} onChange={onChange}>
+    <NativeSelect aria-label="Printer" size="sm" value={value} disabled={disabled} onChange={onChange}>
       <option value="">Printer: not set</option>
       {currentUnavailable ? <option value={row.printer!}>{row.printer} (paused)</option> : null}
       {row.colour ? (
@@ -102,14 +101,13 @@ function timeAgo(at: number, now: number) {
 export default function SubmissionCard({
   row, position, isOwner = false, showStatusBadge = false, showSelection = false,
   selected = false, onSelectionChange, printerOptions, queueOrder = [], onMoveTo,
-  dragHandle, dragStyle, isDragging = false, variant = "full",
+  dragHandle, dragStyle, isDragging = false,
 }: {
   row: BoardRow; position?: number; isOwner?: boolean; showStatusBadge?: boolean;
   showSelection?: boolean; selected?: boolean; onSelectionChange?: (checked: boolean) => void;
   printerOptions: PrinterGroups; queueOrder?: Id<"submissions">[];
   onMoveTo?: (beforeId?: Id<"submissions">) => Promise<void>;
   dragHandle?: ReactNode; dragStyle?: DragStyle; isDragging?: boolean;
-  variant?: "full" | "ticket";
 }) {
   const swatch = useSwatch();
   const approve = useMutation(api.queue.approve);
@@ -184,56 +182,52 @@ export default function SubmissionCard({
     <li
       ref={dragStyle?.ref}
       style={dragStyle?.style}
-      className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-(--shadow-card)", variant === "ticket" && "rounded-lg shadow-none", alreadyHasPrint && "opacity-55 hover:opacity-100", isDragging && "z-10 opacity-70 shadow-xl")}
+      className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-(--shadow-card)", alreadyHasPrint && "opacity-55 hover:opacity-100", isDragging && "z-10 opacity-70 shadow-xl")}
     >
-      <div className={cn("grid gap-3 p-3 sm:grid-cols-[14rem_minmax(0,1fr)_auto] sm:items-start sm:gap-4 sm:p-4", variant === "ticket" && "grid-cols-1 gap-2 p-3 sm:grid-cols-1 sm:gap-2 sm:p-3")}>
-        <div className={cn("flex min-w-0 flex-col items-start gap-1", variant === "ticket" ? "w-full" : "sm:w-56")}>
+      <div className="grid gap-3 p-3 sm:grid-cols-[14rem_minmax(0,1fr)_auto] sm:items-start sm:gap-4 sm:p-4">
+        <div className="flex min-w-0 flex-col items-start gap-1 sm:w-56">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{statusLine}</p>
           <div className="flex items-center gap-2 whitespace-nowrap">
             {dragHandle}
             {showSelection && row.status === "queued" ? (
               <Checkbox aria-label={`Select ${row.printCode}`} checked={selected} onCheckedChange={(v) => onSelectionChange?.(v === true)} />
             ) : null}
-            <span className={cn("whitespace-nowrap font-mono text-3xl font-semibold tracking-tight tabular-nums", variant === "ticket" && "text-2xl")}>{row.printCode}</span>
+            <span className="whitespace-nowrap font-mono text-3xl font-semibold tracking-tight tabular-nums">{row.printCode}</span>
           </div>
         </div>
 
         <div className="min-w-0">
           <div className="flex flex-wrap items-baseline gap-x-2">
             <h3 className="min-w-0 truncate text-base font-semibold">{row.title}</h3>
-            {variant !== "ticket" ? <span className="text-sm text-muted-foreground">@{row.participantUsername}</span> : null}
+            <span className="text-sm text-muted-foreground">@{row.participantUsername}</span>
           </div>
-          <p className="text-sm text-muted-foreground">{variant === "ticket" ? `@${row.participantUsername} · ${row.participantName}` : row.participantName}</p>
+          <p className="text-sm text-muted-foreground">{row.participantName}</p>
           <div className="mt-1 flex flex-wrap gap-1">
-            {variant !== "ticket" && row.version > 1 ? <Badge variant="outline">v{row.version}</Badge> : null}
-            {variant !== "ticket" && showStatusBadge ? <Badge variant="outline">{row.status}</Badge> : null}
-            {variant !== "ticket" && (row.status === "submitted" || row.status === "rejected") ? (
+            {row.version > 1 ? <Badge variant="outline">v{row.version}</Badge> : null}
+            {showStatusBadge ? <Badge variant="outline">{row.status}</Badge> : null}
+            {(row.status === "submitted" || row.status === "rejected") ? (
               <Badge variant={alreadyHasPrint ? "outline" : "secondary"}>{printBadge}</Badge>
             ) : null}
-            {variant !== "ticket" && voteOnly ? <Badge variant="outline">{approvedForVoting ? "Approved for voting" : "Vote only"}</Badge> : null}
-            {variant !== "ticket" && (row.designRemoved ? <Badge variant="outline">Removed from voting</Badge> : row.designEntry ? <Badge variant="outline">In voting</Badge> : null)}
-            {variant !== "ticket" && row.oversize ? <Badge variant="destructive">Over size limit</Badge> : null}
+            {voteOnly ? <Badge variant="outline">{approvedForVoting ? "Approved for voting" : "Vote only"}</Badge> : null}
+            {row.designRemoved ? <Badge variant="outline">Removed from voting</Badge> : row.designEntry ? <Badge variant="outline">In voting</Badge> : null}
+            {row.oversize ? <Badge variant="destructive">Over size limit</Badge> : null}
           </div>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {row.colour ? <span className="inline-flex items-center gap-1"><i className="size-3 rounded-full border border-black/10" style={{ backgroundColor: swatch(row.colour) }} />{row.colour}</span> : null}
-            {row.dimensionsMm ? <span>{variant === "ticket" && row.colour ? "· " : ""}{formatDimensions(row.dimensionsMm)}</span> : null}
-            {variant !== "ticket" && row.printer ? <span className={printerPaused ? "text-amber-700 dark:text-amber-300" : ""}>{row.printer}{printerPaused ? " · paused" : ""}</span> : null}
-            {variant !== "ticket" ? <span>{row.kind.toUpperCase()} · {formatBytes(row.sizeBytes)}</span> : null}
-            {variant !== "ticket" && row.status === "queued" ? <span>queued {timeAgo(row.queuedAt ?? row._creationTime, now)}</span> : null}
+            {row.dimensionsMm ? <span>{formatDimensions(row.dimensionsMm)}</span> : null}
+            {row.printer ? <span className={printerPaused ? "text-amber-700 dark:text-amber-300" : ""}>{row.printer}{printerPaused ? " · paused" : ""}</span> : null}
+            <span>{row.kind.toUpperCase()} · {formatBytes(row.sizeBytes)}</span>
+            {row.status === "queued" ? <span>queued {timeAgo(row.queuedAt ?? row._creationTime, now)}</span> : null}
           </div>
-          {variant !== "ticket" ? <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => download(row._id, row.downloadName).catch((e) => toast.error(errorMessage(e, "Download failed")))}>
               <Download data-icon="inline-start" />Download
             </Button>
             <span className="break-all font-mono text-xs text-muted-foreground">{row.downloadName}</span>
-          </div> : null}
+          </div>
         </div>
 
-        {variant === "ticket" && row.status === "queued" ? (
-          <PrinterSelect className="w-full" row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} onChange={(e) => void run("printer updated", () => setPrinter({ id: row._id, printer: e.currentTarget.value || undefined }))} />
-        ) : null}
-
-        <div className={cn("flex flex-wrap items-center gap-1.5 sm:max-w-72 sm:justify-end", variant === "ticket" && "w-full justify-start sm:max-w-none")}>
+        <div className="flex flex-wrap items-center gap-1.5 sm:max-w-72 sm:justify-end">
           {row.status === "submitted" && !withdrawn && !approvedForVoting ? (
             <>
               {!alreadyHasPrint && (!voteOnly || !row.designRemoved) ? <Button size="sm" disabled={busy} onClick={() => run(voteOnly ? "approved for voting" : "approved", () => voteOnly ? approveForVoting({ id: row._id }) : approve({ id: row._id }))}>
@@ -244,7 +238,7 @@ export default function SubmissionCard({
           ) : null}
           {row.status === "queued" ? (
             <>
-              {variant !== "ticket" ? <PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} onChange={(e) => void run("printer updated", () => setPrinter({ id: row._id, printer: e.currentTarget.value || undefined }))} /> : null}
+              <PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} onChange={(e) => void run("printer updated", () => setPrinter({ id: row._id, printer: e.currentTarget.value || undefined }))} />
               <Button size="sm" disabled={busy || !row.printer || row.printerOutOfService} title={!row.printer ? "Assign a printer first" : row.printerOutOfService ? "Pick another printer first" : undefined} onClick={() => run("printing", () => startPrinting({ id: row._id }))}><Printer data-icon="inline-start" />Start printing</Button>
             </>
           ) : null}

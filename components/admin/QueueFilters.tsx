@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pause, X } from "lucide-react";
+import { ChevronDown, Pause, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -40,23 +40,37 @@ export default function QueueFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <Popover open={addOpen} onOpenChange={setAddOpen}>
+        <PopoverTrigger render={<Button type="button" size="sm" variant="outline" disabled={!availableDimensions.length} />}>
+          + Add filter
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-48 p-2">
+          <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Filter by</p>
+          {availableDimensions.map((dimension) => (
+            <Button key={dimension} type="button" variant="ghost" className="w-full justify-start" onClick={() => add(dimension)}>
+              {dimension === "colour" ? "Colour" : "Printer"}
+            </Button>
+          ))}
+        </PopoverContent>
+      </Popover>
       {pills.map((pill, index) => {
         const options = pill.dimension === "colour" ? [ANY_COLOUR, ...colours] : [NOT_ASSIGNED, ...printers];
         const counts = optionCounts(rows, pills, index, pill.dimension, options);
         const label = pill.dimension === "colour" ? "Colour" : "Printer";
         const selection = pill.values.map((value) => value === ANY_COLOUR
-          ? "Any colour"
+          ? "any"
           : value === NOT_ASSIGNED
-            ? "Not assigned"
-            : `${value}${pill.dimension === "printer" && pausedPrinters.includes(value) ? " · paused" : ""}`
+            ? "not assigned"
+            : value
         ).join(", ");
-        const active = pill.values.length > 0;
         return (
-          <div key={pill.id} className={`flex items-center gap-1 rounded-full border px-2 py-1 ${active ? "border-foreground bg-foreground text-background" : "border-dashed border-muted-foreground/40 bg-muted/20 text-muted-foreground"}`}>
-            <span className={`font-mono text-xs ${active ? "text-background/70" : "text-muted-foreground"}`}>{index + 1}</span>
+          <div key={pill.id} className="inline-flex h-[30px] items-center overflow-hidden rounded-full bg-foreground text-[13px] text-background">
+            <span className="ml-1.5 inline-flex size-[18px] shrink-0 items-center justify-center rounded-full bg-background font-mono text-[11px] leading-none text-foreground">{index + 1}</span>
             <Popover open={openPillId === pill.id} onOpenChange={(open) => setOpenPillId(open ? pill.id : null)}>
-              <PopoverTrigger render={<button type="button" className={`rounded-full px-1.5 py-1 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${active ? "text-background" : "text-muted-foreground"}`} />}>
-                {label}: {selection || "choose…"}
+              <PopoverTrigger render={<button type="button" className="inline-flex h-full min-w-0 items-center gap-1.5 whitespace-nowrap px-2 text-left text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-background/70 focus-visible:ring-inset" />}>
+                <span className="text-background/70">{label} is</span>
+                <span>{selection || "choose…"}</span>
+                <ChevronDown className="size-3 shrink-0 text-background/70" />
               </PopoverTrigger>
               <PopoverContent align="start" className="max-h-80 w-64 overflow-y-auto p-2">
                 <div className="flex flex-col gap-1">
@@ -72,26 +86,13 @@ export default function QueueFilters({
                 </div>
               </PopoverContent>
             </Popover>
-            <Button type="button" size="icon-xs" variant="ghost" className={active ? "text-background hover:bg-background/10 hover:text-background" : "text-muted-foreground"} aria-label={`Remove ${label.toLowerCase()} filter ${index + 1}`} onClick={() => {
+            <button type="button" className="inline-flex h-full w-7 shrink-0 items-center justify-center border-l border-background/20 text-background outline-none transition-colors hover:bg-background/10 focus-visible:ring-2 focus-visible:ring-background/70 focus-visible:ring-inset" aria-label={`Remove ${label.toLowerCase()} filter ${index + 1}`} onClick={() => {
               if (openPillId === pill.id) setOpenPillId(null);
               onChange(pills.filter((item) => item.id !== pill.id));
-            }}><X /></Button>
+            }}><X className="size-3.5" /></button>
           </div>
         );
       })}
-      <Popover open={addOpen} onOpenChange={setAddOpen}>
-        <PopoverTrigger render={<Button type="button" size="sm" variant="outline" disabled={!availableDimensions.length} />}>
-          + Add filter
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-48 p-2">
-          <p className="px-2 py-1 text-xs font-medium text-muted-foreground">Filter by</p>
-          {availableDimensions.map((dimension) => (
-            <Button key={dimension} type="button" variant="ghost" className="w-full justify-start" onClick={() => add(dimension)}>
-              {dimension === "colour" ? "Colour" : "Printer"}
-            </Button>
-          ))}
-        </PopoverContent>
-      </Popover>
       {pills.length ? <Button type="button" size="sm" variant="ghost" onClick={() => onChange([])}>Clear all</Button> : null}
     </div>
   );

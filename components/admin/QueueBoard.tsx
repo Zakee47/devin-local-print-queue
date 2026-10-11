@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { Download, GripVertical, Inbox, Pause, Printer } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, Download, GripVertical, Inbox, Pause, Printer } from "lucide-react";
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -116,8 +116,10 @@ export default function QueueBoard() {
   const [downloading, setDownloading] = useState(false);
   const [activeTab, setActiveTab] = useState<Column | "deleted">("review");
   const [filterPills, setFilterPills] = useState<FilterPill[]>([]);
-  const [queuedView, setQueuedView] = useState<"list" | "printer">("list");
   const [optimisticQueueIds, setOptimisticQueueIds] = useState<BoardRow["_id"][] | null>(null);
+  const printerStripRef = useRef<HTMLDivElement>(null);
+  const printerCardsRef = useRef<HTMLDivElement>(null);
+  const [printerScroll, setPrinterScroll] = useState({ left: false, right: false });
   const moveTo = useMutation(api.queue.moveTo);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -128,6 +130,28 @@ export default function QueueBoard() {
   const [onePrinter, setOnePrinter] = useState("");
   const [spreadPrinters, setSpreadPrinters] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
+
+  const updatePrinterScroll = useCallback(() => {
+    const strip = printerStripRef.current;
+    if (!strip) return;
+    const maxScroll = strip.scrollWidth - strip.clientWidth;
+    const left = strip.scrollLeft > 0;
+    const right = strip.scrollLeft < maxScroll - 1;
+    setPrinterScroll((current) =>
+      current.left === left && current.right === right ? current : { left, right }
+    );
+  }, []);
+
+  useEffect(() => {
+    const strip = printerStripRef.current;
+    const cards = printerCardsRef.current;
+    if (!strip || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(updatePrinterScroll);
+    observer.observe(strip);
+    if (cards) observer.observe(cards);
+    updatePrinterScroll();
+    return () => observer.disconnect();
+  }, [settings?.printers.length, updatePrinterScroll]);
 
   useEffect(() => {
     if (!rows) return;
@@ -195,7 +219,7 @@ export default function QueueBoard() {
     ])
   );
   const notAssignedQueued = rows.filter((row) => row.status === "queued" && !row.printer).length;
-  const hasFilters = filterPills.length > 0;
+  const hasFilters = filterPills.some((pill) => pill.values.length > 0);
   const allShownQueued = filtered.queued;
 
   function choicesFor(row: BoardRow): PrinterChoices {
@@ -256,7 +280,7 @@ export default function QueueBoard() {
     return filtered[tab].length;
   }
 
-  function renderCards(cardRows: BoardRow[], options: { status?: boolean; selectable?: boolean; sortable?: boolean; variant?: "full" | "ticket" } = {}) {
+  function renderCards(cardRows: BoardRow[], options: { status?: boolean; selectable?: boolean; sortable?: boolean } = {}) {
     return (
       <ul className="flex flex-col gap-3">
         {cardRows.map((row) => {
@@ -285,7 +309,6 @@ export default function QueueBoard() {
               dragHandle={dragHandle}
               dragStyle={dragStyle}
               isDragging={isDragging}
-              variant={options.variant}
             />
           );
           return options.sortable
@@ -315,6 +338,13 @@ export default function QueueBoard() {
     });
   }
 
+  function scrollPrinterStatus(direction: -1 | 1) {
+    const strip = printerStripRef.current;
+    if (!strip) return;
+    const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+    strip.scrollBy({ left: direction * 400, behavior });
+  }
+
   return (
     <Tabs
       value={activeTab}
@@ -322,33 +352,6 @@ export default function QueueBoard() {
         setActiveTab(value as Column | "deleted");
       }}
     >
-      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-border bg-card p-3">
-        <p className="text-xs font-medium text-muted-foreground">Printer load · whole queue, not filtered</p>
-        <div className="flex snap-x gap-2 overflow-x-auto md:grid md:grid-cols-3 xl:grid-cols-5">
-          {printerSettings.map((printer) => {
-            const load = printerLoads.get(printer.name)!;
-            const queued = filtered.queued.filter((row) => row.printer === printer.name).length;
-            const printing = filtered.printing.filter((row) => row.printer === printer.name).length;
-            return <div key={printer.name} className={`min-w-44 snap-start rounded-lg border bg-card p-2 ${printer.outOfService ? "border-amber-300 dark:border-amber-900" : "border-border"}`}>
-              <p className="flex items-center gap-1 text-sm font-medium">
-                {printer.outOfService
-                  ? <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><Pause className="size-3" />{printer.name} · paused</span>
-                  : <><Printer className="size-3.5 text-muted-foreground" />{printer.name}</>}
-              </p>
-              <p className="text-xs text-muted-foreground"><span className="font-mono text-base tabular-nums">{load.queued}</span> queued · <span className="font-mono text-base tabular-nums">{load.printing}</span> printing</p>
-              {hasFilters ? <p className="text-xs text-muted-foreground">{queued + printing} match filters</p> : null}
-              <div className={`mt-1 flex flex-wrap gap-1 ${printer.outOfService ? "opacity-50 grayscale" : ""}`}>{printer.colours.map((colour) => <i key={colour} title={colour} className="size-3 rounded-full border" style={{ backgroundColor: swatch(colour) }} />)}</div>
-            </div>;
-          })}
-          <div className="min-w-44 snap-start rounded-lg border border-border bg-card p-2">
-            <p className="text-sm font-medium">Not assigned</p>
-            <p className="text-xs text-muted-foreground"><span className="font-mono text-base tabular-nums">{notAssignedQueued}</span> queued</p>
-            <p className="text-xs text-muted-foreground">needs a printer</p>
-            {hasFilters ? <p className="text-xs text-muted-foreground">{filtered.queued.filter((row) => !row.printer).length} match filters</p> : null}
-          </div>
-        </div>
-      </div>
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <TabsList className="flex-wrap group-data-horizontal/tabs:h-auto">
           {TABS.map((tab) => (
@@ -378,6 +381,55 @@ export default function QueueBoard() {
         <QueueFilters rows={rows} pills={filterPills} onChange={setFilterPills} colours={colourOptions} printers={printerOptions} pausedPrinters={printerSettings.filter((printer) => printer.outOfService).map((printer) => printer.name)} swatch={swatch} />
       </div>
 
+      <div className="mt-4 rounded-xl border border-border bg-card p-3">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="text-xs font-medium text-muted-foreground">Printer load · whole queue, not filtered</p>
+          <div className="hidden items-center gap-1 md:flex">
+            <Button type="button" variant="outline" size="icon" aria-label="Scroll printers left" aria-controls="printer-status-strip" disabled={!printerScroll.left} onClick={() => scrollPrinterStatus(-1)}>
+              <ChevronLeft />
+            </Button>
+            <Button type="button" variant="outline" size="icon" aria-label="Scroll printers right" aria-controls="printer-status-strip" disabled={!printerScroll.right} onClick={() => scrollPrinterStatus(1)}>
+              <ChevronRight />
+            </Button>
+          </div>
+        </div>
+        <div className="relative">
+          <div
+            id="printer-status-strip"
+            ref={printerStripRef}
+            onScroll={updatePrinterScroll}
+            className="flex snap-x snap-mandatory gap-2 overflow-x-auto"
+          >
+          <div className="sticky left-0 z-10 w-[200px] shrink-0 snap-start rounded-lg border border-border bg-card p-2">
+            <p className="text-sm font-medium">Not assigned</p>
+            <p className="text-xs text-muted-foreground"><span className="font-mono text-base tabular-nums">{notAssignedQueued}</span> queued</p>
+            <p className="text-xs text-muted-foreground">needs a printer</p>
+            {hasFilters ? <p className="text-xs text-muted-foreground">{filtered.queued.filter((row) => !row.printer).length} match filters</p> : null}
+          </div>
+          <div ref={printerCardsRef} className="flex w-max shrink-0 gap-2">
+            {printerSettings.map((printer) => {
+              const load = printerLoads.get(printer.name)!;
+              const queued = filtered.queued.filter((row) => row.printer === printer.name).length;
+              const printing = filtered.printing.filter((row) => row.printer === printer.name).length;
+              return <div key={printer.name} className={`w-[200px] shrink-0 snap-start rounded-lg border bg-card p-2 ${printer.outOfService ? "border-amber-300 dark:border-amber-900" : "border-border"}`}>
+                <p className="flex items-center gap-1 text-sm font-medium">
+                  <Printer className="size-3.5 text-muted-foreground" />
+                  {printer.outOfService
+                    ? <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"><Pause className="size-3" />{printer.name} · paused</span>
+                    : printer.name}
+                </p>
+                <p className="text-xs text-muted-foreground"><span className="font-mono text-base tabular-nums">{load.queued}</span> queued · <span className="font-mono text-base tabular-nums">{load.printing}</span> printing</p>
+                {hasFilters ? <p className="text-xs text-muted-foreground">{queued + printing} match filters</p> : null}
+                <div className={`mt-1 flex flex-wrap gap-1 ${printer.outOfService ? "opacity-50 grayscale" : ""}`}>{printer.colours.map((colour) => <i key={colour} title={colour} className="size-3 rounded-full border" style={{ backgroundColor: swatch(colour) }} />)}</div>
+              </div>;
+            })}
+          </div>
+          </div>
+          {printerScroll.left ? <div aria-hidden className="pointer-events-none absolute inset-y-0 left-[208px] z-20 w-8 bg-gradient-to-r from-card to-transparent" /> : null}
+          {printerScroll.right ? <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 z-20 w-8 bg-gradient-to-l from-card to-transparent" /> : null}
+        </div>
+      </div>
+
       {withdrawals?.length ? (
         <Alert className="mt-4">
           <AlertTitle>Changed by participants</AlertTitle>
@@ -397,13 +449,9 @@ export default function QueueBoard() {
         const cardRows = filtered[tab.value];
         return (
           <TabsContent key={tab.value} value={tab.value} className="mt-4">
-            {tab.value === "queued" || tab.value === "printing" ? (
+            {tab.value === "queued" ? (
               <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
-                {tab.value === "queued" && queuedView === "list" ? <Button type="button" size="sm" variant="outline" disabled={allShownQueued.length === 0} onClick={() => setSelectedIds([...new Set([...selectedQueuedIds, ...allShownQueued.map((row) => row._id)])])}>Select all shown</Button> : null}
-                <div className="flex gap-1">
-                  <Button size="sm" variant={queuedView === "list" ? "secondary" : "outline"} onClick={() => setQueuedView("list")}>List</Button>
-                  <Button size="sm" variant={queuedView === "printer" ? "secondary" : "outline"} onClick={() => setQueuedView("printer")}>By printer</Button>
-                </div>
+                <Button type="button" size="sm" variant="outline" disabled={allShownQueued.length === 0} onClick={() => setSelectedIds([...new Set([...selectedQueuedIds, ...allShownQueued.map((row) => row._id)])])}>Select all shown</Button>
               </div>
             ) : null}
             {cardRows.length === 0 ? (
@@ -414,7 +462,7 @@ export default function QueueBoard() {
                   <EmptyDescription>{tab.empty}</EmptyDescription>
                 </EmptyHeader>
               </Empty>
-            ) : tab.value === "printing" && queuedView === "list" ? (
+            ) : tab.value === "printing" ? (
               <div className="flex flex-col gap-4">
                 {printerGroups.map(({ printer, rows: groupRows }) => (
                   <section key={printer ?? "no-printer"} className="flex flex-col gap-2">
@@ -429,35 +477,25 @@ export default function QueueBoard() {
               <div className="flex flex-col gap-6">
                 {TABS.filter((stage) => stage.value !== "all").map((stage) => {
                   const stageRows = filtered[stage.value];
-                  return stageRows.length ? <section key={stage.value} className="flex flex-col gap-2">
+                  return <section key={stage.value} className="flex flex-col gap-2">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{stage.label} · {stageRows.length}</h3>
-                    {stage.value === "printing"
+                    {stageRows.length ? stage.value === "printing"
                       ? <div className="flex flex-col gap-3">{printerGroups.map(({ printer, rows: groupRows }) => <section key={printer ?? "no-printer"}><h4 className="mb-2 text-xs text-muted-foreground">{printer ?? "No printer set"} · {groupRows.length}</h4>{renderCards(groupRows, { status: true })}</section>)}</div>
-                      : renderCards(stageRows, { status: true })}
-                  </section> : null;
+                      : renderCards(stageRows, { status: true })
+                      : null}
+                  </section>;
                 })}
               </div>
             ) : (
               <>
-                {(tab.value === "queued" || tab.value === "printing") && queuedView === "printer" ? (
-                  <div className="flex gap-4 overflow-x-auto pb-3">
-                    {printerSettings.map((printer) => {
-                      const group = cardRows.filter((row) => row.printer === printer.name);
-                      return <section key={printer.name} className={`w-[280px] shrink-0 rounded-xl border p-3 ${printer.outOfService ? "border-amber-300 dark:border-amber-900" : "border-border"}`}>
-                        <h3 className={`mb-2 flex items-center gap-1 text-sm font-semibold ${printer.outOfService ? "text-amber-900 dark:text-amber-200" : ""}`}>{printer.outOfService ? <Pause className="size-3.5" /> : null}{printer.name} · {group.length}</h3>
-                        {renderCards(group, { variant: "ticket" })}
-                      </section>;
-                    })}
-                    {tab.value === "queued" ? <section className="w-[280px] shrink-0 rounded-xl border border-border p-3"><h3 className="mb-2 text-sm font-semibold">Not assigned · {cardRows.filter((row) => !row.printer).length}</h3>{renderCards(cardRows.filter((row) => !row.printer), { variant: "ticket" })}</section> : null}
-                  </div>
-                ) : tab.value === "queued" && queuedView === "list" ? (
+                {tab.value === "queued" ? (
                   <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <SortableContext items={cardRows.map((row) => row._id)} strategy={verticalListSortingStrategy}>
                       {renderCards(cardRows, { selectable: true, sortable: true })}
                     </SortableContext>
                   </DndContext>
-                ) : renderCards(cardRows, { selectable: tab.value === "queued" })}
-                {tab.value === "queued" && queuedView === "list" && selectedVisible > 0 ? (
+                ) : renderCards(cardRows)}
+                {tab.value === "queued" && selectedVisible > 0 ? (
                   <div className="sticky bottom-3 z-20 mt-4 flex flex-col gap-3 rounded-xl border border-brand/50 bg-background/95 p-3 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <strong>{selectedVisible} selected</strong>
