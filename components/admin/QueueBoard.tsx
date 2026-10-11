@@ -48,30 +48,6 @@ function columns(rows: BoardRow[]): Record<Column, BoardRow[]> {
   };
 }
 
-function printingGroups(rows: BoardRow[], printerOrder: string[]) {
-  const byPrinter = new Map<string, BoardRow[]>();
-  const withoutPrinter: BoardRow[] = [];
-  for (const row of rows) {
-    if (!row.printer) {
-      withoutPrinter.push(row);
-      continue;
-    }
-    const group = byPrinter.get(row.printer) ?? [];
-    group.push(row);
-    byPrinter.set(row.printer, group);
-  }
-  const groups: { printer: string | null; rows: BoardRow[] }[] = printerOrder.flatMap((printer) => {
-    const group = byPrinter.get(printer);
-    return group ? [{ printer, rows: group }] : [];
-  });
-  const configured = new Set(printerOrder);
-  for (const [printer, group] of byPrinter) {
-    if (!configured.has(printer)) groups.push({ printer, rows: group });
-  }
-  if (withoutPrinter.length > 0) groups.push({ printer: null, rows: withoutPrinter });
-  return groups;
-}
-
 const TABS: { value: Column; label: string; empty: string }[] = [
   { value: "all", label: "All", empty: "No submissions." },
   { value: "review", label: "Needs review", empty: "Nothing waiting for review." },
@@ -207,7 +183,6 @@ export default function QueueBoard() {
     filtered.queued.sort((a, b) => (order.get(a._id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b._id) ?? Number.MAX_SAFE_INTEGER));
   }
   const reviewCount = filtered.review.length;
-  const printerGroups = printingGroups(filtered.printing, configuredPrinters);
   const inService = inServicePrinters(printerSettings);
   const printerLoads = new Map(
     printerSettings.map(({ name }) => [
@@ -455,6 +430,8 @@ export default function QueueBoard() {
                 <Button type="button" size="sm" variant="outline" disabled={allShownQueued.length === 0} onClick={() => setSelectedIds([...new Set([...selectedQueuedIds, ...allShownQueued.map((row) => row._id)])])}>Select all shown</Button>
               </div>
             ) : null}
+            {tab.value !== "all" ? <h2 className="mb-2 font-mono text-xs font-medium uppercase tracking-wide text-muted-foreground">{tab.label} {cardRows.length}</h2> : null}
+            {tab.value === "withdrawn" ? <p className="mb-3 text-sm text-muted-foreground">Participant removed the print request. Returns to Needs review if they ask again; Restore reverses a mistake.</p> : null}
             {cardRows.length === 0 ? (
               <Empty className="border border-dashed border-border-strong py-14">
                 <EmptyHeader>
@@ -463,25 +440,15 @@ export default function QueueBoard() {
                   <EmptyDescription>{tab.empty}</EmptyDescription>
                 </EmptyHeader>
               </Empty>
-            ) : tab.value === "printing" ? (
-              <div className="flex flex-col gap-4">
-                {printerGroups.map(({ printer, rows: groupRows }) => (
-                  <section key={printer ?? "no-printer"} className="flex flex-col gap-2">
-                    <h3 className="font-mono text-sm text-muted-foreground">
-                      {printer ?? "No printer set"} · {groupRows.length} {groupRows.length === 1 ? "job" : "jobs"}
-                    </h3>
-                    {renderCards(groupRows)}
-                  </section>
-                ))}
-              </div>
             ) : tab.value === "all" ? (
               <div className="flex flex-col gap-6">
                 {TABS.filter((stage) => stage.value !== "all").map((stage) => {
                   const stageRows = filtered[stage.value];
                   return <section key={stage.value} className="flex flex-col gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{stage.label} · {stageRows.length}</h3>
+                    <h3 className="font-mono text-xs font-medium uppercase tracking-wide text-muted-foreground">{stage.label} {stageRows.length}</h3>
+                    {stage.value === "withdrawn" ? <p className="text-sm text-muted-foreground">Participant removed the print request. Returns to Needs review if they ask again; Restore reverses a mistake.</p> : null}
                     {stageRows.length ? stage.value === "printing"
-                      ? <div className="flex flex-col gap-3">{printerGroups.map(({ printer, rows: groupRows }) => <section key={printer ?? "no-printer"}><h4 className="mb-2 text-xs text-muted-foreground">{printer ?? "No printer set"} · {groupRows.length}</h4>{renderCards(groupRows, { status: true })}</section>)}</div>
+                      ? renderCards(stageRows, { status: true })
                       : renderCards(stageRows, { status: true })
                       : null}
                   </section>;

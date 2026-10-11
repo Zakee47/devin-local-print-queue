@@ -43,6 +43,7 @@ export default function ModelViewer({
   const pivotRef = useRef<THREE.Object3D | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const baseDistanceRef = useRef(0);
+  const autoRotateRef = useRef(autoRotate);
   const rotationRef = useRef<ModelRotation>(rotation ?? { x: 0, y: 0, z: 0 });
   const zoomRef = useRef(zoom ?? 1);
   const interactedRef = useRef(false);
@@ -54,6 +55,11 @@ export default function ModelViewer({
     rotationChangeRef.current = onRotationChange;
     zoomChangeRef.current = onZoomChange;
   }, [onRotationChange, onZoomChange]);
+
+  useEffect(() => {
+    autoRotateRef.current = autoRotate;
+    if (autoRotate) interactedRef.current = false;
+  }, [autoRotate]);
 
   useEffect(() => {
     if (!rotation) return;
@@ -181,7 +187,7 @@ export default function ModelViewer({
     canvas.addEventListener("wheel", onWheel, { passive: false });
 
     const tick = () => {
-      if (autoRotate && (!interactive || !interactedRef.current)) pivot.rotation.y += 0.006;
+      if (autoRotateRef.current && (!interactive || !interactedRef.current)) pivot.rotation.y += 0.006;
       renderer.render(scene, camera);
       frame = requestAnimationFrame(tick);
     };
@@ -203,7 +209,7 @@ export default function ModelViewer({
       cameraRef.current = null;
       baseDistanceRef.current = 0;
     };
-  }, [url, kind, colour, autoRotate, boostLighting, interactive]);
+  }, [url, kind, colour, boostLighting, interactive]);
 
   return (
     <div ref={mountRef} className={cn("relative aspect-square w-full", interactive && "cursor-grab active:cursor-grabbing", className)}>
