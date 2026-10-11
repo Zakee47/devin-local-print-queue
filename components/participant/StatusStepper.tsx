@@ -9,12 +9,25 @@ export default function StatusStepper({
   rejectionReason,
   rejectionKind,
   queuePosition,
+  approvedForVoting = false,
 }: {
   status: SubmissionStatus;
+  approvedForVoting?: boolean;
   rejectionReason?: string;
   rejectionKind?: "review" | "print_failed";
   queuePosition: number | null;
 }) {
+  if (approvedForVoting) {
+    return (
+      <div role="status" aria-label="Status: Done, approved for voting" className="rounded-lg border border-border p-4">
+        <p className="flex items-center gap-2 font-medium">
+          <Check className="size-4 text-brand" aria-hidden="true" />
+          {STATUS_LABELS.done} · approved for voting
+        </p>
+        <p className="mt-1.5 text-sm text-muted-foreground">Your design is in the voting gallery. It isn&apos;t printed.</p>
+      </div>
+    );
+  }
   if (status === "rejected" && rejectionKind === "print_failed") {
     const reason = rejectionReason?.trim().replace(/[.!?]+$/, "");
     return (

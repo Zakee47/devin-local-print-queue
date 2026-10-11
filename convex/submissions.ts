@@ -16,7 +16,14 @@ import { fileKindFromName, formatPrintCode } from "../lib/files";
 import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen, type Dimensions } from "../lib/event";
 import { fitsWithin, formatDimensions } from "../lib/dimensions";
 import { isPreviewImage, MAX_PREVIEW_BYTES } from "../lib/preview-image";
-import { currentVersion, isActive, isDeleted, isDesignEntry } from "./entries";
+import {
+  currentVersion,
+  gainPrintPatch,
+  isActive,
+  isApprovedForVoting,
+  isDeleted,
+  isDesignEntry,
+} from "./entries";
 import { planRoles, roleOf, rolesOf, type RoleFile } from "../lib/roles";
 
 export const MAX_TITLE_LENGTH = 60;
@@ -288,7 +295,7 @@ async function applyOtherRoles(
       ? { ...fields, ...withdrawnFields(currentVersion(current), now, "withdrawn") }
       : {
           ...fields,
-          ...(other.print && !current.printRequested ? { votingApprovedAt: undefined } : {}),
+          ...(other.print && !current.printRequested ? gainPrintPatch(current) : {}),
         };
     await ctx.db.patch(id, patch);
     if (other.withdrawsPrint) {
@@ -476,6 +483,7 @@ export const mine = query({
           designRemoved: s.designRemoved ?? false,
           designRemovedReason: s.designRemoved ? s.designRemovedReason : undefined,
           status: s.status,
+          votingApproved: isApprovedForVoting(s),
           rejectionReason: s.rejectionReason,
           rejectionKind: s.rejectionKind,
           dimensionsMm: s.dimensionsMm,
@@ -524,7 +532,7 @@ export const setRoles = mutation({
     } else {
       await ctx.db.patch(id, {
         ...fields,
-        ...(plan.print && !submission.printRequested ? { votingApprovedAt: undefined } : {}),
+        ...(plan.print && !submission.printRequested ? gainPrintPatch(submission) : {}),
       });
     }
     const moved = plan.others.flatMap((other) => [
@@ -562,7 +570,7 @@ export const colourDemand = query({
     );
     const byColour = new Map<string, { colour: string | null; waiting: number }>();
     for (const submission of [...submitted, ...queued]) {
-      if (isDeleted(submission)) continue;
+      if (isDeleted(submission) || isApprovedForVoting(submission)) continue;
       const colour = submission.colour?.trim() || null;
       const key = colour?.toLowerCase() ?? "";
       const current = byColour.get(key);
@@ -809,6 +817,7 @@ export const remove = mutation({
     await ctx.db.patch(next._id, {
       designEntry: isDesignEntry(next) || takeVote,
       printRequested: next.printRequested || takePrint,
+      ...(takePrint ? gainPrintPatch(next) : {}),
     });
     await auditParticipant(
       ctx,

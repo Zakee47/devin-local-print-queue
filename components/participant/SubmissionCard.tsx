@@ -291,9 +291,10 @@ export default function SubmissionCard({
               </div>
             </div>
             {s.notes ? <p className="text-sm whitespace-pre-line text-muted-foreground">{s.notes}</p> : null}
-              {s.print || s.status !== "submitted" ? (
+              {s.print || s.status !== "submitted" || s.votingApproved ? (
                 <StatusStepper
                   status={s.status}
+                  approvedForVoting={s.votingApproved}
                   rejectionReason={s.rejectionReason}
                   rejectionKind={s.rejectionKind}
                   queuePosition={s.queuePosition}

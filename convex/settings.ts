@@ -48,6 +48,59 @@ export async function readSettings(ctx: QueryCtx | MutationCtx): Promise<Setting
   return { ...DEFAULT_SETTINGS, ...rest, keepVotesOnReplace: rest.keepVotesOnReplace ?? false };
 }
 
+const printerKey = (name: string) => name.trim().toLowerCase();
+
+// Printers have no ids: the settings form edits names in place, so a list of
+// the same length with one name swapped is a rename. Queued and printing jobs
+// follow a rename; queued jobs on a removed printer go back to unassigned.
+async function reconcilePrinterAssignments(
+  ctx: MutationCtx,
+  actor: string,
+  previous: Printer[],
+  next: Printer[]
+) {
+  const nextKeys = new Set(next.map(({ name }) => printerKey(name)));
+  const previousKeys = new Set(previous.map(({ name }) => printerKey(name)));
+  const renames = new Map<string, string>();
+  if (previous.length === next.length) {
+    previous.forEach(({ name }, index) => {
+      const replacement = next[index].name;
+      if (!nextKeys.has(printerKey(name)) && !previousKeys.has(printerKey(replacement))) {
+        renames.set(printerKey(name), replacement);
+      }
+    });
+  }
+  for (const status of ["queued", "printing"] as const) {
+    const rows = await ctx.db
+      .query("submissions")
+      .withIndex("by_status", (q) => q.eq("status", status))
+      .collect();
+    for (const row of rows) {
+      if (!row.printer?.trim() || nextKeys.has(printerKey(row.printer))) continue;
+      const renamed = renames.get(printerKey(row.printer));
+      if (renamed) {
+        await ctx.db.patch(row._id, { printer: renamed });
+      } else if (status === "queued") {
+        await ctx.db.patch(row._id, { printer: undefined });
+      } else {
+        continue;
+      }
+      await ctx.db.insert("auditLog", {
+        actor,
+        action: "queue.setPrinter",
+        submissionId: row._id,
+        detail: renamed
+          ? `${renamed} (renamed from ${row.printer.trim()})`
+          : `cleared (${row.printer.trim()} removed)`,
+      });
+    }
+  }
+}
+
+function requirePositive(value: number, message: string) {
+  if (!Number.isFinite(value) || value <= 0) throw new ConvexError(message);
+}
+
 async function writeSettings(ctx: MutationCtx, patch: Partial<Settings>) {
   const row = await ctx.db.query("settings").first();
   if (row) await ctx.db.patch(row._id, patch);
@@ -150,8 +203,23 @@ export const update = mutation({
         settingsPatch.announcementUpdatedAt = Date.now();
       }
     }
+    if (patch.maxFileBytes !== undefined) {
+      requirePositive(patch.maxFileBytes, "Max file size must be more than 0");
+    }
+    if (patch.maxDimensionsMm !== undefined) {
+      for (const size of Object.values(patch.maxDimensionsMm)) {
+        requirePositive(size, "Each size limit must be more than 0 mm");
+      }
+    }
     if (settingsPatch.colours !== undefined) {
-      settingsPatch.colours = [...new Set(settingsPatch.colours.map((c) => c.trim()).filter(Boolean))];
+      const seen = new Set<string>();
+      settingsPatch.colours = settingsPatch.colours.flatMap((colour) => {
+        const trimmed = colour.trim();
+        const key = trimmed.toLowerCase();
+        if (!trimmed || seen.has(key)) return [];
+        seen.add(key);
+        return [trimmed];
+      });
     }
     if (settingsPatch.printers !== undefined) {
       const printerNames = new Set<string>();
@@ -188,6 +256,9 @@ export const update = mutation({
       );
     }
     await writeSettings(ctx, settingsPatch);
+    if (settingsPatch.printers !== undefined) {
+      await reconcilePrinterAssignments(ctx, actor, currentSettings.printers, settingsPatch.printers);
+    }
     await ctx.db.insert("auditLog", {
       actor,
       action: "settings.update",

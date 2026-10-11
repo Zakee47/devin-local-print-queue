@@ -32,6 +32,19 @@ export function printRequestPatch(s: DesignFields, printRequested: boolean) {
   return { printRequested, designEntry: isDesignEntry(s) };
 }
 
+// A vote-only design staff approved for voting: shown as Done, never printed.
+export function isApprovedForVoting(s: Doc<"submissions">): boolean {
+  return s.status === "submitted" && !s.printRequested && s.votingApprovedAt !== undefined;
+}
+
+// A row that (re)gains Print is a fresh print request awaiting review.
+export function gainPrintPatch(s: Doc<"submissions">) {
+  return {
+    votingApprovedAt: undefined,
+    ...(s.participantNotice?.kind === "withdrawn" ? { participantNotice: undefined } : {}),
+  };
+}
+
 export function inCompetition(s: Doc<"submissions">): boolean {
   return !isDeleted(s) && isDesignEntry(s) && !s.designRemoved;
 }
