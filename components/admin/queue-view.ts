@@ -23,10 +23,14 @@ export type QueueViewRow = {
   rejectedAt?: number;
 };
 
+export function isWithdrawnRow(row: QueueViewRow) {
+  return row.participantNotice?.kind === "withdrawn" && !row.printRequested;
+}
+
 export function bucketOf(row: QueueViewRow): QueueBucket {
   if (row.deletedAt !== undefined) return "deleted";
   if (row.status === "submitted") {
-    if (row.participantNotice?.kind === "withdrawn") return "withdrawn";
+    if (isWithdrawnRow(row)) return "withdrawn";
     if (!row.printRequested && row.votingApprovedAt !== undefined) return "done";
     return "review";
   }

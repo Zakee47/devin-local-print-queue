@@ -20,6 +20,7 @@ describe("queue view buckets", () => {
   test("maps lifecycle states, withdrawn rows, and vote-only approval", () => {
     expect(bucketOf(row("review"))).toBe("review");
     expect(bucketOf(row("withdrawn", { printRequested: false, participantNotice: { kind: "withdrawn", at: 2 } }))).toBe("withdrawn");
+    expect(bucketOf(row("re-requested", { printRequested: true, participantNotice: { kind: "withdrawn", at: 3 } }))).toBe("review");
     expect(bucketOf(row("vote", { printRequested: false, votingApprovedAt: 4 }))).toBe("done");
     expect(bucketOf(row("queued", { status: "queued" }))).toBe("queued");
     expect(bucketOf(row("printing", { status: "printing" }))).toBe("printing");

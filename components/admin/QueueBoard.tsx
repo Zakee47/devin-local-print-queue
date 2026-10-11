@@ -38,7 +38,7 @@ import HistoryDialog from "@/components/admin/HistoryDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
 import { errorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { applyFilters, beforeIdAfterDrop, type FilterPill } from "@/components/admin/queue-view";
+import { applyFilters, beforeIdAfterDrop, isWithdrawnRow, type FilterPill } from "@/components/admin/queue-view";
 
 type Column = "all" | "review" | "queued" | "printing" | "done" | "rejected" | "withdrawn";
 type PrinterOption = { name: string; label: string };
@@ -48,11 +48,11 @@ function columns(rows: BoardRow[]): Record<Column, BoardRow[]> {
   const byTime = (a: BoardRow, b: BoardRow) => a._creationTime - b._creationTime;
   const of = (status: BoardRow["status"]) => rows.filter((r) => r.status === status);
   const submitted = of("submitted");
-  const withdrawn = submitted.filter((r) => r.participantNotice?.kind === "withdrawn");
+  const withdrawn = submitted.filter(isWithdrawnRow);
   const votingApproved = submitted.filter((r) => !r.printRequested && r.votingApprovedAt !== undefined);
   return {
     all: [...rows].sort((a, b) => b._creationTime - a._creationTime),
-    review: submitted.filter((r) => r.participantNotice?.kind !== "withdrawn" && r.votingApprovedAt === undefined).sort(
+    review: submitted.filter((r) => !isWithdrawnRow(r) && r.votingApprovedAt === undefined).sort(
       (a, b) => Number(a.participantPrint !== null) - Number(b.participantPrint !== null) || byTime(a, b)
     ),
     queued: of("queued").sort((a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0)),

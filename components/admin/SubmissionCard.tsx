@@ -24,6 +24,7 @@ import RejectDialog from "@/components/admin/RejectDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
 import HistoryDialog from "@/components/admin/HistoryDialog";
 import { errorMessage } from "@/lib/errors";
+import { isWithdrawnRow } from "@/components/admin/queue-view";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -202,7 +203,7 @@ export default function SubmissionCard({
   const desktop = useSyncExternalStore(desktopSubscribe, desktopSnapshot, desktopServerSnapshot);
   const now = useNow(30_000);
   const voteOnly = row.designEntry && !row.printRequested;
-  const withdrawn = row.participantNotice?.kind === "withdrawn";
+  const withdrawn = isWithdrawnRow(row);
   const approvedForVoting = row.status === "submitted" && voteOnly && row.votingApprovedAt !== undefined;
   const alreadyHasPrint = row.participantPrint !== null && row.participantPrint.printCode !== row.printCode;
   const printBadge = voteOnly
@@ -393,7 +394,7 @@ export default function SubmissionCard({
         </div>
       ) : null}
       {row.colour && !row.printersWithColour.length && row.status !== "done" && !voteOnly && !withdrawn ? <div className="border-t border-amber-200 px-4 py-2 text-sm text-muted-foreground">No printer has this colour loaded</div> : null}
-      {row.participantNotice ? <Alert className="m-3"><AlertDescription>{row.participantNotice.kind === "withdrawn" ? "Withdrawn by participant: print request removed" : row.participantNotice.kind === "replaced" ? `Replaced by participant (v${row.participantNotice.version}), needs re-approval` : `Restored by owner (v${row.participantNotice.version}), needs re-approval · ${formatDateTime(row.participantNotice.at)}`}</AlertDescription></Alert> : null}
+      {row.participantNotice && (row.participantNotice.kind !== "withdrawn" || withdrawn) ? <Alert className="m-3"><AlertDescription>{row.participantNotice.kind === "withdrawn" ? "Withdrawn by participant: print request removed" : row.participantNotice.kind === "replaced" ? `Replaced by participant (v${row.participantNotice.version}), needs re-approval` : `Restored by owner (v${row.participantNotice.version}), needs re-approval · ${formatDateTime(row.participantNotice.at)}`}</AlertDescription></Alert> : null}
       {row.status === "rejected" && row.rejectionReason ? <p className="border-t px-4 py-2 text-sm text-destructive">{row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"} · {row.rejectionReason}</p> : null}
       {row.notes ? <div className="mx-3 mb-3 rounded-lg bg-muted px-3 py-2 text-sm text-foreground"><span className="mr-2 font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">NOTE FROM PARTICIPANT</span>{row.notes}</div> : null}
 
