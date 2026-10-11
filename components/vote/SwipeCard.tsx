@@ -7,7 +7,7 @@ import type { Reaction } from "@/lib/event";
 import ModelPreview from "@/components/ModelPreview";
 import StageChip from "@/components/vote/StageChip";
 import VoteStamp from "@/components/vote/VoteStamp";
-import { swatchFor } from "@/lib/colours";
+import { useSwatch } from "@/lib/use-swatch";
 import { cn } from "@/lib/utils";
 
 const SWIPE_DISTANCE = 96;
@@ -30,12 +30,13 @@ const SwipeCard = forwardRef<
     footer: ReactNode;
   }
 >(function SwipeCard({ entry, reaction, voted, voteNumber, onSwipe, footer }, ref) {
+  const swatch = useSwatch();
   const cardRef = useRef<HTMLDivElement>(null);
   const likeRef = useRef<HTMLSpanElement>(null);
   const skipRef = useRef<HTMLSpanElement>(null);
   const drag = useRef<{ id: number; x: number; y: number; t: number; dx: number } | null>(null);
   const flung = useRef(false);
-  const colour = swatchFor(entry.colour);
+  const colour = swatch(entry.colour);
 
   const paint = (dx: number, animate: boolean) => {
     const card = cardRef.current;

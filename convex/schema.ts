@@ -77,6 +77,7 @@ export default defineSchema({
     reviewedBy: v.optional(v.string()),
     // Sort key within the print queue; set when status becomes "queued".
     queueOrder: v.optional(v.number()),
+    votingApprovedAt: v.optional(v.number()),
     queuedAt: v.optional(v.number()),
     printingAt: v.optional(v.number()),
     // Name of the printer staff put this job on; optional.
@@ -137,7 +138,16 @@ export default defineSchema({
     submissionsOpenedAt: v.optional(v.number()),
     votingOpenedAt: v.optional(v.number()),
     maxDimensionsMm: v.optional(v.object({ x: v.number(), y: v.number(), z: v.number() })),
-    printers: v.optional(v.array(v.object({ name: v.string(), colours: v.array(v.string()) }))),
+    printers: v.optional(
+      v.array(
+        v.object({
+          name: v.string(),
+          colours: v.array(v.string()),
+          outOfService: v.optional(v.boolean()),
+        })
+      )
+    ),
+    colourCodes: v.optional(v.array(v.object({ name: v.string(), hex: v.string() }))),
     tvDefaultView: v.optional(v.union(v.literal("main"), v.literal("projects"))),
   }),
 

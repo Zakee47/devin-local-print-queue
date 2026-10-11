@@ -3,16 +3,19 @@ export type Tour = "participant" | "staff";
 export type TutorialArt =
   | "upload"
   | "roles"
+  | "colour"
   | "journey"
   | "voting"
   | "changes"
   | "help"
   | "queue"
+  | "filters"
   | "download"
   | "review"
   | "printing"
   | "changed"
-  | "tv";
+  | "tv"
+  | "settings";
 
 export type TutorialSlide = { art: TutorialArt; title: string; body: string };
 
@@ -27,6 +30,11 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
       art: "roles",
       title: "Choose Vote, Print or Both",
       body: "Vote enters your design in the competition straight away, and the winner takes home a 3D printer. Print asks staff to print it for you once they approve it. You can have one of each.",
+    },
+    {
+      art: "colour",
+      title: "Pick a colour, or Any colour",
+      body: "Each colour shows how many prints are waiting for it. Not fussy? Pick Any colour or a quieter shade and you'll print sooner. Colours depend on what's loaded and aren't guaranteed.",
     },
     {
       art: "journey",
@@ -53,7 +61,27 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "queue",
       title: "The print queue",
-      body: "Prints move through the tabs: Needs review → Queued → Printing → Done. Rejected files have their own tab.",
+      body: "Prints move through the tabs: Needs review → Queued → Printing → Done, with Rejected and Withdrawn on their own tabs. All shows them all, grouped by stage.",
+    },
+    {
+      art: "review",
+      title: "Approve or reject",
+      body: "Check the badge first: No print yet, or Already printed with their earlier print code. Approve sends a print to the back of the queue, and Approve for voting sends a vote-only design straight to Done. When you reject, write a clear comment: the participant sees it and can upload a fixed file.",
+    },
+    {
+      art: "filters",
+      title: "Filters and load",
+      body: "Press + Add filter to narrow by colour then printer, or the other way round. Tap × on a pill to drop it. The printer cards at the top show each printer's queue, loaded colours and whether it's paused.",
+    },
+    {
+      art: "colour",
+      title: "Assign printers",
+      body: "Each queued card lists printers with that colour loaded first, then other printers if you need to override. Or tick several cards and choose Assign to one printer, or Spread evenly to share them across printers with the right colour.",
+    },
+    {
+      art: "printing",
+      title: "On the printer",
+      body: "Press Start printing. When it comes off, mark it done, or mark the print failed with a reason. Drag a queued card by its handle to reorder the queue, and use Move back to undo a step.",
     },
     {
       art: "download",
@@ -61,19 +89,14 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
       body: "Files are named with the print code, name, colour and title, like KC-007_ada-lovelace_red_rocket.3mf, so they sort by print code.",
     },
     {
-      art: "review",
-      title: "Approve or reject",
-      body: "Approve sends a print to the queue. When you reject, write a clear comment: the participant sees it and can upload a fixed file.",
-    },
-    {
-      art: "printing",
-      title: "On the printer",
-      body: "Pick a printer and press Start printing. When it comes off, mark it done, or mark the print failed with a reason.",
-    },
-    {
       art: "changed",
       title: "Changed by participants",
-      body: "Watch this list for replaced or withdrawn prints. They leave the queue, and a replaced print needs approving again.",
+      body: "Watch this list for replaced or withdrawn prints. Withdrawn prints move to the Withdrawn tab, where Restore print request undoes an accident.",
+    },
+    {
+      art: "settings",
+      title: "Settings and blasts",
+      body: "In Settings, pause a printer when it's down, untick a colour when it runs out, and set each colour's exact shade. Use the blast message to tell everyone something on every page.",
     },
     {
       art: "tv",

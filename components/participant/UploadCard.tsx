@@ -12,9 +12,15 @@ import { measureUploadFile, uploadModelFile, validateModelFile, formatUploadByte
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
-import { swatchFor } from "@/lib/colours";
+import { useSwatch } from "@/lib/use-swatch";
 import { formatDimensions } from "@/lib/dimensions";
-import { ALLOWED_EXTENSIONS, MAX_SUBMISSIONS_PER_PARTICIPANT, type Dimensions, type Printer } from "@/lib/event";
+import {
+  ALLOWED_EXTENSIONS,
+  MAX_SUBMISSIONS_PER_PARTICIPANT,
+  type ColourDemand,
+  type Dimensions,
+  type Printer,
+} from "@/lib/event";
 import type { Role, RoleFile } from "@/lib/roles";
 import type { FileKind } from "@/lib/files";
 import { cn } from "@/lib/utils";
@@ -43,6 +49,7 @@ function titleFromFileName(name: string) {
 export default function UploadCard({
   colours,
   printers,
+  colourDemand,
   maxFileBytes,
   maxDimensionsMm,
   slotsLeft,
@@ -52,6 +59,7 @@ export default function UploadCard({
 }: {
   colours: string[];
   printers: Printer[];
+  colourDemand?: ColourDemand[];
   maxFileBytes: number;
   maxDimensionsMm: Dimensions;
   slotsLeft: number;
@@ -59,6 +67,7 @@ export default function UploadCard({
   onCompetitionEntry: (printCode: string) => boolean;
   printOnly?: boolean;
 }) {
+  const swatch = useSwatch();
   const generateUploadUrl = useMutation(api.submissions.generateUploadUrl);
   const generatePreviewUploadUrl = useMutation(api.submissions.generatePreviewUploadUrl);
   const create = useMutation(api.submissions.create);
@@ -121,7 +130,7 @@ export default function UploadCard({
       const uploaded = await uploadModelFile({
         file: file.file,
         kind: file.kind,
-        colour: swatchFor(draft.colour),
+        colour: swatch(draft.colour),
         generateUploadUrl: () => generateUploadUrl({}),
         generatePreviewUploadUrl: () => generatePreviewUploadUrl({}),
       });
@@ -172,7 +181,7 @@ export default function UploadCard({
           {file ? (
             <div className="flex flex-col gap-2">
               <div className="overflow-hidden rounded-lg border border-border bg-surface">
-                <ModelViewer url={file.url} kind={file.kind} colour={swatchFor(draft.colour)} className="aspect-4/3" />
+                <ModelViewer url={file.url} kind={file.kind} colour={swatch(draft.colour)} className="aspect-4/3" />
               </div>
               <div className="flex items-center justify-between gap-2 text-sm">
                 <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
@@ -222,7 +231,14 @@ export default function UploadCard({
           )}
           {file ? (
             <>
-              <SubmissionFields value={draft} onChange={setDraft} colours={colours} printers={printers} disabled={busy} />
+              <SubmissionFields
+                value={draft}
+                onChange={setDraft}
+                colours={colours}
+                printers={printers}
+                demand={colourDemand}
+                disabled={busy}
+              />
               <div className="flex flex-col gap-2">
                 <p className="text-sm font-medium">Use this file for</p>
                 <RoleChoice

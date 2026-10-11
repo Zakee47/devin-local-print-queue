@@ -1,19 +1,31 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Pause, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   COLOUR_DISCLAIMER,
   MAX_BLAST_MESSAGE_LENGTH,
+  type ColourCode,
   type Dimensions,
   type Printer,
 } from "@/lib/event";
+import { useSwatch } from "@/lib/use-swatch";
 import { swatchFor } from "@/lib/colours";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Field,
   FieldDescription,
@@ -33,11 +45,18 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Switch } from "@/components/ui/switch";
 import { submissionsStatusText } from "@/components/admin/countdown";
 import { useNow } from "@/components/admin/use-now";
 import { errorMessage } from "@/lib/errors";
 import { SETTINGS_HELP, type SettingHelpCopy } from "@/lib/settings-help";
 import SettingHelp from "@/components/admin/SettingHelp";
+
+type SettingsConfirmation =
+  | { type: "pause"; printer: string; queuedJobs: number }
+  | { type: "remove-printer"; printer: string; nextPrinters: Printer[] }
+  | { type: "remove-colour"; colour: string; nextColours: string[] }
+  | { type: "close-submissions" };
 
 function Section({
   title,
@@ -82,17 +101,59 @@ function cleanPrinters(printers: Printer[], palette: string[]): Printer[] {
   }));
 }
 
+function ColourCodeInput({
+  name,
+  value,
+  onCommit,
+}: {
+  name: string;
+  value: string;
+  onCommit: (hex: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState(value);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    const commit = () => {
+      if (input.value.toLowerCase() !== value.toLowerCase()) onCommit(input.value);
+    };
+    input.addEventListener("change", commit);
+    return () => input.removeEventListener("change", commit);
+  }, [onCommit, value]);
+
+  return (
+    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+      <input
+        ref={inputRef}
+        aria-label={`${name} colour code`}
+        type="color"
+        value={preview}
+        onChange={(event) => setPreview(event.currentTarget.value)}
+        className="size-8 cursor-pointer rounded border border-border bg-transparent p-0.5"
+      />
+      <code>{preview}</code>
+    </label>
+  );
+}
+
 export default function SettingsManager() {
   const settings = useQuery(api.settings.get);
+  const boardRows = useQuery(api.queue.board);
   const update = useMutation(api.settings.update);
+  const swatch = useSwatch();
   const now = useNow();
   const [newColour, setNewColour] = useState("");
+  const [newColourHex, setNewColourHex] = useState("#888888");
+  const [newColourHexTouched, setNewColourHexTouched] = useState(false);
   const [maxMb, setMaxMb] = useState<string | null>(null);
   const [deadlineInput, setDeadlineInput] = useState<string | null>(null);
   const [announcementInput, setAnnouncementInput] = useState<string | null>(null);
   const [dimensionInput, setDimensionInput] = useState<{ x: string; y: string; z: string } | null>(null);
   const [printersDraft, setPrintersDraft] = useState<Printer[] | null>(null);
   const [newPrinter, setNewPrinter] = useState("");
+  const [confirmation, setConfirmation] = useState<SettingsConfirmation | null>(null);
 
   if (!settings) {
     return (
@@ -113,6 +174,12 @@ export default function SettingsManager() {
   };
 
   const colours = settings.colours;
+  const suggestedNewColourHex = swatchFor(newColour.trim());
+  const knownNewColourHex = /^#[0-9a-f]{6}$/i.test(suggestedNewColourHex)
+    ? suggestedNewColourHex
+    : null;
+  const defaultNewColourHex = knownNewColourHex ?? "#888888";
+  const displayedNewColourHex = newColourHexTouched ? newColourHex : defaultNewColourHex;
   const currentPrinters = cleanPrinters(printersDraft ?? settings.printers, colours);
   const currentMb = String(Math.round((settings.maxFileBytes / 1024 / 1024) * 10) / 10);
   const deadlineValue = deadlineInput ?? formatLocalDateTime(settings.submissionsDeadline);
@@ -123,6 +190,22 @@ export default function SettingsManager() {
     y: String(dimensions.y),
     z: String(dimensions.z),
   };
+  const confirmationTitle =
+    confirmation?.type === "pause"
+      ? `Pause ${confirmation.printer}?`
+      : confirmation?.type === "remove-printer"
+        ? `Remove ${confirmation.printer}?`
+        : confirmation?.type === "remove-colour"
+          ? `Remove ${confirmation.colour} from the palette?`
+          : "Close submissions?";
+  const confirmationDescription =
+    confirmation?.type === "pause"
+      ? `${confirmation.queuedJobs > 0 ? `${confirmation.queuedJobs} queued ${confirmation.queuedJobs === 1 ? "job" : "jobs"} on it will need reassigning. ` : ""}It keeps its loaded colours and you can resume any time.`
+      : confirmation?.type === "remove-printer"
+        ? "Its loaded colours will be lost."
+        : confirmation?.type === "remove-colour"
+          ? "It will be unticked on every printer, and participants can no longer pick it."
+          : "Participants can't upload or replace files until you reopen.";
 
   function savePrinters(next: Printer[], message: string, palette = colours) {
     const cleaned = cleanPrinters(next, palette);
@@ -134,6 +217,26 @@ export default function SettingsManager() {
     const updatedPrinters = cleanPrinters(currentPrinters, next);
     setPrintersDraft(updatedPrinters);
     void save({ colours: next, printers: updatedPrinters }, message);
+  }
+
+  function confirmSettingsAction() {
+    const action = confirmation;
+    if (!action) return;
+    setConfirmation(null);
+    if (action.type === "pause") {
+      savePrinters(
+        currentPrinters.map((printer) =>
+          printer.name === action.printer ? { ...printer, outOfService: true } : printer
+        ),
+        `${action.printer} paused`
+      );
+    } else if (action.type === "remove-printer") {
+      savePrinters(action.nextPrinters, "Printer removed");
+    } else if (action.type === "remove-colour") {
+      savePalette(action.nextColours, `${action.colour} removed`);
+    } else {
+      void save({ submissionsOpen: false }, "Submissions closed");
+    }
   }
 
   const moveColour = (i: number, delta: number) => {
@@ -164,7 +267,11 @@ export default function SettingsManager() {
               onValueChange={(value) => {
                 const selected = value[0];
                 if (selected === "open" || selected === "closed") {
-                  void save({ submissionsOpen: selected === "open" }, `Submissions ${selected}`);
+                  if (selected === "closed" && settings.submissionsOpen) {
+                    setConfirmation({ type: "close-submissions" });
+                  } else if (selected === "open" && !settings.submissionsOpen) {
+                    void save({ submissionsOpen: true }, "Submissions open");
+                  }
                 }
               }}
               aria-label="Submission intake"
@@ -221,7 +328,9 @@ export default function SettingsManager() {
               type="button"
               size="sm"
               variant="destructive"
-              onClick={() => void save({ submissionsOpen: false }, "Submissions closed")}
+              onClick={() => {
+                if (settings.submissionsOpen) setConfirmation({ type: "close-submissions" });
+              }}
             >
               Close now
             </Button>
@@ -284,28 +393,82 @@ export default function SettingsManager() {
                   >
                     Save name
                   </Button>
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <FieldLabel
+                      htmlFor={`printer-${index}-in-service`}
+                      className="font-normal leading-none"
+                    >
+                      In service
+                    </FieldLabel>
+                    <Switch
+                      id={`printer-${index}-in-service`}
+                      checked={!printer.outOfService}
+                      disabled={boardRows === undefined}
+                      onCheckedChange={(inService) => {
+                        if (inService) {
+                          savePrinters(
+                            currentPrinters.map((item, i) =>
+                              i === index ? { ...item, outOfService: false } : item
+                            ),
+                            `${printer.name} resumed`
+                          );
+                        } else if (boardRows) {
+                          setConfirmation({
+                            type: "pause",
+                            printer: printer.name,
+                            queuedJobs: boardRows.filter(
+                              (row) => row.status === "queued" && row.printer === printer.name
+                            ).length,
+                          });
+                        }
+                      }}
+                    />
+                  </div>
                   <Button
                     type="button"
-                    size="icon-sm"
+                    size="icon"
                     variant="ghost"
-                    aria-label={`Remove ${printer.name}`}
+                    aria-label={`Remove printer ${printer.name}`}
+                    title="Remove printer"
                     onClick={() =>
-                      savePrinters(
-                        currentPrinters.filter((_, i) => i !== index),
-                        "Printer removed"
-                      )
+                      setConfirmation({
+                        type: "remove-printer",
+                        printer: printer.name,
+                        nextPrinters: currentPrinters.filter((_, i) => i !== index),
+                      })
                     }
                   >
-                    <X />
+                    <Trash2 />
                   </Button>
                 </div>
+                {printer.outOfService ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                    <Pause aria-hidden className="size-4 shrink-0" />
+                    <span className="flex-1 text-sm">Paused: not taking new jobs</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        savePrinters(
+                          currentPrinters.map((item, i) =>
+                            i === index ? { ...item, outOfService: false } : item
+                          ),
+                          `${printer.name} resumed`
+                        )
+                      }
+                    >
+                      Resume
+                    </Button>
+                  </div>
+                ) : null}
                 {colours.length > 0 ? (
                   <FieldSet>
                     <FieldLegend variant="label" className="flex items-center gap-1">
                       Loaded colours
                       <SettingHelp {...SETTINGS_HELP.loadedColours} />
                     </FieldLegend>
-                    <div className="flex flex-wrap gap-x-5 gap-y-2">
+                    <div className={`flex flex-wrap gap-x-5 gap-y-2${printer.outOfService ? " opacity-50 grayscale" : ""}`}>
                       {colours.map((colour) => {
                         const checked = printer.colours.some(
                           (loaded) => loaded.toLowerCase() === colour.toLowerCase()
@@ -337,7 +500,7 @@ export default function SettingsManager() {
                               <span
                                 aria-hidden="true"
                                 className="size-3 rounded-full ring-1 ring-foreground/20"
-                                style={{ background: swatchFor(colour) }}
+                                style={{ background: swatch(colour) }}
                               />
                               {colour}
                             </FieldLabel>
@@ -465,13 +628,37 @@ export default function SettingsManager() {
       >
         <ul className="mb-4 divide-y divide-border border-y border-border">
           {colours.map((colour, index) => (
-            <li key={colour} className="flex min-h-11 items-center gap-3 px-1 py-1.5">
+            <li key={colour} className="flex min-h-11 flex-wrap items-center gap-3 px-1 py-1.5">
               <span
                 aria-hidden="true"
                 className="size-4 rounded-full ring-1 ring-foreground/20"
-                style={{ background: swatchFor(colour) }}
+                style={{ background: swatch(colour) }}
               />
               <span className="flex-1 text-sm">{colour}</span>
+              {(() => {
+                const code = settings.colourCodes?.find(
+                  (item) => item.name.toLowerCase() === colour.toLowerCase()
+                );
+                const effective = swatch(colour);
+                const inputValue = /^#[0-9a-f]{6}$/i.test(effective) ? effective : "#888888";
+                return (
+                  <ColourCodeInput
+                    key={code?.hex ?? inputValue}
+                    name={colour}
+                    value={code?.hex ?? inputValue}
+                    onCommit={(hex) => {
+                      const nextCode: ColourCode = { name: colour, hex };
+                      const nextCodes = [
+                        ...(settings.colourCodes ?? []).filter(
+                          (item) => item.name.toLowerCase() !== colour.toLowerCase()
+                        ),
+                        nextCode,
+                      ];
+                      void save({ colourCodes: nextCodes }, `${colour} colour code saved`);
+                    }}
+                  />
+                );
+              })()}
               <Button
                 type="button"
                 size="icon-sm"
@@ -498,14 +685,16 @@ export default function SettingsManager() {
                 variant="ghost"
                 aria-label={`Remove ${colour}`}
                 className="text-muted-foreground"
+                title="Remove colour"
                 onClick={() =>
-                  savePalette(
-                    colours.filter((item) => item !== colour),
-                    `${colour} removed`
-                  )
+                  setConfirmation({
+                    type: "remove-colour",
+                    colour,
+                    nextColours: colours.filter((item) => item !== colour),
+                  })
                 }
               >
-                <X />
+                <Trash2 />
               </Button>
             </li>
           ))}
@@ -518,30 +707,87 @@ export default function SettingsManager() {
             if (colours.some((colour) => colour.toLowerCase() === name.toLowerCase())) {
               return toast.error(`${name} is already in the palette`);
             }
-            savePalette([...colours, name], `${name} added`);
+            const nextColours = [...colours, name];
+            const nextPrinters = cleanPrinters(currentPrinters, nextColours);
+            const hasKnownSwatch = /^#[0-9a-f]{6}$/i.test(swatchFor(name));
+            const nextCodes = (settings.colourCodes ?? []).filter(
+              (item) => item.name.toLowerCase() !== name.toLowerCase()
+            );
+            if (newColourHexTouched || !hasKnownSwatch) {
+              nextCodes.push({
+                name,
+                hex: newColourHexTouched ? newColourHex : "#888888",
+              });
+            }
+            setPrintersDraft(nextPrinters);
+            void save(
+              {
+                colours: nextColours,
+                printers: nextPrinters,
+                colourCodes: nextCodes,
+              },
+              `${name} added`
+            );
             setNewColour("");
+            setNewColourHex("#888888");
+            setNewColourHexTouched(false);
           }}
         >
-          <Field className="max-w-sm">
+          <Field className="max-w-xl">
             <FieldLabel htmlFor="new-colour">Add a colour</FieldLabel>
-            <InputGroup>
-              <InputGroupInput
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
                 id="new-colour"
                 value={newColour}
                 onChange={(event) => setNewColour(event.target.value)}
                 placeholder="Silk gold"
+                className="max-w-xs"
               />
-              <InputGroupAddon align="inline-end">
-                <InputGroupButton type="submit" variant="default" size="xs" disabled={!newColour.trim()}>
-                  <Plus data-icon="inline-start" />
-                  Add
-                </InputGroupButton>
-              </InputGroupAddon>
-            </InputGroup>
-            <FieldDescription>Common names (red, blue…) get a swatch; any CSS colour works too.</FieldDescription>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  aria-label="New colour hex code"
+                  type="color"
+                  value={displayedNewColourHex}
+                  onChange={(event) => {
+                    setNewColourHex(event.target.value);
+                    setNewColourHexTouched(true);
+                  }}
+                  className="size-8 cursor-pointer rounded border border-border bg-transparent p-0.5"
+                />
+                <code>{displayedNewColourHex}</code>
+              </label>
+              <Button type="submit" variant="default" size="sm" disabled={!newColour.trim()}>
+                <Plus data-icon="inline-start" />
+                Add
+              </Button>
+            </div>
+            <FieldDescription>Choose the exact hex colour shown for this palette name.</FieldDescription>
           </Field>
         </form>
       </Section>
+      <AlertDialog
+        open={confirmation !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmation(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmationTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmationDescription}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmSettingsAction}>
+              {confirmation?.type === "pause"
+                ? "Pause printer"
+                : confirmation?.type === "close-submissions"
+                  ? "Close submissions"
+                  : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

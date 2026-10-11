@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Download, History, RotateCcw } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -34,12 +34,23 @@ export default function HistoryDialog({
   submissionId,
   deleted = false,
   restore,
+  open: controlledOpen,
+  onOpenChange,
+  trigger = true,
 }: {
   submissionId: Id<"submissions">;
   deleted?: boolean;
   restore?: RestoreInfo;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  trigger?: boolean | ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (value: boolean) => {
+    onOpenChange?.(value);
+    if (controlledOpen === undefined) setInternalOpen(value);
+  };
   const [busy, setBusy] = useState(false);
   const data = useQuery(api.history.forSubmission, open ? { id: submissionId } : "skip");
   const restoreVersion = useMutation(api.history.restoreVersion);
@@ -73,10 +84,14 @@ export default function HistoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
-        <History data-icon="inline-start" />
-        History
-      </DialogTrigger>
+      {trigger === true ? (
+        <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
+          <History data-icon="inline-start" />
+          History
+        </DialogTrigger>
+      ) : trigger ? (
+        <DialogTrigger>{trigger}</DialogTrigger>
+      ) : null}
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
