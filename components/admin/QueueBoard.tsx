@@ -255,7 +255,7 @@ export default function QueueBoard() {
     return filtered[tab].length;
   }
 
-  function renderCards(cardRows: BoardRow[], options: { status?: boolean; selectable?: boolean; sortable?: boolean } = {}) {
+  function renderCards(cardRows: BoardRow[], options: { selectable?: boolean; sortable?: boolean } = {}) {
     return (
       <ul className="flex flex-col gap-3">
         {cardRows.map((row) => {
@@ -267,7 +267,6 @@ export default function QueueBoard() {
               position={row.status === "queued" ? position : undefined}
               queueOrder={fullQueue.map((queued) => queued._id)}
               isOwner={isOwner}
-              showStatusBadge={options.status}
               showSelection={options.selectable}
               selected={selectedQueuedIds.includes(row._id)}
               onSelectionChange={(checked) => {
@@ -447,10 +446,7 @@ export default function QueueBoard() {
                   return <section key={stage.value} className="flex flex-col gap-2">
                     <h3 className="font-mono text-xs font-medium uppercase tracking-wide text-muted-foreground">{stage.label} {stageRows.length}</h3>
                     {stage.value === "withdrawn" ? <p className="text-sm text-muted-foreground">Participant removed the print request. Returns to Needs review if they ask again; Restore reverses a mistake.</p> : null}
-                    {stageRows.length ? stage.value === "printing"
-                      ? renderCards(stageRows, { status: true })
-                      : renderCards(stageRows, { status: true })
-                      : null}
+                    {stageRows.length ? renderCards(stageRows) : null}
                   </section>;
                 })}
               </div>

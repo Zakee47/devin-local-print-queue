@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
+import { useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import {
@@ -153,11 +153,11 @@ function projectAxis(axis: [number, number, number], rotation: { x: number; y: n
 }
 
 export default function SubmissionCard({
-  row, position, isOwner = false, showStatusBadge = false, showSelection = false,
+  row, position, isOwner = false, showSelection = false,
   selected = false, onSelectionChange, printerOptions, settingsPrinters, queueOrder = [], onMoveTo,
   dragHandle, dragStyle, isDragging = false,
 }: {
-  row: BoardRow; position?: number; isOwner?: boolean; showStatusBadge?: boolean;
+  row: BoardRow; position?: number; isOwner?: boolean;
   showSelection?: boolean; selected?: boolean; onSelectionChange?: (checked: boolean) => void;
   printerOptions: PrinterGroups; queueOrder?: Id<"submissions">[];
   settingsPrinters: PrinterSetting[];
@@ -188,6 +188,8 @@ export default function SubmissionCard({
   const [targetPosition, setTargetPosition] = useState(String(position ?? 1));
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewTab, setPreviewTab] = useState<"image" | "3d">("image");
+  const imageToggleRef = useRef<HTMLButtonElement | null>(null);
+  const threeDToggleRef = useRef<HTMLButtonElement | null>(null);
   const [inline3d, setInline3d] = useState(false);
   const [autoRotate, setAutoRotate] = useState(true);
   const [rotation, setRotation] = useState({ x: -0.35, y: 0.65, z: 0 });
@@ -211,7 +213,7 @@ export default function SubmissionCard({
             : `Print queued · ${row.participantPrint.printCode}`
         : "No print yet"
       : null;
-  const showVotingBadge = showStatusBadge || withdrawn || !row.designEntry || row.designRemoved;
+  const showVotingBadge = withdrawn || !row.designEntry || row.designRemoved;
 
   async function run(label: string, fn: () => Promise<unknown>) {
     setBusy(true);
@@ -263,7 +265,7 @@ export default function SubmissionCard({
           ) : null}
         </div>
         <div className="min-w-0">
-          <p className="font-mono text-[11px] leading-4 text-muted-foreground">{statusLine}</p>
+          <p className="whitespace-nowrap font-mono text-[11px] leading-4 text-muted-foreground">{statusLine}</p>
           <div className="flex items-center gap-1.5 whitespace-nowrap">
             {dragHandle}
             <span className="whitespace-nowrap font-mono text-[26px] font-semibold leading-[1.1] tracking-tight tabular-nums">{row.printCode}</span>
@@ -276,7 +278,7 @@ export default function SubmissionCard({
             {row.version > 1 ? <CardBadge>v{row.version}</CardBadge> : null}
             {printBadge ? <CardBadge tone={printBadge === "No print yet" ? "filled" : "outline"}>{printBadge}</CardBadge> : null}
             {voteOnly ? <CardBadge><Trophy className="size-3" />Vote only</CardBadge> : null}
-            {showVotingBadge ? <CardBadge tone={row.designRemoved ? "red" : "outline"}><Trophy className="size-3" />{row.designRemoved ? "Removed from voting" : withdrawn ? "Not in voting" : row.designEntry ? "In voting" : "Not in voting"}</CardBadge> : null}
+            {showVotingBadge ? <CardBadge tone={row.designRemoved ? "red" : "outline"}><Trophy className="size-3" />{row.designRemoved ? "Removed from voting" : "Not in voting"}</CardBadge> : null}
             {row.oversize ? <CardBadge tone="red">Over size limit</CardBadge> : null}
           </div>
           <p className="mt-1 text-sm font-medium text-foreground">{row.participantUsername}</p>
@@ -458,7 +460,10 @@ export default function SubmissionCard({
       <Dialog open={printerOpen} onOpenChange={setPrinterOpen}><DialogContent><DialogHeader><DialogTitle>Change printer · {row.printCode}</DialogTitle><DialogDescription>Choose a printer for this job.</DialogDescription></DialogHeader><PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} settingsPrinters={settingsPrinters} paused={printerPaused} onChange={(e) => { const printer = e.currentTarget.value; void run("printer updated", () => setPrinter({ id: row._id, printer: printer || undefined })).then(() => setPrinterOpen(false)); }} /><DialogFooter><Button variant="outline" onClick={() => setPrinterOpen(false)}>Close</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={positionOpen} onOpenChange={setPositionOpen}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle>Move {row.printCode}</DialogTitle><DialogDescription>Choose a queue position from 1 to {queueOrder.length}.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor={`position-${row._id}`}>Position</FieldLabel><input id={`position-${row._id}`} type="number" min={1} max={queueOrder.length} value={targetPosition} onChange={(e) => setTargetPosition(e.target.value)} className="h-9 rounded-lg border border-input bg-background px-3" /></Field><DialogFooter><Button variant="outline" onClick={() => setPositionOpen(false)}>Cancel</Button><Button disabled={busy || Number(targetPosition) < 1 || Number(targetPosition) > queueOrder.length} onClick={() => void run("moved", () => placeAt(Number(targetPosition))).then(() => setPositionOpen(false))}>Move</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="w-[calc(100vw-2rem)] max-w-3xl gap-0 overflow-y-auto p-0 sm:max-w-3xl">
+        <DialogContent
+          className="w-[calc(100vw-2rem)] max-w-3xl gap-0 overflow-y-auto p-0 sm:max-w-3xl"
+          initialFocus={() => previewTab === "3d" ? threeDToggleRef.current : imageToggleRef.current}
+        >
           <div className="flex items-start justify-between gap-3 border-b p-4 pr-12">
             <DialogHeader className="min-w-0 gap-0.5">
               <DialogTitle className="font-mono text-2xl leading-none">{row.printCode}</DialogTitle>
@@ -468,10 +473,10 @@ export default function SubmissionCard({
               </DialogDescription>
             </DialogHeader>
             <div role="group" aria-label="Preview mode" className="inline-flex shrink-0 items-center rounded-lg bg-muted p-1">
-              <Button type="button" size="xs" variant="ghost" aria-pressed={previewTab === "image"} className={cn("h-7 rounded-md px-2", previewTab === "image" && "bg-background text-foreground shadow-sm")} onClick={() => setPreviewTab("image")}>
+              <Button ref={imageToggleRef} type="button" size="xs" variant="ghost" aria-pressed={previewTab === "image"} className={cn("h-7 rounded-md px-2", previewTab === "image" && "bg-background text-foreground shadow-sm")} onClick={() => setPreviewTab("image")}>
                 <ImageIcon className="size-3.5" />Image
               </Button>
-              <Button type="button" size="xs" variant="ghost" aria-pressed={previewTab === "3d"} className={cn("h-7 rounded-md px-2", previewTab === "3d" && "bg-background text-foreground shadow-sm")} onClick={() => setPreviewTab("3d")}>
+              <Button ref={threeDToggleRef} type="button" size="xs" variant="ghost" aria-pressed={previewTab === "3d"} className={cn("h-7 rounded-md px-2", previewTab === "3d" && "bg-background text-foreground shadow-sm")} onClick={() => setPreviewTab("3d")}>
                 <Box className="size-3.5" />3D
               </Button>
             </div>
