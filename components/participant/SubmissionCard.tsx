@@ -290,7 +290,7 @@ export default function SubmissionCard({
                 </p>
               </div>
             </div>
-            {s.notes ? <p className="text-sm whitespace-pre-line text-muted-foreground">{s.notes}</p> : null}
+            {s.notes ? <p className="break-words whitespace-pre-line [overflow-wrap:anywhere] text-sm text-muted-foreground">{s.notes}</p> : null}
               {s.print || s.status !== "submitted" ? (
                 <StatusStepper
                   status={s.status}
@@ -409,7 +409,7 @@ export default function SubmissionCard({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => run(() => remove({ id: s._id }), "Deleted")}>Delete</AlertDialogAction>
+                      <AlertDialogAction disabled={busy} onClick={() => run(() => remove({ id: s._id }), "Deleted")}>Delete</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
