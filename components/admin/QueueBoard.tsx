@@ -73,7 +73,7 @@ function printingGroups(rows: BoardRow[], printerOrder: string[]) {
 }
 
 const TABS: { value: Column; label: string; empty: string }[] = [
-  { value: "all", label: "Every stage", empty: "No submissions." },
+  { value: "all", label: "All", empty: "No submissions." },
   { value: "review", label: "Needs review", empty: "Nothing waiting for review." },
   { value: "queued", label: "Queued", empty: "Approve a submission to queue it." },
   { value: "printing", label: "Printing", empty: "Nothing on the printers." },

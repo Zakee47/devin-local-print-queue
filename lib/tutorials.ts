@@ -61,7 +61,7 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "queue",
       title: "The print queue",
-      body: "Prints move through the tabs: Needs review → Queued → Printing → Done, with Rejected and Withdrawn on their own tabs. Every stage shows them all, grouped by stage.",
+      body: "Prints move through the tabs: Needs review → Queued → Printing → Done, with Rejected and Withdrawn on their own tabs. All shows them all, grouped by stage.",
     },
     {
       art: "review",

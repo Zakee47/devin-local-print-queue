@@ -25,7 +25,7 @@ describe("tutorial slide copy", () => {
 
   it("shows the complete staff workflow in the approved order", () => {
     expect(TOURS.staff.map(({ art, title, body }) => [art, title, body])).toEqual([
-      ["queue", "The print queue", "Prints move through the tabs: Needs review → Queued → Printing → Done, with Rejected and Withdrawn on their own tabs. Every stage shows them all, grouped by stage."],
+      ["queue", "The print queue", "Prints move through the tabs: Needs review → Queued → Printing → Done, with Rejected and Withdrawn on their own tabs. All shows them all, grouped by stage."],
       ["review", "Approve or reject", "Check the badge first: No print yet, or Already printed with their earlier print code. Approve sends a print to the back of the queue, and Approve for voting sends a vote-only design straight to Done. When you reject, write a clear comment: the participant sees it and can upload a fixed file."],
       ["filters", "Filters and load", "Press + Add filter to narrow by colour then printer, or the other way round. Tap × on a pill to drop it. The printer cards at the top show each printer's queue, loaded colours and whether it's paused."],
       ["colour", "Assign printers", "Each queued card lists printers with that colour loaded first, then other printers if you need to override. Or tick several cards and choose Assign to one printer, or Spread evenly to share them across printers with the right colour."],
