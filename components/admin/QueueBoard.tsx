@@ -1,7 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, Download, GripVertical, Inbox, Pause, Printer } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleCheck,
+  CircleX,
+  Download,
+  GripVertical,
+  Inbox,
+  ListOrdered,
+  Pause,
+  Printer,
+  Undo2,
+  type LucideIcon,
+} from "lucide-react";
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -58,6 +72,17 @@ const TABS: { value: Column; label: string; empty: string }[] = [
   { value: "withdrawn", label: "Withdrawn", empty: "No withdrawn print requests." },
 ];
 
+type StageColumn = Exclude<Column, "all">;
+
+const STAGE_ICONS: Record<StageColumn, LucideIcon> = {
+  review: Inbox,
+  queued: ListOrdered,
+  printing: Printer,
+  done: CircleCheck,
+  rejected: CircleX,
+  withdrawn: Undo2,
+};
+
 function SortableCard({ id, printCode, children }: {
   id: BoardRow["_id"];
   printCode: string;
@@ -91,6 +116,15 @@ export default function QueueBoard() {
   const swatch = useSwatch();
   const [downloading, setDownloading] = useState(false);
   const [activeTab, setActiveTab] = useState<Column | "deleted">("review");
+  const [expandedAllStages, setExpandedAllStages] = useState<Record<StageColumn, boolean>>({
+    review: true,
+    queued: true,
+    printing: true,
+    done: false,
+    rejected: false,
+    withdrawn: false,
+  });
+  const [siteHeaderHeight, setSiteHeaderHeight] = useState(0);
   const [filterPills, setFilterPills] = useState<FilterPill[]>([]);
   const [optimisticQueueIds, setOptimisticQueueIds] = useState<BoardRow["_id"][] | null>(null);
   const printerStripRef = useRef<HTMLDivElement>(null);
@@ -128,6 +162,20 @@ export default function QueueBoard() {
     updatePrinterScroll();
     return () => observer.disconnect();
   }, [settings?.printers.length, updatePrinterScroll]);
+
+  useEffect(() => {
+    const header = document.querySelector("header");
+    if (!header) return;
+    const measure = () => setSiteHeaderHeight(Math.ceil(header.getBoundingClientRect().height));
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!rows) return;
@@ -443,11 +491,37 @@ export default function QueueBoard() {
               <div className="flex flex-col gap-6">
                 {TABS.filter((stage) => stage.value !== "all").map((stage) => {
                   const stageRows = filtered[stage.value];
-                  return <section key={stage.value} className="flex flex-col gap-2">
-                    <h3 className="font-mono text-xs font-medium uppercase tracking-wide text-muted-foreground">{stage.label} {stageRows.length}</h3>
-                    {stage.value === "withdrawn" ? <p className="text-sm text-muted-foreground">Participant removed the print request. Returns to Needs review if they ask again; Restore reverses a mistake.</p> : null}
-                    {stageRows.length ? renderCards(stageRows) : null}
-                  </section>;
+                  const stageValue = stage.value as StageColumn;
+                  const expanded = expandedAllStages[stageValue];
+                  const canToggle = stageRows.length > 0;
+                  const StageIcon = STAGE_ICONS[stageValue];
+                  const panelId = `all-stage-${stageValue}`;
+                  return (
+                    <section key={stage.value} className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        className="sticky z-30 flex w-full items-center gap-2 border-b border-border bg-background py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-default"
+                        style={{ top: siteHeaderHeight }}
+                        aria-expanded={canToggle && expanded}
+                        aria-controls={panelId}
+                        disabled={!canToggle}
+                        onClick={() => setExpandedAllStages((current) => ({ ...current, [stageValue]: !current[stageValue] }))}
+                      >
+                        <StageIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <span className="font-mono text-xs font-semibold uppercase tracking-wide text-foreground">{stage.label}</span>
+                        <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] leading-4 text-muted-foreground">{stageRows.length}</span>
+                        {canToggle ? expanded ? (
+                          <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        ) : (
+                          <ChevronRight className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        ) : null}
+                      </button>
+                      {stage.value === "withdrawn" ? <p className="text-sm text-muted-foreground">Participant removed the print request. Returns to Needs review if they ask again; Restore reverses a mistake.</p> : null}
+                      <div id={panelId} hidden={!canToggle || !expanded} className={canToggle && expanded ? "pt-2" : undefined}>
+                        {canToggle && expanded ? renderCards(stageRows) : null}
+                      </div>
+                    </section>
+                  );
                 })}
               </div>
             ) : (
