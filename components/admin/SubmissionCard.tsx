@@ -136,6 +136,11 @@ function formatDuration(at: number, now: number) {
   return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 
+function formatStatusDuration(at: number, now: number) {
+  const minutes = Math.max(0, Math.floor((now - at) / 60_000));
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h`;
+}
+
 function projectAxis(axis: [number, number, number], rotation: { x: number; y: number; z: number }) {
   const [x0, y0, z0] = axis;
   const sx = Math.sin(rotation.x);
@@ -230,12 +235,12 @@ export default function SubmissionCard({
   }
 
   const statusLine = row.status === "queued" ? `#${position ?? row.queueOrder ?? "–"} in queue`
-    : row.status === "printing" ? `${formatDuration(row.printingAt ?? row._creationTime, now)} on printer`
+    : row.status === "printing" ? `${formatStatusDuration(row.printingAt ?? row._creationTime, now)} on printer`
       : row.status === "done" ? "Done"
         : row.status === "rejected" ? row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"
-          : withdrawn ? `withdrawn ${formatDuration(row.participantNotice?.at ?? row._creationTime, now)}`
+          : withdrawn ? `withdrawn ${formatStatusDuration(row.participantNotice?.at ?? row._creationTime, now)}`
             : approvedForVoting ? "Approved for voting"
-              : `waiting ${formatDuration(row._creationTime, now)}`;
+              : `waiting ${formatStatusDuration(row._creationTime, now)}`;
   const printerSetting = row.printer
     ? settingsPrinters.find((printer) => printer.name.toLowerCase() === row.printer?.toLowerCase())
     : undefined;
@@ -265,7 +270,7 @@ export default function SubmissionCard({
           ) : null}
         </div>
         <div className="min-w-0">
-          <p className="whitespace-nowrap font-mono text-[11px] leading-4 text-muted-foreground">{statusLine}</p>
+          <p className="block truncate font-mono text-[11px] leading-4 text-muted-foreground" title={statusLine}>{statusLine}</p>
           <div className="flex items-center gap-1.5 whitespace-nowrap">
             {dragHandle}
             <span className="whitespace-nowrap font-mono text-[26px] font-semibold leading-[1.1] tracking-tight tabular-nums">{row.printCode}</span>
