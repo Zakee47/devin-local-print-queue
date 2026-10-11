@@ -37,6 +37,7 @@ import QueueFilters from "@/components/admin/QueueFilters";
 import HistoryDialog from "@/components/admin/HistoryDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
 import { errorMessage } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 import { applyFilters, beforeIdAfterDrop, type FilterPill } from "@/components/admin/queue-view";
 
 type Column = "all" | "review" | "queued" | "printing" | "done" | "rejected" | "withdrawn";
@@ -497,7 +498,7 @@ export default function QueueBoard() {
                   const StageIcon = STAGE_ICONS[stageValue];
                   const panelId = `all-stage-${stageValue}`;
                   return (
-                    <section key={stage.value} className="flex flex-col gap-2 rounded-xl bg-muted px-3 pb-3 sm:px-4 sm:pb-4">
+                    <section key={stage.value} className={cn("flex flex-col gap-2 rounded-xl bg-muted px-3 sm:px-4", canToggle && expanded ? "pb-3 sm:pb-4" : stage.value === "withdrawn" ? "pb-3" : "pb-0")}>
                       <button
                         type="button"
                         className="sticky z-30 -mx-3 flex w-[calc(100%+1.5rem)] items-center gap-2 rounded-t-xl bg-muted px-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-default sm:-mx-4 sm:w-[calc(100%+2rem)] sm:px-4"
