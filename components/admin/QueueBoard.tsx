@@ -497,19 +497,19 @@ export default function QueueBoard() {
                   const StageIcon = STAGE_ICONS[stageValue];
                   const panelId = `all-stage-${stageValue}`;
                   return (
-                    <section key={stage.value} className="flex flex-col gap-2">
+                    <section key={stage.value} className="flex flex-col gap-2 rounded-xl bg-muted px-3 pb-3 sm:px-4 sm:pb-4">
                       <button
                         type="button"
-                        className="sticky z-30 flex w-full items-center gap-2 border-b border-border bg-background py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-default"
+                        className="sticky z-30 -mx-3 flex w-[calc(100%+1.5rem)] items-center gap-2 rounded-t-xl bg-muted px-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-default sm:-mx-4 sm:w-[calc(100%+2rem)] sm:px-4"
                         style={{ top: siteHeaderHeight }}
                         aria-expanded={canToggle && expanded}
                         aria-controls={panelId}
                         disabled={!canToggle}
                         onClick={() => setExpandedAllStages((current) => ({ ...current, [stageValue]: !current[stageValue] }))}
                       >
-                        <StageIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                        <span className="font-mono text-xs font-semibold uppercase tracking-wide text-foreground">{stage.label}</span>
-                        <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] leading-4 text-muted-foreground">{stageRows.length}</span>
+                        <StageIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <span className="text-xl font-semibold tracking-tight text-foreground">{stage.label}</span>
+                        <span className="rounded-full bg-background px-2.5 py-0.5 font-mono text-xs leading-4 text-muted-foreground">{stageRows.length}</span>
                         {canToggle ? expanded ? (
                           <ChevronDown className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                         ) : (
