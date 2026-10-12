@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Menu } from "lucide-react";
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useViewerAuth } from "@/lib/use-viewer-auth";
@@ -9,12 +10,14 @@ import EventSignInButton from "@/components/EventSignInButton";
 import ProfileMenu from "@/components/ProfileMenu";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 export default function HeaderAuth({
   showSignIn = true,
 }: {
   showSignIn?: boolean;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const { authReady, signedIn, canQuery } = useViewerAuth();
   const access = useQuery(api.admins.isAdmin, canQuery ? {} : "skip");
 
@@ -46,35 +49,85 @@ export default function HeaderAuth({
 
   return (
     <div className="flex items-center gap-1 sm:gap-2">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="text-muted-foreground hover:bg-transparent dark:hover:bg-transparent"
-        render={<Link href="/submit" />}
-        nativeButton={false}
-      >
-        My entries
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="text-muted-foreground hover:bg-transparent dark:hover:bg-transparent"
-        render={<Link href="/vote" />}
-        nativeButton={false}
-      >
-        Vote
-      </Button>
-      {access ? (
+      <div className="hidden items-center gap-1 sm:flex sm:gap-2">
         <Button
           variant="ghost"
           size="sm"
           className="text-muted-foreground hover:bg-transparent dark:hover:bg-transparent"
-          render={<Link href="/admin" />}
+          render={<Link href="/submit" />}
           nativeButton={false}
         >
-          Admin
+          My entries
         </Button>
-      ) : null}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:bg-transparent dark:hover:bg-transparent"
+          render={<Link href="/vote" />}
+          nativeButton={false}
+        >
+          Vote
+        </Button>
+        {access ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:bg-transparent dark:hover:bg-transparent"
+            render={<Link href="/admin" />}
+            nativeButton={false}
+          >
+            Admin
+          </Button>
+        ) : null}
+      </div>
+      <Sheet open={menuOpen} onOpenChange={(open) => setMenuOpen(open)}>
+        <SheetTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:bg-transparent dark:hover:bg-transparent sm:hidden"
+              aria-label="Menu"
+            />
+          }
+        >
+          <Menu aria-hidden="true" />
+        </SheetTrigger>
+        <SheetContent side="right">
+          <SheetTitle className="sr-only">Account menu</SheetTitle>
+          <nav aria-label="Account menu" className="flex flex-col gap-1 px-4 pt-12">
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-muted-foreground hover:text-foreground"
+              render={<Link href="/submit" />}
+              nativeButton={false}
+              onClick={() => setMenuOpen(false)}
+            >
+              My entries
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-muted-foreground hover:text-foreground"
+              render={<Link href="/vote" />}
+              nativeButton={false}
+              onClick={() => setMenuOpen(false)}
+            >
+              Vote
+            </Button>
+            {access ? (
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-muted-foreground hover:text-foreground"
+                render={<Link href="/admin" />}
+                nativeButton={false}
+                onClick={() => setMenuOpen(false)}
+              >
+                Admin
+              </Button>
+            ) : null}
+          </nav>
+        </SheetContent>
+      </Sheet>
       <ProfileMenu />
     </div>
   );

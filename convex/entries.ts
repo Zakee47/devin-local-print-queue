@@ -1,5 +1,5 @@
 import type { Doc, Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 type DesignFields = Pick<Doc<"submissions">, "designEntry" | "printRequested">;
 
@@ -43,6 +43,30 @@ export function gainPrintPatch(s: Doc<"submissions">) {
     votingApprovedAt: undefined,
     ...(s.participantNotice?.kind === "withdrawn" ? { participantNotice: undefined } : {}),
   };
+}
+
+export const PRINT_AFTER_VOTING_APPROVAL = "queue.printAfterVotingApproval";
+
+// "KC-014 · priya · Sky Blue" for audit rows about a design.
+export async function designAuditDetail(ctx: QueryCtx, s: Doc<"submissions">): Promise<string> {
+  const participant = await ctx.db.get(s.participantId);
+  return [s.printCode, participant?.displayName, s.colour].filter(Boolean).join(" · ");
+}
+
+// Call with the row as it was before gaining Print: logs when that drops a
+// staff approval for voting.
+export async function logPrintAfterVotingApproval(
+  ctx: MutationCtx,
+  actor: string,
+  before: Doc<"submissions">
+) {
+  if (before.printRequested || before.votingApprovedAt === undefined) return;
+  await ctx.db.insert("auditLog", {
+    actor,
+    action: PRINT_AFTER_VOTING_APPROVAL,
+    submissionId: before._id,
+    detail: await designAuditDetail(ctx, before),
+  });
 }
 
 export function inCompetition(s: Doc<"submissions">): boolean {

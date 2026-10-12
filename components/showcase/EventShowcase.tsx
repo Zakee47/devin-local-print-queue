@@ -34,8 +34,8 @@ export default function EventShowcase({
             Every design from London #01
           </h2>
         </div>
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
-          <div className="lg:h-[44rem]">
+        <div className="mt-6 grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+          <div className="min-w-0 lg:h-[44rem]">
             <LiveLeaderboard
               variant="page"
               rows={data.leaderboard}
@@ -50,7 +50,7 @@ export default function EventShowcase({
               className="h-full"
             />
           </div>
-          <Card className="gap-0 overflow-hidden p-0 shadow-none lg:h-[44rem] lg:min-h-0">
+          <Card className="min-w-0 gap-0 overflow-hidden p-0 shadow-none lg:h-[44rem] lg:min-h-0">
             <CardHeader className="shrink-0 gap-1 px-6 pt-5 pb-4">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="font-mono text-lg font-medium tracking-[0.18em] text-muted-foreground uppercase">

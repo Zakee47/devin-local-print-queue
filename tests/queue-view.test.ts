@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { Id } from "../convex/_generated/dataModel";
 import {
   ANY_COLOUR, NOT_ASSIGNED, applyFilters, beforeIdAfterDrop, bucketOf,
-  optionCounts, partitionPrinters, sortBuckets, type FilterPill, type QueueViewRow,
+  optionCounts, partitionPrinters, sortBuckets, splitDone, type FilterPill, type QueueViewRow,
 } from "../components/admin/queue-view";
 
 function row(id: string, patch: Partial<QueueViewRow> = {}): QueueViewRow {
@@ -38,6 +38,20 @@ describe("queue view buckets", () => {
     ]);
     expect(buckets.done.map((r) => r._id)).toEqual(["new", "old"]);
     expect(buckets.withdrawn.map((r) => r._id)).toEqual(["withdrawn-new", "withdrawn-old"]);
+  });
+});
+
+describe("Done split", () => {
+  test("separates printed rows from vote-only designs approved for voting, keeping order", () => {
+    const { done } = sortBuckets([
+      row("printed-old", { status: "done", doneAt: 1 }),
+      row("vote-new", { printRequested: false, votingApprovedAt: 6 }),
+      row("printed-new", { status: "done", doneAt: 5 }),
+      row("vote-old", { printRequested: false, votingApprovedAt: 2 }),
+    ]);
+    const groups = splitDone(done);
+    expect(groups.printed.map((r) => r._id)).toEqual(["printed-new", "printed-old"]);
+    expect(groups.votingOnly.map((r) => r._id)).toEqual(["vote-new", "vote-old"]);
   });
 });
 

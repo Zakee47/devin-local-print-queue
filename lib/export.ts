@@ -39,7 +39,7 @@ export const EXPORT_CSV_HEADERS = [
   "deleted",
   "likes",
   "votes",
-  "Approved for voting",
+  "Approved for voting only",
   "rejectionReason",
   "createdAt",
 ];

@@ -285,7 +285,7 @@ export default function SubmissionCard({
             <h3 className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-[15px] font-semibold">{row.title}</h3>
             {row.version > 1 ? <CardBadge>v{row.version}</CardBadge> : null}
             {printBadge ? <CardBadge tone={printBadge === "No print yet" ? "filled" : "outline"}>{printBadge}</CardBadge> : null}
-            {voteOnly ? <CardBadge><Trophy className="size-3" />Vote only</CardBadge> : null}
+            {voteOnly ? <CardBadge><Trophy className="size-3" />{approvedForVoting ? "Approved for voting only" : "Vote only"}</CardBadge> : null}
             {showVotingBadge ? <CardBadge tone={row.designRemoved ? "red" : "outline"}><Trophy className="size-3" />{row.designRemoved ? "Removed from voting" : "Not in voting"}</CardBadge> : null}
             {row.oversize ? <CardBadge tone="red">Over size limit</CardBadge> : null}
           </div>
@@ -441,7 +441,7 @@ export default function SubmissionCard({
               {approvedForVoting ? (
                 <>
                   <li className="flex items-center gap-2 py-0.5"><span className="size-[7px] shrink-0 rounded-full bg-foreground" />Submitted · {formatDateTime(row._creationTime)}</li>
-                  {row.votingApprovedAt !== undefined ? <li className="flex items-center gap-2 py-0.5"><span className="size-[7px] shrink-0 rounded-full bg-foreground" />Approved for voting · {formatDateTime(row.votingApprovedAt)}</li> : null}
+                  {row.votingApprovedAt !== undefined ? <li className="flex items-center gap-2 py-0.5"><span className="size-[7px] shrink-0 rounded-full bg-foreground" />Approved for voting only · {formatDateTime(row.votingApprovedAt)}</li> : null}
                   <li className="flex items-center gap-2 py-0.5 text-muted-foreground"><span className="size-[7px] shrink-0 rounded-full bg-muted-foreground/30" />Not printed (vote only)</li>
                 </>
               ) : timeline.map(([label, at, done]) => (
