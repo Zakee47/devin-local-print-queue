@@ -64,6 +64,19 @@ export const submitScan = mutation({
       });
     }
 
+    const matchingScans = await ctx.db
+      .query("checkinScans")
+      .withIndex("by_key", (q) => q.eq("key", parsed.key))
+      .collect();
+    matchingScans.sort((a, b) => b._creationTime - a._creationTime);
+    const active = matchingScans.find(
+      (scan) => scan.status === "pending" || scan.status === "processing"
+    );
+    if (active) return active._id;
+
+    const mostRecent = matchingScans[0];
+    if (mostRecent && Date.now() - mostRecent._creationTime < 30_000) return mostRecent._id;
+
     if (process.env.LUMA_EVENT_ID && parsed.eventId !== process.env.LUMA_EVENT_ID) {
       return await recordScan(ctx, actor, {
         raw,
@@ -76,15 +89,6 @@ export const submitScan = mutation({
         finishedAt: Date.now(),
       });
     }
-
-    const matchingScans = await ctx.db
-      .query("checkinScans")
-      .withIndex("by_key", (q) => q.eq("key", parsed.key))
-      .collect();
-    const active = matchingScans.find(
-      (scan) => scan.status === "pending" || scan.status === "processing"
-    );
-    if (active) return active._id;
 
     const completed = matchingScans.find(
       (scan) => scan.status === "checked_in" || scan.status === "already_checked_in"

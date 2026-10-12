@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
@@ -56,24 +56,57 @@ describe("check-in scans", () => {
   });
 
   test("deduplicates pending scans and records repeats after completion", async () => {
-    const { t, asOwner } = await setup();
-    const id = await asOwner.mutation(api.checkin.submitScan, { raw });
-    expect(await asOwner.mutation(api.checkin.submitScan, { raw })).toBe(id);
-    await asOwner.mutation(api.checkin.workerComplete, {
-      secret: "worker-secret",
-      scanId: id,
-      status: "checked_in",
-      guestName: "Alice",
-      guestEmail: "ALICE@example.com",
-    });
-    const repeated = await asOwner.mutation(api.checkin.submitScan, { raw });
-    expect(repeated).not.toBe(id);
-    expect(await t.run((ctx) => ctx.db.get(repeated))).toMatchObject({
-      status: "already_checked_in",
-      guestName: "Alice",
-      guestEmail: "alice@example.com",
-      message: expect.stringContaining("Already scanned at"),
-    });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-01T18:00:00Z"));
+    try {
+      const { t, asOwner } = await setup();
+      const id = await asOwner.mutation(api.checkin.submitScan, { raw });
+      expect(await asOwner.mutation(api.checkin.submitScan, { raw })).toBe(id);
+      await asOwner.mutation(api.checkin.workerComplete, {
+        secret: "worker-secret",
+        scanId: id,
+        status: "checked_in",
+        guestName: "Alice",
+        guestEmail: "ALICE@example.com",
+      });
+      vi.setSystemTime(new Date("2026-10-01T18:00:30Z"));
+      const repeated = await asOwner.mutation(api.checkin.submitScan, { raw });
+      expect(repeated).not.toBe(id);
+      expect(await t.run((ctx) => ctx.db.get(repeated))).toMatchObject({
+        status: "already_checked_in",
+        guestName: "Alice",
+        guestEmail: "alice@example.com",
+        message: expect.stringContaining("Already scanned at"),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("deduplicates a recent scan with any status for 30 seconds", async () => {
+    vi.useFakeTimers();
+    const start = new Date("2026-10-01T18:00:00Z");
+    vi.setSystemTime(start);
+    try {
+      const { t, asOwner } = await setup();
+      const id = await asOwner.mutation(api.checkin.submitScan, { raw });
+      await asOwner.mutation(api.checkin.workerComplete, {
+        secret: "worker-secret",
+        scanId: id,
+        status: "not_found",
+      });
+
+      vi.setSystemTime(new Date(start.getTime() + 29_999));
+      expect(await asOwner.mutation(api.checkin.submitScan, { raw })).toBe(id);
+      expect(await t.run((ctx) => ctx.db.query("checkinScans").collect())).toHaveLength(1);
+
+      vi.setSystemTime(new Date(start.getTime() + 30_000));
+      const retry = await asOwner.mutation(api.checkin.submitScan, { raw });
+      expect(retry).not.toBe(id);
+      expect(await t.run((ctx) => ctx.db.get(retry))).toMatchObject({ status: "pending" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("claims oldest scans and reclaims stale processing leases", async () => {

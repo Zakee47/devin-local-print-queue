@@ -76,10 +76,10 @@ export default function CheckinScanner() {
       if (!raw) return;
       const now = Date.now();
       const lastScanned = recentRawRef.current.get(raw);
-      if (lastScanned && now - lastScanned < 5_000) return;
+      if (lastScanned !== undefined && now - lastScanned < 30_000) return;
       recentRawRef.current.set(raw, now);
       for (const [previous, timestamp] of recentRawRef.current) {
-        if (now - timestamp >= 5_000) recentRawRef.current.delete(previous);
+        if (now - timestamp >= 30_000) recentRawRef.current.delete(previous);
       }
       setSubmitting(true);
       try {
@@ -216,17 +216,19 @@ export default function CheckinScanner() {
             {!cameraActive && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-950 px-6 text-center text-white">
                 <VideoOff className="size-9 text-white/60" />
-                <p className="text-sm text-white/75">
+                <p className="w-full max-w-sm text-sm text-white/75">
                   {cameraError || "Allow camera access to scan a guest ticket."}
                 </p>
               </div>
             )}
-            <div className="pointer-events-none absolute inset-0 grid place-items-center">
-              <div className="size-48 rounded-2xl border-2 border-white/80 shadow-[0_0_0_999px_rgba(0,0,0,0.2)] sm:size-60" />
-            </div>
+            {cameraActive && (
+              <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                <div className="size-48 rounded-2xl border-2 border-white/80 shadow-[0_0_0_999px_rgba(0,0,0,0.2)] sm:size-60" />
+              </div>
+            )}
             <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-xs text-white">
               <Camera className="size-3.5" />
-              {cameraActive ? "Camera ready" : "Camera paused"}
+              {cameraActive ? "Camera ready" : "No camera"}
             </div>
           </div>
           {cameraError && cameraActive && (
