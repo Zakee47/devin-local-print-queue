@@ -7,11 +7,23 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { parseGuestCsv } from "@/lib/guest-csv";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useUndoableRemoval } from "@/components/admin/useUndoableRemoval";
 import { errorMessage } from "@/lib/errors";
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
@@ -30,6 +42,7 @@ export default function GuestsManager() {
   const importCsv = useMutation(api.guests.importCsv);
   const addGuest = useMutation(api.guests.addGuest);
   const removeGuest = useMutation(api.guests.removeGuest);
+  const { pending, schedule } = useUndoableRemoval();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
@@ -69,7 +82,11 @@ export default function GuestsManager() {
 
   const q = search.trim().toLowerCase();
   const filtered =
-    guests?.filter((g) => !q || g.email.includes(q) || g.name?.toLowerCase().includes(q)) ?? [];
+    guests?.filter(
+      (g) =>
+        !pending.has(g._id) &&
+        (!q || g.email.includes(q) || g.name?.toLowerCase().includes(q))
+    ) ?? [];
   const registeredCount = guests?.filter((g) => g.registered).length ?? 0;
 
   return (
@@ -205,21 +222,47 @@ export default function GuestsManager() {
                       {g.registered ? <Badge variant="outline">Registered</Badge> : <span className="text-muted-dim">No</span>}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          removeGuest({ id: g._id })
-                            .then(() => toast.success(`${g.email} removed`))
-                            .catch((err: unknown) =>
-                              toast.error(
-                                errorMessage(err, "Couldn't remove guest")
-                              )
-                            )
-                        }
-                      >
-                        Remove
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                            />
+                          }
+                        >
+                          Remove
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Remove {g.email}?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              They won&apos;t be able to sign up. An account they&apos;ve already
+                              registered isn&apos;t deleted.
+                              {!g.manual
+                                ? " They'll come back if they're in your next guest-list upload."
+                                : null}
+                              {" "}You&apos;ll have 15 seconds to undo.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              variant="destructive"
+                              onClick={() =>
+                                schedule({
+                                  id: g._id,
+                                  label: g.email,
+                                  run: () => removeGuest({ id: g._id }),
+                                  errorFallback: "Couldn't remove guest",
+                                })
+                              }
+                            >
+                              Remove
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </td>
                   </tr>
                 ))}

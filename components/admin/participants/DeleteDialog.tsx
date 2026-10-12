@@ -1,9 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -17,21 +14,20 @@ import {
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import type { ParticipantRow } from "./ParticipantsManager";
-import { errorMessage } from "@/lib/errors";
 
 export default function DeleteDialog({
   participant,
   open,
   onOpenChange,
+  onConfirm,
 }: {
   participant: ParticipantRow | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onConfirm: (args: { block: boolean; reason?: string }) => void;
 }) {
-  const deleteParticipant = useMutation(api.accounts.deleteParticipant);
   const [block, setBlock] = useState(false);
   const [reason, setReason] = useState("");
-  const [saving, setSaving] = useState(false);
 
   function close(next: boolean) {
     onOpenChange(next);
@@ -41,25 +37,11 @@ export default function DeleteDialog({
     }
   }
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!participant) return;
-    setSaving(true);
-    try {
-      await deleteParticipant({
-        participantId: participant._id,
-        block,
-        reason: reason.trim() || undefined,
-      });
-      toast.success(
-        `${participant.username} deleted${block ? " and blocked" : ""}`
-      );
-      close(false);
-    } catch (err) {
-      toast.error(errorMessage(err, "Couldn't delete"));
-    } finally {
-      setSaving(false);
-    }
+    onConfirm({ block, reason: reason.trim() || undefined });
+    close(false);
   }
 
   return (
@@ -71,6 +53,7 @@ export default function DeleteDialog({
             <DialogDescription>
               This deletes their submissions and files, votes and likes. Their Clerk
               sign-in remains, but they will no longer have a participant account.
+              {" "}You&apos;ll have 15 seconds to undo.
             </DialogDescription>
           </DialogHeader>
           <Field>
@@ -98,7 +81,7 @@ export default function DeleteDialog({
             <Button type="button" variant="ghost" onClick={() => close(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="destructive" disabled={saving}>
+            <Button type="submit" variant="destructive">
               Delete participant
             </Button>
           </DialogFooter>

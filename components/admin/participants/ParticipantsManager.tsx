@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useUndoableRemoval } from "@/components/admin/useUndoableRemoval";
 import { cn } from "@/lib/utils";
 import RenameDialog from "./RenameDialog";
 import DeleteDialog from "./DeleteDialog";
@@ -56,7 +57,9 @@ function EntryCell({ entry }: { entry: ParticipantRow["entry"] }) {
 export default function ParticipantsManager() {
   const participants = useQuery(api.accounts.listParticipants);
   const blocked = useQuery(api.accounts.listBlocked);
+  const deleteParticipant = useMutation(api.accounts.deleteParticipant);
   const unblock = useMutation(api.accounts.unblock);
+  const { pending, schedule } = useUndoableRemoval();
   const [search, setSearch] = useState("");
   const [renaming, setRenaming] = useState<ParticipantRow | null>(null);
   const [deleting, setDeleting] = useState<ParticipantRow | null>(null);
@@ -65,11 +68,12 @@ export default function ParticipantsManager() {
   const filtered =
     participants?.filter(
       (p) =>
-        !q ||
-        p.username.toLowerCase().includes(q) ||
-        p.name.toLowerCase().includes(q) ||
-        p.email.toLowerCase().includes(q) ||
-        p.entry?.printCode.toLowerCase().includes(q)
+        !pending.has(p._id) &&
+        (!q ||
+          p.username.toLowerCase().includes(q) ||
+          p.name.toLowerCase().includes(q) ||
+          p.email.toLowerCase().includes(q) ||
+          p.entry?.printCode.toLowerCase().includes(q))
     ) ?? [];
 
   async function handleUnblock(row: Doc<"blockedEmails">) {
@@ -79,6 +83,22 @@ export default function ParticipantsManager() {
     } catch (err) {
       toast.error(errorMessage(err, "Couldn't unblock"));
     }
+  }
+
+  function handleDeleteConfirm({ block, reason }: { block: boolean; reason?: string }) {
+    if (!deleting) return;
+    const participant = deleting;
+    schedule({
+      id: participant._id,
+      label: participant.username,
+      run: () =>
+        deleteParticipant({
+          participantId: participant._id,
+          block,
+          reason,
+        }),
+      errorFallback: "Couldn't delete",
+    });
   }
 
   return (
@@ -248,6 +268,7 @@ export default function ParticipantsManager() {
       <DeleteDialog
         participant={deleting}
         open={deleting !== null}
+        onConfirm={handleDeleteConfirm}
         onOpenChange={(open) => {
           if (!open) setDeleting(null);
         }}
