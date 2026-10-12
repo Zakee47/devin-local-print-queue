@@ -8,7 +8,14 @@ import { inServicePrinters, printersWithColour } from "../lib/printers";
 import { fitsWithin } from "../lib/dimensions";
 import { readSettings, type Settings } from "./settings";
 import { previewUrlOf } from "./submissions";
-import { currentVersion, isActive, isDeleted, isDesignEntry, printRequestPatch } from "./entries";
+import {
+  currentVersion,
+  isActive,
+  isApprovedForVoting,
+  isDeleted,
+  isDesignEntry,
+  printRequestPatch,
+} from "./entries";
 
 export { printersWithColour } from "../lib/printers";
 
@@ -24,14 +31,6 @@ const PIPELINE_PRIORITY: Record<PipelineStatus, number> = {
 
 function isPipelineStatus(status: Doc<"submissions">["status"]): status is PipelineStatus {
   return PIPELINE.includes(status as PipelineStatus);
-}
-
-function isApprovedForVoting(submission: Doc<"submissions">) {
-  return (
-    submission.status === "submitted" &&
-    !submission.printRequested &&
-    submission.votingApprovedAt !== undefined
-  );
 }
 
 function isWithdrawn(submission: Doc<"submissions">) {
@@ -83,13 +82,27 @@ function expectStatus(submission: Doc<"submissions">, ...allowed: Doc<"submissio
   }
 }
 
+// Printing and done rows keep their slot so Move back can return them to it;
+// new slots go after all of them so a slot is never handed out twice.
 async function nextQueueOrder(ctx: MutationCtx) {
-  const last = await ctx.db
+  const lasts = await Promise.all(
+    PIPELINE.map((status) =>
+      ctx.db
+        .query("submissions")
+        .withIndex("by_status_queueOrder", (q) => q.eq("status", status))
+        .order("desc")
+        .first()
+    )
+  );
+  return Math.max(0, ...lasts.map((last) => last?.queueOrder ?? 0)) + 1;
+}
+
+async function queueSlotTaken(ctx: MutationCtx, queueOrder: number) {
+  const holder = await ctx.db
     .query("submissions")
-    .withIndex("by_status_queueOrder", (q) => q.eq("status", "queued"))
-    .order("desc")
+    .withIndex("by_status_queueOrder", (q) => q.eq("status", "queued").eq("queueOrder", queueOrder))
     .first();
-  return (last?.queueOrder ?? 0) + 1;
+  return holder !== null;
 }
 
 // Every submission with its participant and a preview URL, for the board.
@@ -276,6 +289,7 @@ export const approve = mutation({
       status: "queued",
       queueOrder: await nextQueueOrder(ctx),
       queuedAt: Date.now(),
+      printer: undefined,
       votingApprovedAt: undefined,
       reviewedBy: actor,
       rejectionReason: undefined,
@@ -437,6 +451,8 @@ export const reject = mutation({
       reviewedBy: actor,
       ...printRequestPatch(submission, false),
       queueOrder: undefined,
+      queuedAt: undefined,
+      printer: undefined,
       rejectionKind: "review",
       participantNotice: undefined,
     });
@@ -489,11 +505,14 @@ export const moveBack = mutation({
           status: "queued",
           printingAt: undefined,
           printer: undefined,
-          queueOrder: submission.queueOrder ?? (await nextQueueOrder(ctx)),
+          queueOrder:
+            submission.queueOrder !== undefined && !(await queueSlotTaken(ctx, submission.queueOrder))
+              ? submission.queueOrder
+              : await nextQueueOrder(ctx),
         });
         break;
       case "queued":
-        await ctx.db.patch(id, { status: "submitted", queueOrder: undefined, queuedAt: undefined });
+        await ctx.db.patch(id, { status: "submitted", queueOrder: undefined, queuedAt: undefined, printer: undefined });
         break;
       case "rejected": {
         const active = (
