@@ -2,6 +2,7 @@ import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } fr
 import type { Doc } from "./_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { requireAdmin, requireOwner } from "./admins";
+import { isDeleted } from "./entries";
 import {
   DEFAULT_COLOURS,
   DEFAULT_MAX_DIMENSIONS_MM,
@@ -50,15 +51,7 @@ export async function readSettings(ctx: QueryCtx | MutationCtx): Promise<Setting
 
 const printerKey = (name: string) => name.trim().toLowerCase();
 
-// Printers have no ids: the settings form edits names in place, so a list of
-// the same length with one name swapped is a rename. Queued and printing jobs
-// follow a rename; queued jobs on a removed printer go back to unassigned.
-async function reconcilePrinterAssignments(
-  ctx: MutationCtx,
-  actor: string,
-  previous: Printer[],
-  next: Printer[]
-) {
+function printerRenames(previous: Printer[], next: Printer[]) {
   const nextKeys = new Set(next.map(({ name }) => printerKey(name)));
   const previousKeys = new Set(previous.map(({ name }) => printerKey(name)));
   const renames = new Map<string, string>();
@@ -70,6 +63,20 @@ async function reconcilePrinterAssignments(
       }
     });
   }
+  return renames;
+}
+
+// Printers have no ids: the settings form edits names in place, so a list of
+// the same length with one name swapped is a rename. Queued and printing jobs
+// follow a rename; queued jobs on a removed printer go back to unassigned.
+async function reconcilePrinterAssignments(
+  ctx: MutationCtx,
+  actor: string,
+  previous: Printer[],
+  next: Printer[]
+) {
+  const nextKeys = new Set(next.map(({ name }) => printerKey(name)));
+  const renames = printerRenames(previous, next);
   for (const status of ["queued", "printing"] as const) {
     const rows = await ctx.db
       .query("submissions")
@@ -254,6 +261,32 @@ export const update = mutation({
       settingsPatch.colourCodes = [...byName.values()].filter((code) =>
         paletteNames.has(code.name.toLowerCase())
       );
+    }
+    if (settingsPatch.printers !== undefined) {
+      const nextKeys = new Set(settingsPatch.printers.map(({ name }) => printerKey(name)));
+      const renames = printerRenames(currentSettings.printers, settingsPatch.printers);
+      const removedPrinters = currentSettings.printers.filter(
+        ({ name }) => !nextKeys.has(printerKey(name)) && !renames.has(printerKey(name))
+      );
+      if (removedPrinters.length) {
+        const printing = await ctx.db
+          .query("submissions")
+          .withIndex("by_status", (q) => q.eq("status", "printing"))
+          .collect();
+        for (const printer of removedPrinters) {
+          const printCodes = printing
+            .filter(
+              (row) =>
+                !isDeleted(row) && printerKey(row.printer ?? "") === printerKey(printer.name)
+            )
+            .map(({ printCode }) => printCode);
+          if (printCodes.length) {
+            throw new ConvexError(
+              `Mark the job(s) printing on ${printer.name} as done or failed before removing it (${printCodes.join(", ")})`
+            );
+          }
+        }
+      }
     }
     await writeSettings(ctx, settingsPatch);
     if (settingsPatch.printers !== undefined) {

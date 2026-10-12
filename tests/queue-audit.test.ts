@@ -154,6 +154,8 @@ describe("queue order", () => {
     const b = await add(graceId);
     await asStaff.mutation(api.queue.approve, { id: b });
     expect((await get(b))?.queueOrder).toBeGreaterThan((await get(a))!.queueOrder!);
+    const originalSlot = (await get(a))!.queueOrder!;
+    await t.run((ctx) => ctx.db.patch(b, { queueOrder: originalSlot }));
 
     await asStaff.mutation(api.queue.moveBack, { id: a });
     const queued = await t.run((ctx) =>
@@ -161,7 +163,7 @@ describe("queue order", () => {
     );
     const orders = queued.map((row) => row.queueOrder);
     expect(new Set(orders).size).toBe(orders.length);
-    // It goes back to the slot it left, ahead of the job approved while it printed.
+    // Move back puts it ahead of the jobs that stayed queued.
     expect(queued.map((row) => row._id)).toEqual([a, b]);
     const positions = await Promise.all(
       [ada, grace].map((who) => t.withIdentity(who).query(api.submissions.mine, {}))
@@ -295,24 +297,60 @@ describe("printer rename and removal", () => {
     expect((await get(queued))?.printer).toBe("BAMBU");
   });
 
-  test("removing a printer unassigns its queued jobs; printing and done keep the record", async () => {
-    const { add, adaId, graceId, asStaff, get, boardRow, audits } = await setup();
-    const queued = await add(adaId, { status: "queued", queueOrder: 1, printer: "Prusa" });
-    const printing = await add(graceId, { status: "printing", printer: "Prusa" });
-    await asStaff.mutation(api.settings.update, {
-      printers: [
+  test.each(["done", "failed"] as const)(
+    "blocks removal while printing, then allows it after the job is %s",
+    async (resolution) => {
+      const { add, adaId, graceId, asStaff, get, boardRow, audits } = await setup();
+      const queued = await add(adaId, { status: "queued", queueOrder: 1, printer: "Prusa" });
+      const printing = await add(graceId, { status: "printing", printer: " prusa " });
+      const nextPrinters = [
         { name: "Bambu", colours: ["Red", "Blue"] },
         { name: "Ender", colours: ["Gold"] },
-      ],
+      ];
+      await expect(
+        asStaff.mutation(api.settings.update, { printers: nextPrinters })
+      ).rejects.toThrow(
+        "Mark the job(s) printing on Prusa as done or failed before removing it (KC-002)"
+      );
+      if (resolution === "done") {
+        await asStaff.mutation(api.queue.markDone, { id: printing });
+      } else {
+        await asStaff.mutation(api.queue.printFailed, { id: printing, reason: "Spaghetti" });
+      }
+      await asStaff.mutation(api.settings.update, { printers: nextPrinters });
+      expect((await get(queued))?.printer).toBeUndefined();
+      expect((await get(printing))?.printer).toBe(" prusa ");
+      expect((await boardRow(queued))?.printer).toBeUndefined();
+      expect((await audits("queue.setPrinter")).map((row) => row.detail)).toContain(
+        "cleared (Prusa removed)"
+      );
+      await asStaff.mutation(api.queue.startPrinting, { id: queued });
+      expect((await get(queued))?.status).toBe("printing");
+    }
+  );
+});
+
+describe("CSV export approval timestamp", () => {
+  test("includes the approval time only for rows approved for voting", async () => {
+    const { add, adaId, asOwner } = await setup();
+    const approved = await add(adaId, {
+      printRequested: false,
+      votingApprovedAt: 1_800_000_000_000,
     });
-    expect((await get(queued))?.printer).toBeUndefined();
-    expect((await get(printing))?.printer).toBe("Prusa");
-    expect((await boardRow(queued))?.printer).toBeUndefined();
-    expect((await audits("queue.setPrinter")).map((row) => row.detail)).toContain(
-      "cleared (Prusa removed)"
-    );
-    await asStaff.mutation(api.queue.startPrinting, { id: queued });
-    expect((await get(queued))?.status).toBe("printing");
+    const printRequest = await add(adaId, {
+      printRequested: true,
+      votingApprovedAt: 1_800_000_000_001,
+    });
+    const notApproved = await add(adaId, {
+      printRequested: false,
+      status: "queued",
+      votingApprovedAt: 1_800_000_000_002,
+    });
+
+    const rows = await asOwner.query(api.queue.exportRows, {});
+    expect(rows.find((row) => row.id === approved)?.votingApprovedAt).toBe(1_800_000_000_000);
+    expect(rows.find((row) => row.id === printRequest)?.votingApprovedAt).toBeUndefined();
+    expect(rows.find((row) => row.id === notApproved)?.votingApprovedAt).toBeUndefined();
   });
 });
 
@@ -409,7 +447,9 @@ describe("settings validation", () => {
     expect((await boardRow(id))?.printersWithColour).toEqual([]);
     const result = await asStaff.mutation(api.queue.assignPrinters, { ids: [id], printers: ["Bambu"], mode: "spread" });
     expect(result.skipped.map((row) => row.id)).toEqual([id]);
-    expect(await asStaff.query(api.submissions.colourDemand, {})).toEqual([{ colour: "Gold", waiting: 1 }]);
+    expect(await asStaff.query(api.submissions.colourDemand, {})).toEqual([
+      { colour: "Gold", waiting: 1 },
+    ]);
   });
 });
 
@@ -504,7 +544,7 @@ describe("vote-only designs approved for voting are Done", () => {
     const id = await add(adaId, { printRequested: false, colour: "Gold" });
     await add(graceId, { printRequested: false, colour: "Gold" });
     await asStaff.mutation(api.queue.approveForVoting, { id });
-    expect(await asStaff.query(api.submissions.colourDemand, {})).toEqual([{ colour: "Gold", waiting: 1 }]);
+    expect(await asStaff.query(api.submissions.colourDemand, {})).toEqual([]);
   });
 });
 

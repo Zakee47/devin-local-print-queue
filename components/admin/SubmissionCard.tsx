@@ -302,7 +302,7 @@ export default function SubmissionCard({
               {row.colour || "Any colour"}
             </span>
             {row.dimensionsMm ? <span>{formatDimensions(row.dimensionsMm)}</span> : null}
-            {row.printer ? <span className={cn("inline-flex items-center gap-1", printerAttention ? "text-amber-700 dark:text-amber-300" : "")}>{row.status === "done" ? <Printer className="size-3.5" /> : null}{row.printer}{printerPaused ? " · paused" : printerMissing ? " · pick another" : ""}</span> : null}
+            {row.printer ? <span className={cn("inline-flex items-center gap-1", printerAttention ? "text-amber-700 dark:text-amber-300" : "")}>{row.status === "done" ? <Printer className="size-3.5" /> : null}{row.printer}{printerPaused ? " · paused" : printerMissing ? row.status === "printing" ? " · printer removed" : " · pick another" : ""}</span> : null}
             <span>{row.kind.toUpperCase()} · {formatBytes(row.sizeBytes)}</span>
             {row.status === "queued" ? <span>queued {formatDuration(row.queuedAt ?? row._creationTime, now)} ago</span> : null}
           </div>
@@ -392,7 +392,7 @@ export default function SubmissionCard({
       {printerAttention && (row.status === "queued" || row.status === "printing") ? (
         <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           <Pause className="size-4 shrink-0" />
-          <span>{printerPaused ? <><strong>{row.printer} is paused</strong>: not taking new jobs. Pick another printer.</> : <><strong>{row.printer} is not in Settings</strong>: pick another printer.</>}</span>
+          <span>{printerPaused ? <><strong>{row.printer} is paused</strong>: not taking new jobs. Pick another printer.</> : printerMissing && row.status === "printing" ? "Printer removed: mark done or failed" : <><strong>{row.printer} is not in Settings</strong>: pick another printer.</>}</span>
         </div>
       ) : null}
       {row.colour && !row.printersWithColour.length && row.status !== "done" && !voteOnly && !withdrawn ? <div className="border-t border-amber-200 px-4 py-2 text-sm text-muted-foreground">No printer has this colour loaded</div> : null}

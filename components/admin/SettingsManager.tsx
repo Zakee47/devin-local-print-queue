@@ -142,6 +142,8 @@ export default function SettingsManager() {
   const settings = useQuery(api.settings.get);
   const boardRows = useQuery(api.queue.board);
   const update = useMutation(api.settings.update);
+  const markDone = useMutation(api.queue.markDone);
+  const printFailed = useMutation(api.queue.printFailed);
   const swatch = useSwatch();
   const now = useNow();
   const [newColour, setNewColour] = useState("");
@@ -154,6 +156,8 @@ export default function SettingsManager() {
   const [printersDraft, setPrintersDraft] = useState<Printer[] | null>(null);
   const [newPrinter, setNewPrinter] = useState("");
   const [confirmation, setConfirmation] = useState<SettingsConfirmation | null>(null);
+  const [printFailedReasons, setPrintFailedReasons] = useState<Record<string, string>>({});
+  const [resolvingPrintJob, setResolvingPrintJob] = useState<string | null>(null);
 
   if (!settings) {
     return (
@@ -183,6 +187,20 @@ export default function SettingsManager() {
   const defaultNewColourHex = knownNewColourHex ?? "#888888";
   const displayedNewColourHex = newColourHexTouched ? newColourHex : defaultNewColourHex;
   const currentPrinters = cleanPrinters(printersDraft ?? settings.printers, colours);
+  const confirmedPrinterKey =
+    confirmation?.type === "remove-printer" ? confirmation.printer.trim().toLowerCase() : null;
+  const printingPrinterJobs = (boardRows ?? []).filter(
+    (row) =>
+      !row.deletedAt &&
+      row.status === "printing" &&
+      row.printer?.trim().toLowerCase() === confirmedPrinterKey
+  );
+  const queuedPrinterJobs = (boardRows ?? []).filter(
+    (row) =>
+      !row.deletedAt &&
+      row.status === "queued" &&
+      row.printer?.trim().toLowerCase() === confirmedPrinterKey
+  ).length;
   const currentMb = String(Math.round((settings.maxFileBytes / 1024 / 1024) * 10) / 10);
   const deadlineValue = deadlineInput ?? formatLocalDateTime(settings.submissionsDeadline);
   const announcementValue = announcementInput ?? settings.announcement ?? "";
@@ -204,7 +222,13 @@ export default function SettingsManager() {
     confirmation?.type === "pause"
       ? `${confirmation.queuedJobs > 0 ? `${confirmation.queuedJobs} queued ${confirmation.queuedJobs === 1 ? "job" : "jobs"} on it will need reassigning. ` : ""}It keeps its loaded colours and you can resume any time.`
       : confirmation?.type === "remove-printer"
-        ? "Its loaded colours will be lost."
+        ? [
+            "Its loaded colours will be lost.",
+            ...(queuedPrinterJobs
+              ? [`${queuedPrinterJobs} queued jobs will go back to Not assigned.`]
+              : []),
+            "Prints on this printer must be marked done or failed before you remove it.",
+          ].join(" ")
         : confirmation?.type === "remove-colour"
           ? "It will be unticked on every printer, and participants can no longer pick it."
           : "Participants can't upload or replace files until you reopen.";
@@ -777,9 +801,86 @@ export default function SettingsManager() {
             <AlertDialogTitle>{confirmationTitle}</AlertDialogTitle>
             <AlertDialogDescription>{confirmationDescription}</AlertDialogDescription>
           </AlertDialogHeader>
+          {confirmation?.type === "remove-printer" && printingPrinterJobs.length > 0 ? (
+            <div className="max-h-72 space-y-3 overflow-y-auto">
+              {printingPrinterJobs.map((job) => {
+                const reason = printFailedReasons[String(job._id)] ?? "";
+                return (
+                  <div key={job._id} className="space-y-2 rounded-lg border p-3">
+                    <p className="text-sm">
+                      <span className="font-mono">{job.printCode}</span> · {job.title} ·{" "}
+                      {job.participantUsername}
+                    </p>
+                    <Textarea
+                      aria-label={`Failure reason for ${job.printCode}`}
+                      required
+                      placeholder="Reason for failure (required)"
+                      value={reason}
+                      onChange={(event) =>
+                        setPrintFailedReasons((current) => ({
+                          ...current,
+                          [String(job._id)]: event.target.value,
+                        }))
+                      }
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={resolvingPrintJob !== null}
+                        onClick={async () => {
+                          setResolvingPrintJob(String(job._id));
+                          try {
+                            await markDone({ id: job._id });
+                            toast.success(`${job.printCode} marked done`);
+                          } catch (error) {
+                            toast.error(errorMessage(error, "Could not mark the print done"));
+                          } finally {
+                            setResolvingPrintJob(null);
+                          }
+                        }}
+                      >
+                        Mark done
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={resolvingPrintJob !== null || !reason.trim()}
+                        onClick={async () => {
+                          setResolvingPrintJob(String(job._id));
+                          try {
+                            await printFailed({ id: job._id, reason });
+                            setPrintFailedReasons((current) => {
+                              const next = { ...current };
+                              delete next[String(job._id)];
+                              return next;
+                            });
+                            toast.success(`${job.printCode} marked failed`);
+                          } catch (error) {
+                            toast.error(errorMessage(error, "Could not mark the print failed"));
+                          } finally {
+                            setResolvingPrintJob(null);
+                          }
+                        }}
+                      >
+                        Mark failed
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmSettingsAction}>
+            <AlertDialogAction
+              disabled={
+                confirmation?.type === "remove-printer" &&
+                (boardRows === undefined || printingPrinterJobs.length > 0)
+              }
+              onClick={confirmSettingsAction}
+            >
               {confirmation?.type === "pause"
                 ? "Pause printer"
                 : confirmation?.type === "close-submissions"
