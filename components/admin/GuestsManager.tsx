@@ -5,8 +5,20 @@ import { FileUp, Search, TriangleAlert, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { parseGuestCsv } from "@/lib/guest-csv";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +48,7 @@ export default function GuestsManager() {
   const [guestEmail, setGuestEmail] = useState("");
   const [guestName, setGuestName] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
+  const [removing, setRemoving] = useState<Id<"guests"> | null>(null);
 
   if (role === undefined) return <Skeleton className="h-20 rounded-xl" />;
   if (role !== "owner") {
@@ -64,6 +77,18 @@ export default function GuestsManager() {
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function handleRemoveGuest(id: Id<"guests">, email: string) {
+    setRemoving(id);
+    try {
+      await removeGuest({ id });
+      toast.success(`${email} removed`);
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't remove guest"));
+    } finally {
+      setRemoving(null);
     }
   }
 
@@ -205,21 +230,41 @@ export default function GuestsManager() {
                       {g.registered ? <Badge variant="outline">Registered</Badge> : <span className="text-muted-dim">No</span>}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          removeGuest({ id: g._id })
-                            .then(() => toast.success(`${g.email} removed`))
-                            .catch((err: unknown) =>
-                              toast.error(
-                                errorMessage(err, "Couldn't remove guest")
-                              )
-                            )
-                        }
-                      >
-                        Remove
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={removing === g._id}
+                            />
+                          }
+                        >
+                          Remove
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Remove {g.email}?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              They won&apos;t be able to sign up. An account they&apos;ve already
+                              registered isn&apos;t deleted.
+                              {!g.manual
+                                ? " They'll come back if they're in your next guest-list upload."
+                                : null}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              variant="destructive"
+                              disabled={removing === g._id}
+                              onClick={() => void handleRemoveGuest(g._id, g.email)}
+                            >
+                              Remove
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </td>
                   </tr>
                 ))}
