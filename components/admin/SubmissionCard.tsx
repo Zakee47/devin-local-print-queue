@@ -240,7 +240,7 @@ export default function SubmissionCard({
       : row.status === "done" ? "Done"
         : row.status === "rejected" ? row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"
           : withdrawn ? `withdrawn ${formatStatusDuration(row.participantNotice?.at ?? row._creationTime, now)}`
-            : approvedForVoting ? "Approved for voting only"
+            : approvedForVoting ? "Approved for voting"
               : `waiting ${formatStatusDuration(row._creationTime, now)}`;
   const printerSetting = row.printer
     ? settingsPrinters.find((printer) => printer.name.trim().toLowerCase() === row.printer?.trim().toLowerCase())
