@@ -29,16 +29,16 @@ export default function SiteHeader({
         )}
       >
         <BrandHomeLink
-          className="group flex shrink-0 items-center rounded-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+          className="group flex min-w-0 items-center rounded-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
         >
           <span className="hidden items-center gap-3 sm:flex">
             <CognitionLogo className="h-4.5 w-auto" />
             <span aria-hidden="true" className="h-5 w-px bg-border" />
             <DevinLogo className="h-4.5 w-auto" />
           </span>
-          <span className="flex items-center gap-1.5 sm:hidden">
-            <BrandMark className="size-6" />
-            <span className="whitespace-nowrap font-heading text-sm font-semibold tracking-tight">{EVENT_TITLE}</span>
+          <span className="flex min-w-0 items-center gap-1.5 sm:hidden">
+            <BrandMark className="size-6 shrink-0" />
+            <span className="truncate font-heading text-sm font-semibold tracking-tight">{EVENT_TITLE}</span>
           </span>
         </BrandHomeLink>
         <span

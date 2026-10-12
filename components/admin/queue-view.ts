@@ -23,10 +23,14 @@ export type QueueViewRow = {
   rejectedAt?: number;
 };
 
+export function isWithdrawnRow(row: QueueViewRow) {
+  return row.participantNotice?.kind === "withdrawn" && !row.printRequested;
+}
+
 export function bucketOf(row: QueueViewRow): QueueBucket {
   if (row.deletedAt !== undefined) return "deleted";
   if (row.status === "submitted") {
-    if (row.participantNotice?.kind === "withdrawn") return "withdrawn";
+    if (isWithdrawnRow(row)) return "withdrawn";
     if (!row.printRequested && row.votingApprovedAt !== undefined) return "done";
     return "review";
   }
@@ -75,6 +79,19 @@ export function sortBuckets<T extends QueueViewRow>(rows: T[]) {
   buckets.rejected.sort((a, b) => (b.rejectedAt ?? 0) - (a.rejectedAt ?? 0));
   buckets.withdrawn.sort((a, b) => (b.participantNotice?.at ?? 0) - (a.participantNotice?.at ?? 0));
   return buckets;
+}
+
+export function partitionPrinters(
+  inService: { name: string }[],
+  matchingNames: string[],
+  colour?: string
+): { matching: string[]; other: string[] } {
+  if (!colour) return { matching: [], other: inService.map((printer) => printer.name) };
+  const matching = new Set(matchingNames.map((name) => name.trim().toLowerCase()));
+  return {
+    matching: inService.filter(({ name }) => matching.has(name.trim().toLowerCase())).map(({ name }) => name),
+    other: inService.filter(({ name }) => !matching.has(name.trim().toLowerCase())).map(({ name }) => name),
+  };
 }
 
 export function beforeIdAfterDrop(

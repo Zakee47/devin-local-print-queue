@@ -52,6 +52,7 @@ export default function HistoryDialog({
     if (controlledOpen === undefined) setInternalOpen(value);
   };
   const [busy, setBusy] = useState(false);
+  const [confirmVersionId, setConfirmVersionId] = useState<Id<"submissionVersions"> | null>(null);
   const data = useQuery(api.history.forSubmission, open ? { id: submissionId } : "skip");
   const restoreVersion = useMutation(api.history.restoreVersion);
   const restoreSubmission = useMutation(api.history.restoreSubmission);
@@ -63,6 +64,7 @@ export default function HistoryDialog({
     try {
       await restoreVersion({ versionId });
       toast.success(`Restored v${version}`);
+      setConfirmVersionId(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't restore version");
     } finally {
@@ -196,7 +198,7 @@ export default function HistoryDialog({
                       <Download data-icon="inline-start" />
                       Download
                     </Button>
-                    <AlertDialog>
+                    <AlertDialog open={confirmVersionId === version._id} onOpenChange={(next) => setConfirmVersionId(next ? version._id : null)}>
                       <AlertDialogTrigger
                         render={<Button type="button" size="sm" variant="brand" disabled={busy || Boolean(data.restoreBlockedReason)} />}
                       >

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import type { Id } from "../convex/_generated/dataModel";
 import {
   ANY_COLOUR, NOT_ASSIGNED, applyFilters, beforeIdAfterDrop, bucketOf,
-  optionCounts, sortBuckets, type FilterPill, type QueueViewRow,
+  optionCounts, partitionPrinters, sortBuckets, type FilterPill, type QueueViewRow,
 } from "../components/admin/queue-view";
 
 function row(id: string, patch: Partial<QueueViewRow> = {}): QueueViewRow {
@@ -20,6 +20,7 @@ describe("queue view buckets", () => {
   test("maps lifecycle states, withdrawn rows, and vote-only approval", () => {
     expect(bucketOf(row("review"))).toBe("review");
     expect(bucketOf(row("withdrawn", { printRequested: false, participantNotice: { kind: "withdrawn", at: 2 } }))).toBe("withdrawn");
+    expect(bucketOf(row("re-requested", { printRequested: true, participantNotice: { kind: "withdrawn", at: 3 } }))).toBe("review");
     expect(bucketOf(row("vote", { printRequested: false, votingApprovedAt: 4 }))).toBe("done");
     expect(bucketOf(row("queued", { status: "queued" }))).toBe("queued");
     expect(bucketOf(row("printing", { status: "printing" }))).toBe("printing");
@@ -66,6 +67,40 @@ describe("queue view filters", () => {
       [NOT_ASSIGNED]: 0,
       "Muon 1": 1,
       Creality: 1,
+    });
+  });
+});
+
+describe("partitionPrinters", () => {
+  const inService = [{ name: "Muon 1" }, { name: "Creality" }, { name: "Ultimaker" }];
+
+  test("Any colour puts every in-service printer in other", () => {
+    expect(partitionPrinters(inService, ["Muon 1", "Creality", "Ultimaker"], undefined)).toEqual({
+      matching: [],
+      other: ["Muon 1", "Creality", "Ultimaker"],
+    });
+    expect(partitionPrinters(inService, inService.map((p) => p.name), "")).toEqual({
+      matching: [],
+      other: ["Muon 1", "Creality", "Ultimaker"],
+    });
+  });
+
+  test("a colour splits matching from other", () => {
+    expect(partitionPrinters(inService, ["muon 1"], "Gold")).toEqual({
+      matching: ["Muon 1"],
+      other: ["Creality", "Ultimaker"],
+    });
+  });
+
+  test("paused printers are already excluded by the in-service list", () => {
+    const available = inService.filter(({ name }) => name !== "Ultimaker");
+    expect(partitionPrinters(available, ["Muon 1"], "Gold")).toEqual({
+      matching: ["Muon 1"],
+      other: ["Creality"],
+    });
+    expect(partitionPrinters(available, available.map((p) => p.name), undefined)).toEqual({
+      matching: [],
+      other: ["Muon 1", "Creality"],
     });
   });
 });

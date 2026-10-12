@@ -168,8 +168,10 @@ export default function SettingsManager() {
     try {
       await update(patch);
       toast.success(message);
+      return true;
     } catch (err) {
       toast.error(errorMessage(err));
+      return false;
     }
   };
 
@@ -210,13 +212,13 @@ export default function SettingsManager() {
   function savePrinters(next: Printer[], message: string, palette = colours) {
     const cleaned = cleanPrinters(next, palette);
     setPrintersDraft(cleaned);
-    void save({ printers: cleaned }, message);
+    void save({ printers: cleaned }, message).then((ok) => ok && setPrintersDraft(null));
   }
 
   function savePalette(next: string[], message: string) {
     const updatedPrinters = cleanPrinters(currentPrinters, next);
     setPrintersDraft(updatedPrinters);
-    void save({ colours: next, printers: updatedPrinters }, message);
+    void save({ colours: next, printers: updatedPrinters }, message).then((ok) => ok && setPrintersDraft(null));
   }
 
   function confirmSettingsAction() {
@@ -250,7 +252,7 @@ export default function SettingsManager() {
     const base = current !== undefined && current > now ? current : now;
     const next = base + minutes * 60 * 1000;
     setDeadlineInput(formatLocalDateTime(next));
-    void save({ submissionsDeadline: next }, "Submission deadline updated");
+    void save({ submissionsDeadline: next }, "Submission deadline updated").then((ok) => ok && setDeadlineInput(null));
   }
 
   return (
@@ -291,7 +293,7 @@ export default function SettingsManager() {
                 return;
               }
               setDeadlineInput(deadlineValue);
-              void save({ submissionsDeadline: deadline }, "Submission deadline saved");
+              void save({ submissionsDeadline: deadline }, "Submission deadline saved").then((ok) => ok && setDeadlineInput(null));
             }}
           >
             <Field className="w-full max-w-sm">
@@ -319,7 +321,7 @@ export default function SettingsManager() {
               variant="ghost"
               onClick={() => {
                 setDeadlineInput("");
-                void save({ submissionsDeadline: null }, "Submission deadline cleared");
+                void save({ submissionsDeadline: null }, "Submission deadline cleared").then((ok) => ok && setDeadlineInput(null));
               }}
             >
               Clear
@@ -343,7 +345,7 @@ export default function SettingsManager() {
               event.preventDefault();
               const announcement = announcementValue.trim();
               setAnnouncementInput(announcement);
-              void save({ announcement }, "Blast sent");
+              void save({ announcement }, "Blast sent").then((ok) => ok && setAnnouncementInput(null));
             }}
           >
             <Field className="w-full">
@@ -568,7 +570,7 @@ export default function SettingsManager() {
               y: String(maxDimensionsMm.y),
               z: String(maxDimensionsMm.z),
             });
-            void save({ maxDimensionsMm }, "Maximum dimensions saved");
+            void save({ maxDimensionsMm }, "Maximum dimensions saved").then((ok) => ok && setDimensionInput(null));
           }}
         >
           {(["x", "y", "z"] as const).map((axis) => (
@@ -597,8 +599,7 @@ export default function SettingsManager() {
             event.preventDefault();
             const mb = Number(maxMb ?? currentMb);
             if (!Number.isFinite(mb) || mb <= 0) return toast.error("Enter a size in MB");
-            void save({ maxFileBytes: Math.round(mb * 1024 * 1024) }, `Max file size set to ${mb} MB`);
-            setMaxMb(null);
+            void save({ maxFileBytes: Math.round(mb * 1024 * 1024) }, `Max file size set to ${mb} MB`).then((ok) => ok && setMaxMb(null));
           }}
         >
           <Field className="max-w-xs">
@@ -727,7 +728,7 @@ export default function SettingsManager() {
                 colourCodes: nextCodes,
               },
               `${name} added`
-            );
+            ).then((ok) => ok && setPrintersDraft(null));
             setNewColour("");
             setNewColourHex("#888888");
             setNewColourHexTouched(false);

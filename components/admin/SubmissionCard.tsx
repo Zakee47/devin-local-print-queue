@@ -24,6 +24,7 @@ import RejectDialog from "@/components/admin/RejectDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
 import HistoryDialog from "@/components/admin/HistoryDialog";
 import { errorMessage } from "@/lib/errors";
+import { isWithdrawnRow } from "@/components/admin/queue-view";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -202,7 +203,7 @@ export default function SubmissionCard({
   const desktop = useSyncExternalStore(desktopSubscribe, desktopSnapshot, desktopServerSnapshot);
   const now = useNow(30_000);
   const voteOnly = row.designEntry && !row.printRequested;
-  const withdrawn = row.participantNotice?.kind === "withdrawn";
+  const withdrawn = isWithdrawnRow(row);
   const approvedForVoting = row.status === "submitted" && voteOnly && row.votingApprovedAt !== undefined;
   const alreadyHasPrint = row.participantPrint !== null && row.participantPrint.printCode !== row.printCode;
   const printBadge = voteOnly
@@ -222,8 +223,8 @@ export default function SubmissionCard({
 
   async function run(label: string, fn: () => Promise<unknown>) {
     setBusy(true);
-    try { await fn(); toast.success(`${row.printCode} ${label}`); }
-    catch (error) { toast.error(errorMessage(error, "Action failed")); }
+    try { await fn(); toast.success(`${row.printCode} ${label}`); return true; }
+    catch (error) { toast.error(errorMessage(error, "Action failed")); return false; }
     finally { setBusy(false); }
   }
 
@@ -242,9 +243,11 @@ export default function SubmissionCard({
             : approvedForVoting ? "Approved for voting"
               : `waiting ${formatStatusDuration(row._creationTime, now)}`;
   const printerSetting = row.printer
-    ? settingsPrinters.find((printer) => printer.name.toLowerCase() === row.printer?.toLowerCase())
+    ? settingsPrinters.find((printer) => printer.name.trim().toLowerCase() === row.printer?.trim().toLowerCase())
     : undefined;
   const printerPaused = Boolean(printerSetting?.outOfService);
+  const printerMissing = Boolean(row.printer) && !printerSetting;
+  const printerAttention = printerPaused || printerMissing;
   const timeline = [
     ["Submitted", row._creationTime, true],
     ["Queued", row.queuedAt, row.queuedAt !== undefined],
@@ -279,15 +282,15 @@ export default function SubmissionCard({
 
         <div className="col-span-2 min-w-0 sm:col-span-1">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-            <h3 className="min-w-0 text-[15px] font-semibold">{row.title}</h3>
+            <h3 className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-[15px] font-semibold">{row.title}</h3>
             {row.version > 1 ? <CardBadge>v{row.version}</CardBadge> : null}
             {printBadge ? <CardBadge tone={printBadge === "No print yet" ? "filled" : "outline"}>{printBadge}</CardBadge> : null}
             {voteOnly ? <CardBadge><Trophy className="size-3" />Vote only</CardBadge> : null}
             {showVotingBadge ? <CardBadge tone={row.designRemoved ? "red" : "outline"}><Trophy className="size-3" />{row.designRemoved ? "Removed from voting" : "Not in voting"}</CardBadge> : null}
             {row.oversize ? <CardBadge tone="red">Over size limit</CardBadge> : null}
           </div>
-          <p className="mt-1 text-sm font-medium text-foreground">{row.participantUsername}</p>
-          <p className="text-sm text-muted-foreground">{row.participantName}</p>
+          <p className="mt-1 truncate text-sm font-medium text-foreground">{row.participantUsername}</p>
+          <p className="truncate text-sm text-muted-foreground">{row.participantName}</p>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <i
@@ -299,7 +302,7 @@ export default function SubmissionCard({
               {row.colour || "Any colour"}
             </span>
             {row.dimensionsMm ? <span>{formatDimensions(row.dimensionsMm)}</span> : null}
-            {row.printer ? <span className={cn("inline-flex items-center gap-1", printerPaused ? "text-amber-700 dark:text-amber-300" : "")}>{row.status === "done" ? <Printer className="size-3.5" /> : null}{row.printer}{printerPaused ? " · paused" : ""}</span> : null}
+            {row.printer ? <span className={cn("inline-flex items-center gap-1", printerAttention ? "text-amber-700 dark:text-amber-300" : "")}>{row.status === "done" ? <Printer className="size-3.5" /> : null}{row.printer}{printerPaused ? " · paused" : printerMissing ? " · pick another" : ""}</span> : null}
             <span>{row.kind.toUpperCase()} · {formatBytes(row.sizeBytes)}</span>
             {row.status === "queued" ? <span>queued {formatDuration(row.queuedAt ?? row._creationTime, now)} ago</span> : null}
           </div>
@@ -323,8 +326,8 @@ export default function SubmissionCard({
           ) : null}
           {row.status === "queued" ? (
             <>
-              <PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} settingsPrinters={settingsPrinters} paused={printerPaused} onChange={(e) => void run("printer updated", () => setPrinter({ id: row._id, printer: e.currentTarget.value || undefined }))} />
-              <Button size="sm" disabled={busy || !row.printer || printerPaused} title={!row.printer ? "Assign a printer first" : printerPaused ? "Pick another printer first" : undefined} onClick={() => run("printing", () => startPrinting({ id: row._id }))}><Printer data-icon="inline-start" />Start printing</Button>
+              <PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} settingsPrinters={settingsPrinters} paused={printerAttention} onChange={(e) => void run("printer updated", () => setPrinter({ id: row._id, printer: e.currentTarget.value || undefined }))} />
+              <Button size="sm" disabled={busy || !row.printer || printerAttention} title={!row.printer ? "Assign a printer first" : printerAttention ? "Pick another printer first" : undefined} onClick={() => run("printing", () => startPrinting({ id: row._id }))}><Printer data-icon="inline-start" />Start printing</Button>
             </>
           ) : null}
           {row.status === "printing" ? (
@@ -349,7 +352,7 @@ export default function SubmissionCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
               {row.status !== "submitted" || approvedForVoting ? (
-                <DropdownMenuItem onClick={() => void run("moved back", () => moveBack({ id: row._id }))}>
+                <DropdownMenuItem disabled={busy} onClick={() => void run("moved back", () => moveBack({ id: row._id }))}>
                   <Undo2 />{approvedForVoting ? "Move back to Needs review" : "Move back"}
                 </DropdownMenuItem>
               ) : null}
@@ -361,7 +364,7 @@ export default function SubmissionCard({
               ) : null}
               {row.status === "printing" || row.status === "done" ? <DropdownMenuItem onClick={() => setPrinterOpen(true)}><Printer />Change printer</DropdownMenuItem> : null}
               {row.designRemoved ? (
-                <DropdownMenuItem onClick={() => void run("restored to the competition", () => restoreToCompetition({ id: row._id }))}><Trophy />Restore to competition</DropdownMenuItem>
+                <DropdownMenuItem disabled={busy} onClick={() => void run("restored to the competition", () => restoreToCompetition({ id: row._id }))}><Trophy />Restore to competition</DropdownMenuItem>
               ) : null}
               <DropdownMenuItem onClick={() => download(row._id, row.downloadName).catch((e) => toast.error(errorMessage(e, "Download failed")))}><Download />Download file</DropdownMenuItem>
               {isOwner ? <DropdownMenuItem onClick={() => setHistoryOpen(true)}><History />History</DropdownMenuItem> : null}
@@ -386,16 +389,16 @@ export default function SubmissionCard({
         </div>
       </div>
 
-      {printerPaused && (row.status === "queued" || row.status === "printing") ? (
+      {printerAttention && (row.status === "queued" || row.status === "printing") ? (
         <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           <Pause className="size-4 shrink-0" />
-          <span><strong>{row.printer} is paused</strong>: not taking new jobs. Pick another printer.</span>
+          <span>{printerPaused ? <><strong>{row.printer} is paused</strong>: not taking new jobs. Pick another printer.</> : <><strong>{row.printer} is not in Settings</strong>: pick another printer.</>}</span>
         </div>
       ) : null}
       {row.colour && !row.printersWithColour.length && row.status !== "done" && !voteOnly && !withdrawn ? <div className="border-t border-amber-200 px-4 py-2 text-sm text-muted-foreground">No printer has this colour loaded</div> : null}
-      {row.participantNotice ? <Alert className="m-3"><AlertDescription>{row.participantNotice.kind === "withdrawn" ? "Withdrawn by participant: print request removed" : row.participantNotice.kind === "replaced" ? `Replaced by participant (v${row.participantNotice.version}), needs re-approval` : `Restored by owner (v${row.participantNotice.version}), needs re-approval · ${formatDateTime(row.participantNotice.at)}`}</AlertDescription></Alert> : null}
+      {row.participantNotice && (row.participantNotice.kind !== "withdrawn" || withdrawn) ? <Alert className="m-3"><AlertDescription>{row.participantNotice.kind === "withdrawn" ? "Withdrawn by participant: print request removed" : row.participantNotice.kind === "replaced" ? `Replaced by participant (v${row.participantNotice.version}), needs re-approval` : `Restored by owner (v${row.participantNotice.version}), needs re-approval · ${formatDateTime(row.participantNotice.at)}`}</AlertDescription></Alert> : null}
       {row.status === "rejected" && row.rejectionReason ? <p className="border-t px-4 py-2 text-sm text-destructive">{row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"} · {row.rejectionReason}</p> : null}
-      {row.notes ? <div className="mx-3 mb-3 rounded-lg bg-muted px-3 py-2 text-sm text-foreground"><span className="mr-2 font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">NOTE FROM PARTICIPANT</span>{row.notes}</div> : null}
+      {row.notes ? <div className="mx-3 mb-3 break-words [overflow-wrap:anywhere] rounded-lg bg-muted px-3 py-2 text-sm text-foreground"><span className="mr-2 font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">NOTE FROM PARTICIPANT</span>{row.notes}</div> : null}
 
       {expanded ? (
         <div className="grid gap-5 border-t bg-muted/20 p-4 md:grid-cols-[200px_minmax(0,1fr)_minmax(0,1fr)]">
@@ -457,13 +460,13 @@ export default function SubmissionCard({
       <RejectDialog submissionId={row._id} printCode={row.printCode} open={rejecting} onOpenChange={setRejecting} kind={rejectKind} designEntry={row.designEntry && !row.designRemoved} />
       <HistoryDialog submissionId={row._id} open={historyOpen} onOpenChange={setHistoryOpen} trigger={false} />
       <AlertDialog open={removeOpen} onOpenChange={setRemoveOpen}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Remove {row.printCode} from the competition?</AlertDialogTitle><AlertDialogDescription>Its votes no longer count. Printing is unaffected.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => void run("removed from the competition", () => removeFromCompetition({ id: row._id }))}>Remove from competition</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Remove {row.printCode} from the competition?</AlertDialogTitle><AlertDialogDescription>Its votes no longer count. Printing is unaffected.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => void run("removed from the competition", () => removeFromCompetition({ id: row._id })).then((ok) => ok && setRemoveOpen(false))}>Remove from competition</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
       <AlertDialog open={restoreOpen} onOpenChange={setRestoreOpen}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Restore {row.printCode}&apos;s print request?</AlertDialogTitle><AlertDialogDescription>{row.restorePrint && "movesFrom" in row.restorePrint && row.restorePrint.movesFrom ? `This moves the print request back from ${row.restorePrint.movesFrom}.` : "This restores the participant's withdrawn print request."}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={() => void run("print request restored", () => restorePrintRequest({ id: row._id }))}>Restore print request</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Restore {row.printCode}&apos;s print request?</AlertDialogTitle><AlertDialogDescription>{row.restorePrint && "movesFrom" in row.restorePrint && row.restorePrint.movesFrom ? `This moves the print request back from ${row.restorePrint.movesFrom}.` : "This restores the participant's withdrawn print request."}</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={() => void run("print request restored", () => restorePrintRequest({ id: row._id })).then((ok) => ok && setRestoreOpen(false))}>Restore print request</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
       </AlertDialog>
-      <Dialog open={printerOpen} onOpenChange={setPrinterOpen}><DialogContent><DialogHeader><DialogTitle>Change printer · {row.printCode}</DialogTitle><DialogDescription>Choose a printer for this job.</DialogDescription></DialogHeader><PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} settingsPrinters={settingsPrinters} paused={printerPaused} onChange={(e) => { const printer = e.currentTarget.value; void run("printer updated", () => setPrinter({ id: row._id, printer: printer || undefined })).then(() => setPrinterOpen(false)); }} /><DialogFooter><Button variant="outline" onClick={() => setPrinterOpen(false)}>Close</Button></DialogFooter></DialogContent></Dialog>
-      <Dialog open={positionOpen} onOpenChange={setPositionOpen}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle>Move {row.printCode}</DialogTitle><DialogDescription>Choose a queue position from 1 to {queueOrder.length}.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor={`position-${row._id}`}>Position</FieldLabel><input id={`position-${row._id}`} type="number" min={1} max={queueOrder.length} value={targetPosition} onChange={(e) => setTargetPosition(e.target.value)} className="h-9 rounded-lg border border-input bg-background px-3" /></Field><DialogFooter><Button variant="outline" onClick={() => setPositionOpen(false)}>Cancel</Button><Button disabled={busy || Number(targetPosition) < 1 || Number(targetPosition) > queueOrder.length} onClick={() => void run("moved", () => placeAt(Number(targetPosition))).then(() => setPositionOpen(false))}>Move</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={printerOpen} onOpenChange={setPrinterOpen}><DialogContent><DialogHeader><DialogTitle>Change printer · {row.printCode}</DialogTitle><DialogDescription>Choose a printer for this job.</DialogDescription></DialogHeader><PrinterSelect row={row} value={row.printer ?? ""} disabled={busy} options={printerOptions} settingsPrinters={settingsPrinters} paused={printerPaused} onChange={(e) => { const printer = e.currentTarget.value; void run("printer updated", () => setPrinter({ id: row._id, printer: printer || undefined })).then((ok) => ok && setPrinterOpen(false)); }} /><DialogFooter><Button variant="outline" onClick={() => setPrinterOpen(false)}>Close</Button></DialogFooter></DialogContent></Dialog>
+      <Dialog open={positionOpen} onOpenChange={setPositionOpen}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle>Move {row.printCode}</DialogTitle><DialogDescription>Choose a queue position from 1 to {queueOrder.length}.</DialogDescription></DialogHeader><Field><FieldLabel htmlFor={`position-${row._id}`}>Position</FieldLabel><input id={`position-${row._id}`} type="number" min={1} max={queueOrder.length} value={targetPosition} onChange={(e) => setTargetPosition(e.target.value)} className="h-9 rounded-lg border border-input bg-background px-3" /></Field><DialogFooter><Button variant="outline" onClick={() => setPositionOpen(false)}>Cancel</Button><Button disabled={busy || Number(targetPosition) < 1 || Number(targetPosition) > queueOrder.length} onClick={() => void run("moved", () => placeAt(Number(targetPosition))).then((ok) => ok && setPositionOpen(false))}>Move</Button></DialogFooter></DialogContent></Dialog>
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent
           className="w-[calc(100vw-2rem)] max-w-3xl gap-0 overflow-y-auto p-0 sm:max-w-3xl"
