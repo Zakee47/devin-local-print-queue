@@ -10,6 +10,7 @@
 
 import type * as accounts from "../accounts.js";
 import type * as admins from "../admins.js";
+import type * as checkin from "../checkin.js";
 import type * as entries from "../entries.js";
 import type * as guests from "../guests.js";
 import type * as history from "../history.js";
@@ -34,6 +35,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   accounts: typeof accounts;
   admins: typeof admins;
+  checkin: typeof checkin;
   entries: typeof entries;
   guests: typeof guests;
   history: typeof history;
