@@ -570,7 +570,7 @@ export const colourDemand = query({
     );
     const byColour = new Map<string, { colour: string | null; waiting: number }>();
     for (const submission of [...submitted, ...queued]) {
-      if (isDeleted(submission) || isApprovedForVoting(submission)) continue;
+      if (isDeleted(submission) || !submission.printRequested) continue;
       const colour = submission.colour?.trim() || null;
       const key = colour?.toLowerCase() ?? "";
       const current = byColour.get(key);

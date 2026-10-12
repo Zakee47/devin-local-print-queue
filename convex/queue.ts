@@ -82,8 +82,7 @@ function expectStatus(submission: Doc<"submissions">, ...allowed: Doc<"submissio
   }
 }
 
-// Printing and done rows keep their slot so Move back can return them to it;
-// new slots go after all of them so a slot is never handed out twice.
+// Allocates a slot after every queued, printing, or completed row.
 async function nextQueueOrder(ctx: MutationCtx) {
   const lasts = await Promise.all(
     PIPELINE.map((status) =>
@@ -97,12 +96,13 @@ async function nextQueueOrder(ctx: MutationCtx) {
   return Math.max(0, ...lasts.map((last) => last?.queueOrder ?? 0)) + 1;
 }
 
-async function queueSlotTaken(ctx: MutationCtx, queueOrder: number) {
-  const holder = await ctx.db
+async function frontQueueOrder(ctx: MutationCtx) {
+  const firstQueued = await ctx.db
     .query("submissions")
-    .withIndex("by_status_queueOrder", (q) => q.eq("status", "queued").eq("queueOrder", queueOrder))
+    .withIndex("by_status_queueOrder", (q) => q.eq("status", "queued"))
+    .order("asc")
     .first();
-  return holder !== null;
+  return (firstQueued?.queueOrder ?? (await nextQueueOrder(ctx))) - 1;
 }
 
 // Every submission with its participant and a preview URL, for the board.
@@ -505,10 +505,7 @@ export const moveBack = mutation({
           status: "queued",
           printingAt: undefined,
           printer: undefined,
-          queueOrder:
-            submission.queueOrder !== undefined && !(await queueSlotTaken(ctx, submission.queueOrder))
-              ? submission.queueOrder
-              : await nextQueueOrder(ctx),
+          queueOrder: await frontQueueOrder(ctx),
         });
         break;
       case "queued":
@@ -771,6 +768,7 @@ export const exportRows = query({
         likes,
         votes,
         rejectionReason: s.rejectionReason ?? "",
+        votingApprovedAt: isApprovedForVoting(s) ? s.votingApprovedAt : undefined,
         createdAt: s._creationTime,
       });
     }

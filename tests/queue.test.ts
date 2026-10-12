@@ -74,10 +74,12 @@ async function setup() {
 }
 
 describe("colour demand", () => {
-  test("counts submitted and queued rows by colour, including vote-only rows, but excludes terminal and deleted rows", async () => {
+  test("counts only submitted and queued print requests by colour", async () => {
     const { t, participantId, otherId, addSubmission } = await setup();
     const first = await addSubmission(participantId, { colour: "Crimson Red" });
     await addSubmission(otherId, { colour: "crimson red", printRequested: false });
+    const approvedVoteOnly = await addSubmission(participantId, { colour: "crimson red", printRequested: false });
+    const withdrawn = await addSubmission(otherId, { colour: "crimson red", printRequested: false });
     await addSubmission(participantId, { colour: "Red" });
     const queued = await addSubmission(otherId, { colour: "CRIMSON RED" });
     await addSubmission(participantId, { colour: "Gold", status: "printing" });
@@ -88,13 +90,17 @@ describe("colour demand", () => {
       await ctx.db.patch(first, { colour: undefined });
       await ctx.db.patch(queued, { status: "queued", queueOrder: 1 });
       await ctx.db.patch(deleted, { deletedAt: Date.now() });
+      await ctx.db.patch(approvedVoteOnly, { votingApprovedAt: Date.now() });
+      await ctx.db.patch(withdrawn, {
+        participantNotice: { kind: "withdrawn", version: 1, at: Date.now() },
+      });
     });
 
     const demand = await t.query(api.submissions.colourDemand, {});
     expect(demand).toEqual(
       expect.arrayContaining([
         { colour: null, waiting: 1 },
-        { colour: "crimson red", waiting: 2 },
+        { colour: "CRIMSON RED", waiting: 1 },
         { colour: "Red", waiting: 1 },
       ])
     );
@@ -603,6 +609,31 @@ describe("printer assignments", () => {
     await as.mutation(api.queue.moveBack, { id });
     expect((await get(id))?.status).toBe("queued");
     expect((await get(id))?.printer).toBeUndefined();
+  });
+
+  test("Move back from Printing puts the job first in the queue and both views report #1", async () => {
+    const { t, as, participantId, addSubmission } = await setup();
+    const a = await addSubmission(participantId, { status: "queued" });
+    const b = await addSubmission(participantId, { status: "queued" });
+    const c = await addSubmission(participantId, { status: "queued" });
+    const x = await addSubmission(participantId, { status: "printing" });
+    await t.run(async (ctx) => {
+      await ctx.db.patch(a, { queueOrder: 10 });
+      await ctx.db.patch(b, { queueOrder: 20 });
+      await ctx.db.patch(c, { queueOrder: 30 });
+      await ctx.db.patch(x, { queueOrder: 40 });
+    });
+
+    await as.mutation(api.queue.moveBack, { id: x });
+
+    const queued = (await as.query(api.queue.board, {}))
+      .filter((row) => row.status === "queued")
+      .sort((left, right) => (left.queueOrder ?? 0) - (right.queueOrder ?? 0));
+    expect(queued.map((row) => row._id)).toEqual([x, a, b, c]);
+    expect(queued[0]._id).toBe(x);
+    expect(queued[0].queueOrder).toBeLessThan(queued[1].queueOrder!);
+    const participantRows = await t.withIdentity(guest).query(api.submissions.mine, {});
+    expect(participantRows?.find((row) => row._id === x)?.queuePosition).toBe(1);
   });
 
   test("multiple jobs can print on the same or different printers", async () => {
