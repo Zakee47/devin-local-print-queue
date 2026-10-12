@@ -5,7 +5,6 @@ import { FileUp, Search, TriangleAlert, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { parseGuestCsv } from "@/lib/guest-csv";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -24,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useUndoableRemoval } from "@/components/admin/useUndoableRemoval";
 import { errorMessage } from "@/lib/errors";
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
@@ -42,13 +42,13 @@ export default function GuestsManager() {
   const importCsv = useMutation(api.guests.importCsv);
   const addGuest = useMutation(api.guests.addGuest);
   const removeGuest = useMutation(api.guests.removeGuest);
+  const { pending, schedule } = useUndoableRemoval();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [guestName, setGuestName] = useState("");
   const [addingGuest, setAddingGuest] = useState(false);
-  const [removing, setRemoving] = useState<Id<"guests"> | null>(null);
 
   if (role === undefined) return <Skeleton className="h-20 rounded-xl" />;
   if (role !== "owner") {
@@ -80,21 +80,13 @@ export default function GuestsManager() {
     }
   }
 
-  async function handleRemoveGuest(id: Id<"guests">, email: string) {
-    setRemoving(id);
-    try {
-      await removeGuest({ id });
-      toast.success(`${email} removed`);
-    } catch (err) {
-      toast.error(errorMessage(err, "Couldn't remove guest"));
-    } finally {
-      setRemoving(null);
-    }
-  }
-
   const q = search.trim().toLowerCase();
   const filtered =
-    guests?.filter((g) => !q || g.email.includes(q) || g.name?.toLowerCase().includes(q)) ?? [];
+    guests?.filter(
+      (g) =>
+        !pending.has(g._id) &&
+        (!q || g.email.includes(q) || g.name?.toLowerCase().includes(q))
+    ) ?? [];
   const registeredCount = guests?.filter((g) => g.registered).length ?? 0;
 
   return (
@@ -236,7 +228,6 @@ export default function GuestsManager() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={removing === g._id}
                             />
                           }
                         >
@@ -251,14 +242,21 @@ export default function GuestsManager() {
                               {!g.manual
                                 ? " They'll come back if they're in your next guest-list upload."
                                 : null}
+                              {" "}You&apos;ll have 15 seconds to undo.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                               variant="destructive"
-                              disabled={removing === g._id}
-                              onClick={() => void handleRemoveGuest(g._id, g.email)}
+                              onClick={() =>
+                                schedule({
+                                  id: g._id,
+                                  label: g.email,
+                                  run: () => removeGuest({ id: g._id }),
+                                  errorFallback: "Couldn't remove guest",
+                                })
+                              }
                             >
                               Remove
                             </AlertDialogAction>
