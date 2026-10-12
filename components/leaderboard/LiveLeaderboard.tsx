@@ -102,7 +102,7 @@ export default function LiveLeaderboard({
         ) : (
           <ol
             className={cn(
-              "flex min-h-0 flex-col",
+              "flex min-h-0 w-full min-w-0 flex-col",
               tv && "overflow-hidden",
               scrollable &&
                 "flex-1 overflow-y-auto lg:overscroll-contain max-lg:flex-none max-lg:max-h-[19.5rem]"
@@ -117,7 +117,7 @@ export default function LiveLeaderboard({
                   key={row.printCode}
                   ref={register(row.printCode)}
                   className={cn(
-                    "relative flex shrink-0 items-center border-b border-border/70 last:border-0",
+                    "relative flex w-full min-w-0 shrink-0 items-center border-b border-border/70 last:border-0",
                     tv ? "h-[64px] gap-4 px-3" : "h-14 gap-2 px-1 sm:gap-3 sm:px-2",
                     change?.votesDelta && change.votesDelta > 0 && "rank-flash",
                     change?.isNew && "animate-in fade-in slide-in-from-bottom-3",
@@ -140,7 +140,7 @@ export default function LiveLeaderboard({
                   >
                     {row.rank}
                   </span>
-                  <Swatch colour={row.colour} className={tv ? "relative z-10 size-6" : "relative z-10 size-4"} />
+                  <Swatch colour={row.colour} className={tv ? "relative z-10 size-6 shrink-0" : "relative z-10 size-4 shrink-0"} />
                   <div className="relative z-10 min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-1.5">
                       <p className={cn("min-w-0 truncate font-medium", tv ? "text-2xl" : "text-base")}>{row.title}</p>
@@ -150,7 +150,7 @@ export default function LiveLeaderboard({
                         </span>
                       ) : null}
                     </div>
-                    <p className={cn("truncate text-muted-foreground", tv ? "text-base" : "text-xs")}>
+                    <p className={cn("min-w-0 truncate text-muted-foreground", tv ? "text-base" : "text-xs")}>
                       {row.displayName}
                     </p>
                   </div>
@@ -219,7 +219,7 @@ export default function LiveLeaderboard({
             <p className={cn("mb-1 text-xs font-medium text-muted-foreground", tv && "text-sm")}>Your entry</p>
             <div
               className={cn(
-                "relative flex shrink-0 items-center rounded-lg bg-brand/5 ring-2 ring-brand/70",
+                "relative flex w-full min-w-0 shrink-0 items-center rounded-lg bg-brand/5 ring-2 ring-brand/70",
                 tv ? "h-[64px] gap-4 px-3" : "h-14 gap-2 px-1 sm:gap-3 sm:px-2"
               )}
             >
@@ -234,7 +234,7 @@ export default function LiveLeaderboard({
               >
                 {pinnedEntry.rank}
               </span>
-              <Swatch colour={null} className={tv ? "relative z-10 size-6" : "relative z-10 size-4"} />
+              <Swatch colour={null} className={tv ? "relative z-10 size-6 shrink-0" : "relative z-10 size-4 shrink-0"} />
               <div className="relative z-10 min-w-0 flex-1">
                 <p className={cn("truncate font-medium", tv ? "text-2xl" : "text-base")}>{pinnedEntry.title}</p>
                 <p className={cn("truncate text-muted-foreground", tv ? "text-base" : "text-xs")}>
