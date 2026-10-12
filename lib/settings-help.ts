@@ -53,14 +53,14 @@ export const SETTINGS_HELP = {
   },
   printers: {
     title: "Printers",
-    what: "The printers staff can assign prints to on the queue.",
+    what: "The printers staff can assign prints to on the queue, including whether each printer is paused.",
     on: {
       label: "Added:",
-      text: "Staff can pick it for a print on the queue, and you can tick the colours it has loaded.",
+      text: "Staff can pick it for a print on the queue and tick its loaded colours. Pause it when it is down.",
     },
     off: {
       label: "Removed:",
-      text: "It's no longer offered on the queue, and participants stop seeing it in the \"Loaded on\" hint.",
+      text: "It's no longer offered on the queue. Participants see colour availability and waiting counts, never printer names.",
     },
     note: "Prints already given a printer keep that name, even if you rename or remove it.",
   },
@@ -69,11 +69,11 @@ export const SETTINGS_HELP = {
     what: "Which palette colours are on this printer right now.",
     on: {
       label: "Ticked:",
-      text: "Participants who pick that colour see \"Loaded on\" this printer, and staff see it listed first on queue cards asking for that colour.",
+      text: "Staff see matching in-service printers first on queue cards asking for that colour. Participants see availability and waiting counts, never printer names.",
     },
     off: {
       label: "Unticked:",
-      text: "This printer isn't suggested for that colour. If no printer has it, participants see \"Not loaded on any printer right now\" but can still ask for it.",
+      text: "This printer isn't suggested for that colour. If no in-service printer has it, participants see that it's unavailable but can still ask for it.",
     },
     note: "Colour requests are not guaranteed. This is only a hint for participants and staff.",
   },
@@ -105,16 +105,16 @@ export const SETTINGS_HELP = {
   },
   colourPalette: {
     title: "Colour palette",
-    what: "The colours participants can ask for, in the order they're shown on /submit.",
+    what: "The colours participants can ask for, in the order they're shown on /submit, with optional custom colour codes.",
     on: {
       label: "Added:",
-      text: "It appears as a swatch on /submit and can be ticked as loaded on each printer.",
+      text: "It appears as a swatch on /submit; add a hex colour code to choose its exact swatch colour.",
     },
     off: {
       label: "Removed:",
       text: "Participants can't pick it any more and it's unticked on every printer. Uploads that already asked for it keep their request.",
     },
-    note: "Participants can always choose \"Any\". Colour requests are not guaranteed: they depend on which printer is free.",
+    note: "Participants can always choose \"Any\". They see availability and waiting counts, never printer names. Colour requests are not guaranteed.",
   },
   previews: {
     title: "Previews",

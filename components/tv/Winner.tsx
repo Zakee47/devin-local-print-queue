@@ -3,10 +3,11 @@
 import { Heart, Trophy } from "lucide-react";
 import type { TvWinner } from "@/convex/tv";
 import ModelViewer from "@/components/ModelViewer";
-import { swatchFor } from "@/lib/colours";
+import { useSwatch } from "@/lib/use-swatch";
 import Swatch from "./Swatch";
 
 export default function Winner({ winner, totalVotes }: { winner: TvWinner | null; totalVotes: number }) {
+  const swatch = useSwatch();
   return (
     <section className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-brand/60 bg-card">
       <div
@@ -28,13 +29,13 @@ export default function Winner({ winner, totalVotes }: { winner: TvWinner | null
             <div
               aria-hidden
               className="absolute inset-0 m-auto size-[560px] rounded-full opacity-30 blur-3xl"
-              style={{ backgroundColor: swatchFor(winner.colour ?? undefined) }}
+              style={{ backgroundColor: swatch(winner.colour ?? undefined) }}
             />
             {winner.file ? (
               <ModelViewer
                 url={winner.file.url}
                 kind={winner.file.kind}
-                colour={swatchFor(winner.colour ?? undefined)}
+                colour={swatch(winner.colour ?? undefined)}
                 className="absolute inset-0 aspect-auto h-full"
               />
             ) : (

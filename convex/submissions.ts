@@ -16,7 +16,15 @@ import { fileKindFromName, formatPrintCode } from "../lib/files";
 import { MAX_SUBMISSIONS_PER_PARTICIPANT, submissionsAreOpen, type Dimensions } from "../lib/event";
 import { fitsWithin, formatDimensions } from "../lib/dimensions";
 import { isPreviewImage, MAX_PREVIEW_BYTES } from "../lib/preview-image";
-import { currentVersion, isActive, isDeleted, isDesignEntry } from "./entries";
+import {
+  currentVersion,
+  gainPrintPatch,
+  logPrintAfterVotingApproval,
+  isActive,
+  isApprovedForVoting,
+  isDeleted,
+  isDesignEntry,
+} from "./entries";
 import { planRoles, roleOf, rolesOf, type RoleFile } from "../lib/roles";
 
 export const MAX_TITLE_LENGTH = 60;
@@ -286,8 +294,14 @@ async function applyOtherRoles(
     const fields = { designEntry: other.vote, printRequested: other.print };
     const patch = other.withdrawsPrint
       ? { ...fields, ...withdrawnFields(currentVersion(current), now, "withdrawn") }
-      : fields;
+      : {
+          ...fields,
+          ...(other.print && !current.printRequested ? gainPrintPatch(current) : {}),
+        };
     await ctx.db.patch(id, patch);
+    if (other.print && !current.printRequested) {
+      await logPrintAfterVotingApproval(ctx, participant.email, current);
+    }
     if (other.withdrawsPrint) {
       await auditParticipant(ctx, participant, "queue.withdrawn", id, "print removed");
     }
@@ -473,6 +487,7 @@ export const mine = query({
           designRemoved: s.designRemoved ?? false,
           designRemovedReason: s.designRemoved ? s.designRemovedReason : undefined,
           status: s.status,
+          votingApproved: isApprovedForVoting(s),
           rejectionReason: s.rejectionReason,
           rejectionKind: s.rejectionKind,
           dimensionsMm: s.dimensionsMm,
@@ -519,7 +534,13 @@ export const setRoles = mutation({
       await ctx.db.patch(id, { ...fields, ...withdrawnFields(currentVersion(submission), Date.now(), "withdrawn") });
       await auditParticipant(ctx, participant, "queue.withdrawn", id, "print removed");
     } else {
-      await ctx.db.patch(id, fields);
+      await ctx.db.patch(id, {
+        ...fields,
+        ...(plan.print && !submission.printRequested ? gainPrintPatch(submission) : {}),
+      });
+      if (plan.print && !submission.printRequested) {
+        await logPrintAfterVotingApproval(ctx, participant.email, submission);
+      }
     }
     const moved = plan.others.flatMap((other) => [
       ...(files.find((file) => file.id === other.id)?.vote && plan.vote
@@ -539,6 +560,32 @@ export const setRoles = mutation({
       "participant.roles",
       id,
       detail
+    );
+  },
+});
+
+export const colourDemand = query({
+  args: {},
+  handler: async (ctx) => {
+    const [submitted, queued] = await Promise.all(
+      (["submitted", "queued"] as const).map((status) =>
+        ctx.db
+          .query("submissions")
+          .withIndex("by_status", (q) => q.eq("status", status))
+          .collect()
+      )
+    );
+    const byColour = new Map<string, { colour: string | null; waiting: number }>();
+    for (const submission of [...submitted, ...queued]) {
+      if (isDeleted(submission) || !submission.printRequested) continue;
+      const colour = submission.colour?.trim() || null;
+      const key = colour?.toLowerCase() ?? "";
+      const current = byColour.get(key);
+      if (current) current.waiting += 1;
+      else byColour.set(key, { colour, waiting: 1 });
+    }
+    return [...byColour.values()].sort((a, b) =>
+      (a.colour ?? "").localeCompare(b.colour ?? "")
     );
   },
 });
@@ -598,6 +645,7 @@ export async function applyFile(
   const patch: Partial<Submission> = {
     ...file,
     version: nextVersion,
+    votingApprovedAt: undefined,
   };
   if (leftQueue) {
     Object.assign(patch, {
@@ -776,7 +824,9 @@ export const remove = mutation({
     await ctx.db.patch(next._id, {
       designEntry: isDesignEntry(next) || takeVote,
       printRequested: next.printRequested || takePrint,
+      ...(takePrint ? gainPrintPatch(next) : {}),
     });
+    if (takePrint) await logPrintAfterVotingApproval(ctx, participant.email, next);
     await auditParticipant(
       ctx,
       participant,

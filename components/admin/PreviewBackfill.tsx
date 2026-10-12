@@ -9,11 +9,12 @@ import { useFetchSubmissionFile } from "@/components/admin/download";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { swatchFor } from "@/lib/colours";
+import { useSwatch } from "@/lib/use-swatch";
 import { SETTINGS_HELP } from "@/lib/settings-help";
 import SettingHelp from "@/components/admin/SettingHelp";
 
 export default function PreviewBackfill() {
+  const swatch = useSwatch();
   const missing = useQuery(api.submissions.missingPreviews);
   const fetchSubmissionFile = useFetchSubmissionFile();
   const generatePreviewUploadUrl = useMutation(api.submissions.generatePreviewUploadUrl);
@@ -55,7 +56,7 @@ export default function PreviewBackfill() {
         const image = await renderModelSnapshot(
           model,
           submission.kind,
-          swatchFor(submission.colour)
+          swatch(submission.colour)
         );
         const previewStorageId = await uploadPreview(
           () => generatePreviewUploadUrl({}),

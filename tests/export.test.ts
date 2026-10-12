@@ -28,6 +28,7 @@ const row: ExportRow = {
   likes: 3,
   votes: 1,
   rejectionReason: "",
+  votingApprovedAt: undefined,
   createdAt: new Date("2026-10-01T19:35:00Z").getTime(),
 };
 
@@ -51,6 +52,7 @@ describe("exportCsvRows", () => {
       "deleted",
       "likes",
       "votes",
+      "Approved for voting only",
       "rejectionReason",
       "createdAt",
     ]);
@@ -71,6 +73,7 @@ describe("exportCsvRows", () => {
       "3",
       "1",
       "",
+      "",
       "2026-10-01T19:35:00.000Z",
     ]);
   });
@@ -78,6 +81,15 @@ describe("exportCsvRows", () => {
   test("false booleans render as 'false'", () => {
     const [, data] = exportCsvRows([{ ...row, printRequested: false }]);
     expect(data[8]).toBe("false");
+  });
+
+  test("formats the approved-for-voting timestamp as ISO and leaves it blank when absent", () => {
+    const [, approved] = exportCsvRows([
+      { ...row, votingApprovedAt: new Date("2026-10-02T12:00:00Z").getTime() },
+    ]);
+    expect(approved[15]).toBe("2026-10-02T12:00:00.000Z");
+    const [, notApproved] = exportCsvRows([row]);
+    expect(notApproved[15]).toBe("");
   });
 });
 

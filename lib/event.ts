@@ -16,7 +16,9 @@ export const ALLOWED_EXTENSIONS = ["stl", "3mf"] as const;
 export const DEFAULT_COLOURS = ["Black", "White", "Silver", "Gold", "Sea Green", "Sky Blue"];
 export const COLOUR_DISCLAIMER = "Colour requests depend on which printer is free and aren't guaranteed.";
 
-export type Printer = { name: string; colours: string[] };
+export type ColourCode = { name: string; hex: string };
+export type ColourDemand = { colour: string | null; waiting: number };
+export type Printer = { name: string; colours: string[]; outOfService?: boolean };
 export const DEFAULT_PRINTERS: Printer[] = [
   { name: "Creality", colours: [...DEFAULT_COLOURS] },
   { name: "Ultimaker", colours: [...DEFAULT_COLOURS] },

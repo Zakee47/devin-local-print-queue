@@ -88,6 +88,14 @@ test("maps printer palette colours to their swatches", () => {
   expect(swatchFor("Sky Blue")).toBe("#6ec3f4");
 });
 
+test("custom colour codes override known swatches without changing defaults", () => {
+  const codes = [{ name: "Crimson Red", hex: "#b3152f" }];
+  expect(swatchFor("Crimson Red", codes)).toBe("#b3152f");
+  expect(swatchFor(" crimson red ", codes)).toBe("#b3152f");
+  expect(swatchFor("Gold", codes)).toBe("#d4a93a");
+  expect(swatchFor(undefined, codes)).toBe("#467bf7");
+});
+
 describe("admin roles and settings permissions", () => {
   test("distinguishes owner, staff and stranger; staff cannot manage admins", async () => {
     process.env.OWNER_EMAIL = " OWNER@example.com ";
@@ -150,6 +158,36 @@ describe("admin roles and settings permissions", () => {
     expect(settings.submissionsDeadline).toBeUndefined();
     expect(settings.announcement).toBeUndefined();
     expect(settings.announcementUpdatedAt).toBeUndefined();
+  });
+
+  test("staff can set printer service status and manage palette colour codes", async () => {
+    process.env.OWNER_EMAIL = "owner@example.com";
+    const t = convexTest(schema, modules);
+    await t.run((ctx) => ctx.db.insert("admins", { email: "staff@example.com" }));
+    const staff = t.withIdentity(identity("staff", "staff@example.com"));
+
+    await staff.mutation(api.settings.update, {
+      colours: ["Gold", "Crimson Red"],
+      printers: [{ name: "Muon 1", colours: ["Gold", "Crimson Red"], outOfService: true }],
+      colourCodes: [
+        { name: "Crimson Red", hex: "#B3152F" },
+        { name: " crimson red ", hex: "#AABBCC" },
+      ],
+    });
+
+    expect(await t.query(api.settings.get, {})).toMatchObject({
+      colours: ["Gold", "Crimson Red"],
+      printers: [{ name: "Muon 1", colours: ["Gold", "Crimson Red"], outOfService: true }],
+      colourCodes: [{ name: "crimson red", hex: "#aabbcc" }],
+    });
+    await expect(
+      staff.mutation(api.settings.update, {
+        colourCodes: [{ name: "Crimson Red", hex: "#bad" }],
+      })
+    ).rejects.toThrow(/Invalid colour code.*6-digit hex/);
+
+    await staff.mutation(api.settings.update, { colours: ["Gold"] });
+    expect((await staff.query(api.settings.get, {})).colourCodes).toEqual([]);
   });
 
   test("tracks blast changes, allows staff, enforces the length limit, and clears timestamps", async () => {

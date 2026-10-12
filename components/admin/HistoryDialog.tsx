@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Download, History, RotateCcw } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime } from "@/lib/datetime";
+import { auditActionLabel } from "@/lib/audit";
 
 type RestoreInfo = { ok: boolean; reason?: string };
 
@@ -34,13 +35,25 @@ export default function HistoryDialog({
   submissionId,
   deleted = false,
   restore,
+  open: controlledOpen,
+  onOpenChange,
+  trigger = true,
 }: {
   submissionId: Id<"submissions">;
   deleted?: boolean;
   restore?: RestoreInfo;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  trigger?: boolean | ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (value: boolean) => {
+    onOpenChange?.(value);
+    if (controlledOpen === undefined) setInternalOpen(value);
+  };
   const [busy, setBusy] = useState(false);
+  const [confirmVersionId, setConfirmVersionId] = useState<Id<"submissionVersions"> | null>(null);
   const data = useQuery(api.history.forSubmission, open ? { id: submissionId } : "skip");
   const restoreVersion = useMutation(api.history.restoreVersion);
   const restoreSubmission = useMutation(api.history.restoreSubmission);
@@ -52,6 +65,7 @@ export default function HistoryDialog({
     try {
       await restoreVersion({ versionId });
       toast.success(`Restored v${version}`);
+      setConfirmVersionId(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Couldn't restore version");
     } finally {
@@ -73,10 +87,14 @@ export default function HistoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
-        <History data-icon="inline-start" />
-        History
-      </DialogTrigger>
+      {trigger === true ? (
+        <DialogTrigger render={<Button type="button" variant="outline" size="sm" />}>
+          <History data-icon="inline-start" />
+          History
+        </DialogTrigger>
+      ) : trigger ? (
+        <DialogTrigger>{trigger}</DialogTrigger>
+      ) : null}
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
@@ -181,7 +199,7 @@ export default function HistoryDialog({
                       <Download data-icon="inline-start" />
                       Download
                     </Button>
-                    <AlertDialog>
+                    <AlertDialog open={confirmVersionId === version._id} onOpenChange={(next) => setConfirmVersionId(next ? version._id : null)}>
                       <AlertDialogTrigger
                         render={<Button type="button" size="sm" variant="brand" disabled={busy || Boolean(data.restoreBlockedReason)} />}
                       >
@@ -215,7 +233,7 @@ export default function HistoryDialog({
                 <div key={row._id} className="flex flex-wrap gap-x-2 text-xs">
                   <time className="text-muted-foreground">{formatDateTime(row.at)}</time>
                   <span className="font-medium">{row.actor}</span>
-                  <span>{row.action}</span>
+                  <span>{auditActionLabel(row.action)}</span>
                   {row.detail ? <span className="text-muted-foreground">{row.detail}</span> : null}
                 </div>
               )) : <p className="text-sm text-muted-foreground">No audit events.</p>}

@@ -1,3 +1,5 @@
+import type { ColourCode } from "@/lib/event";
+
 // Maps palette names to swatch/preview colours; unknown names fall back to
 // being used as CSS colour strings directly.
 const SWATCHES: Record<string, string> = {
@@ -18,7 +20,10 @@ const SWATCHES: Record<string, string> = {
   pink: "#ef7fb4",
 };
 
-export function swatchFor(colour?: string) {
+export function swatchFor(colour?: string | null, codes?: ColourCode[]) {
   if (!colour) return "#467bf7";
-  return SWATCHES[colour.trim().toLowerCase()] ?? colour;
+  const key = colour.trim().toLowerCase();
+  return codes?.find((code) => code.name.trim().toLowerCase() === key)?.hex ??
+    SWATCHES[key] ??
+    colour;
 }

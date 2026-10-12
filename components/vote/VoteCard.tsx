@@ -8,7 +8,7 @@ import ModelPreview from "@/components/ModelPreview";
 import StageChip from "@/components/vote/StageChip";
 import VoteStamp from "@/components/vote/VoteStamp";
 import { Button } from "@/components/ui/button";
-import { swatchFor } from "@/lib/colours";
+import { useSwatch } from "@/lib/use-swatch";
 import { cn } from "@/lib/utils";
 
 export default function VoteCard({
@@ -32,7 +32,8 @@ export default function VoteCard({
   ownStanding?: { rank: number; totalEntries: number; votes: number };
   onOpen?: () => void;
 }) {
-  const colour = swatchFor(entry.colour);
+  const swatch = useSwatch();
+  const colour = swatch(entry.colour);
   return (
     <li
       className={cn(

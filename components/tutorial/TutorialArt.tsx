@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowDownToLine, Check, File, Info, Printer, Trophy, Tv, Upload } from "lucide-react";
+import { AlertCircle, ArrowDownToLine, Check, File, Filter, Info, MessageSquareText, Pause, Printer, Settings, Trophy, Tv, Upload } from "lucide-react";
 import type { TutorialArt as TutorialArtKey } from "@/lib/tutorials";
 import VoteVsHeartArt from "./VoteVsHeartArt";
 
@@ -44,6 +44,36 @@ function RolesArt() {
           >
             <Icon aria-hidden className="size-5" />
             <span className="text-xs font-medium">{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ColourArt() {
+  const options = [
+    { label: "Any colour", waiting: "2 waiting", colour: null },
+    { label: "Sky Blue", waiting: "2 waiting", colour: "#76b8d8" },
+    { label: "Gold", waiting: "9 waiting", colour: "#d7a72e" },
+  ];
+  return (
+    <div className="tour-art tour-colour flex h-full items-center justify-center p-5">
+      <div className="grid w-full max-w-[22rem] grid-cols-3 gap-2">
+        {options.map(({ label, waiting, colour }, index) => (
+          <div
+            key={label}
+            className={`flex min-w-0 flex-col items-center gap-2 rounded-xl border p-3 text-center ${
+              index === 1 ? "border-brand bg-brand/10 ring-2 ring-brand/30" : "border-border bg-card"
+            }`}
+          >
+            <span
+              aria-hidden
+              className="size-6 rounded-full ring-1 ring-foreground/15"
+              style={{ backgroundColor: colour ?? "transparent" }}
+            />
+            <span className="text-[10px] font-medium text-foreground">{label}</span>
+            <span className="font-mono text-[9px] text-muted-foreground">{waiting}</span>
           </div>
         ))}
       </div>
@@ -137,6 +167,57 @@ function QueueArt() {
           <div className="tour-queue-card absolute top-2 left-2 flex h-12 w-[calc(25%-1rem)] min-w-14 items-center rounded-md border border-border bg-card px-1 shadow-sm">
             <span className="w-full text-center font-mono text-[10px]">KC-007</span>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FiltersArt() {
+  return (
+    <div className="tour-art tour-filters flex h-full items-center justify-center p-6">
+      <div className="w-full max-w-[22rem] rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+          <Filter aria-hidden className="size-3.5" />
+          All · Gold · Muon 1
+        </div>
+        <div className="mt-4 flex items-center justify-between rounded-lg border border-dashed border-border bg-background px-3 py-2 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1 font-medium">
+            <Pause aria-hidden className="size-3" />
+            Muon 1 · paused
+          </span>
+          <span>4 queued · 1 printing</span>
+        </div>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+          <span className="block h-full w-2/3 rounded-full bg-brand" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsArt() {
+  return (
+    <div className="tour-art flex h-full items-center justify-center p-5">
+      <div className="w-full max-w-[22rem] rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-2 text-xs font-medium">
+            <Settings aria-hidden className="size-4" />
+            Printer settings
+          </span>
+          <span className="flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+            <Pause aria-hidden className="size-3" />
+            Paused
+          </span>
+        </div>
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-background p-2">
+          <span aria-hidden className="size-4 rounded-full bg-[#d93636]" />
+          <span className="flex-1 text-[10px]">Red</span>
+          <code className="text-[10px] text-muted-foreground">#d93636</code>
+        </div>
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-[10px] text-muted-foreground">
+          <MessageSquareText aria-hidden className="size-3.5" />
+          Blast message to everyone
         </div>
       </div>
     </div>
@@ -251,6 +332,8 @@ export default function TutorialArt({ art }: { art: TutorialArtKey }) {
       return <UploadArt />;
     case "roles":
       return <RolesArt />;
+    case "colour":
+      return <ColourArt />;
     case "journey":
       return <JourneyArt />;
     case "voting":
@@ -261,6 +344,8 @@ export default function TutorialArt({ art }: { art: TutorialArtKey }) {
       return <HelpArt />;
     case "queue":
       return <QueueArt />;
+    case "filters":
+      return <FiltersArt />;
     case "download":
       return <DownloadArt />;
     case "review":
@@ -271,5 +356,7 @@ export default function TutorialArt({ art }: { art: TutorialArtKey }) {
       return <ChangedArt />;
     case "tv":
       return <TvArt />;
+    case "settings":
+      return <SettingsArt />;
   }
 }

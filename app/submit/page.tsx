@@ -78,6 +78,7 @@ export default function SubmitPage() {
   const { authReady, signedIn, canQuery } = useViewerAuth();
   const status = useQuery(api.participants.viewerStatus, canQuery ? {} : "skip");
   const myStanding = useQuery(api.votes.myStanding, canQuery ? {} : "skip");
+  const colourDemand = useQuery(api.submissions.colourDemand);
   const registered = status?.state === "registered";
   const submissions = useQuery(api.submissions.mine, registered ? {} : "skip");
   const settings = useQuery(api.settings.get);
@@ -251,6 +252,7 @@ export default function SubmitPage() {
                     submission={s}
                     colours={settings.colours}
                     printers={settings.printers}
+                    colourDemand={colourDemand}
                     active={roleFiles}
                     submissionsOpen={open}
                     votingOpen={settings.votingOpen}
@@ -275,6 +277,7 @@ export default function SubmitPage() {
                       <UploadCard
                         colours={settings.colours}
                         printers={settings.printers}
+                        colourDemand={colourDemand}
                         maxFileBytes={settings.maxFileBytes}
                         maxDimensionsMm={settings.maxDimensionsMm}
                         slotsLeft={slotsLeft}

@@ -1,7 +1,14 @@
 import { internalQuery, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireOwner } from "./admins";
-import { currentVersion, isActive, isDeleted, isDesignEntry } from "./entries";
+import {
+  currentVersion,
+  gainPrintPatch,
+  isActive,
+  isDeleted,
+  isDesignEntry,
+  logPrintAfterVotingApproval,
+} from "./entries";
 import { downloadFileName } from "../lib/files";
 import { applyFile, previewUrlOf } from "./submissions";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -215,7 +222,9 @@ export const restoreSubmission = mutation({
       deletedRoles: undefined,
       designEntry: plan.vote,
       printRequested: plan.print,
+      ...(plan.print ? gainPrintPatch(submission) : {}),
     });
+    if (plan.print) await logPrintAfterVotingApproval(ctx, actor, submission);
     const roles = [plan.vote ? "Vote" : "", plan.print ? "Print" : ""].filter(Boolean);
     await ctx.db.insert("auditLog", {
       actor,

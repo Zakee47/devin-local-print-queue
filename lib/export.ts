@@ -19,6 +19,7 @@ export type ExportRow = {
   likes: number;
   votes: number;
   rejectionReason: string;
+  votingApprovedAt?: number;
   createdAt: number;
 };
 
@@ -38,6 +39,7 @@ export const EXPORT_CSV_HEADERS = [
   "deleted",
   "likes",
   "votes",
+  "Approved for voting only",
   "rejectionReason",
   "createdAt",
 ];
@@ -61,6 +63,7 @@ export function exportCsvRows(rows: ExportRow[]): string[][] {
       String(row.deleted),
       String(row.likes),
       String(row.votes),
+      row.votingApprovedAt === undefined ? "" : new Date(row.votingApprovedAt).toISOString(),
       row.rejectionReason,
       new Date(row.createdAt).toISOString(),
     ]),

@@ -28,9 +28,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { swatchFor } from "@/lib/colours";
+import { useSwatch } from "@/lib/use-swatch";
 import { formatDimensions } from "@/lib/dimensions";
-import type { Printer } from "@/lib/event";
+import type { ColourDemand, Printer } from "@/lib/event";
 import { type Role, type RoleFile, roleOf } from "@/lib/roles";
 import { ALLOWED_EXTENSIONS, type Dimensions } from "@/lib/event";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,7 @@ export default function SubmissionCard({
   submission: s,
   colours,
   printers,
+  colourDemand,
   submissionsOpen,
   votingOpen,
   keepVotesOnReplace,
@@ -55,6 +56,7 @@ export default function SubmissionCard({
   submission: MySubmission;
   colours: string[];
   printers: Printer[];
+  colourDemand?: ColourDemand[];
   submissionsOpen: boolean;
   votingOpen: boolean;
   keepVotesOnReplace: boolean;
@@ -64,6 +66,7 @@ export default function SubmissionCard({
   maxFileBytes: number;
   maxDimensionsMm: Dimensions;
 }) {
+  const swatch = useSwatch();
   const setRoles = useMutation(api.submissions.setRoles);
   const update = useMutation(api.submissions.update);
   const generatePreviewUploadUrl = useMutation(api.submissions.generatePreviewUploadUrl);
@@ -127,7 +130,7 @@ export default function SubmissionCard({
       const uploaded = await uploadModelFile({
         file: replacement.file,
         kind: replacement.kind,
-        colour: swatchFor(s.colour),
+        colour: swatch(s.colour),
         generateUploadUrl: () => generateUploadUrl({ replaceId: s._id }),
         generatePreviewUploadUrl: () => generatePreviewUploadUrl({}),
       });
@@ -172,7 +175,7 @@ export default function SubmissionCard({
             <ModelViewer
               url={s.fileUrl}
               kind={s.kind}
-              colour={swatchFor(editing.colour)}
+              colour={swatch(editing.colour)}
               className="aspect-4/3"
             />
           ) : (
@@ -180,7 +183,7 @@ export default function SubmissionCard({
               url={s.fileUrl}
               previewUrl={s.previewUrl}
               kind={s.kind}
-              colour={swatchFor(s.colour)}
+              colour={swatch(s.colour)}
               alt={s.title}
               className={cn("aspect-4/3", rejected && !liveDesign && "opacity-50 grayscale")}
             />
@@ -225,7 +228,7 @@ export default function SubmissionCard({
                   previewStorageId = await renderModelSnapshot(
                     s.fileUrl,
                     s.kind,
-                    swatchFor(editing.colour)
+                    swatch(editing.colour)
                   )
                     .then((blob) =>
                       uploadPreview(() => generatePreviewUploadUrl({}), blob)
@@ -248,6 +251,7 @@ export default function SubmissionCard({
               onChange={setEditing}
               colours={colours}
               printers={printers}
+              demand={colourDemand}
               disabled={busy}
             />
             <div className="flex gap-2">
@@ -268,7 +272,7 @@ export default function SubmissionCard({
                   <span className="inline-flex items-center gap-1.5">
                     <span
                       className="size-2.5 rounded-full border border-border-strong"
-                      style={{ backgroundColor: s.colour ? swatchFor(s.colour) : "transparent" }}
+                      style={{ backgroundColor: s.colour ? swatch(s.colour) : "transparent" }}
                       aria-hidden="true"
                     />
                     {s.colour ?? "Any colour"}
@@ -286,10 +290,11 @@ export default function SubmissionCard({
                 </p>
               </div>
             </div>
-            {s.notes ? <p className="text-sm whitespace-pre-line text-muted-foreground">{s.notes}</p> : null}
-              {s.print || s.status !== "submitted" ? (
+            {s.notes ? <p className="break-words whitespace-pre-line [overflow-wrap:anywhere] text-sm text-muted-foreground">{s.notes}</p> : null}
+              {s.print || s.status !== "submitted" || s.votingApproved ? (
                 <StatusStepper
                   status={s.status}
+                  approvedForVoting={s.votingApproved}
                   rejectionReason={s.rejectionReason}
                   rejectionKind={s.rejectionKind}
                   queuePosition={s.queuePosition}
@@ -405,7 +410,7 @@ export default function SubmissionCard({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => run(() => remove({ id: s._id }), "Deleted")}>Delete</AlertDialogAction>
+                      <AlertDialogAction disabled={busy} onClick={() => run(() => remove({ id: s._id }), "Deleted")}>Delete</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>

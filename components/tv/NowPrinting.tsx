@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Printer } from "lucide-react";
 import type { TvPrintingItem } from "@/convex/tv";
 import ModelViewer from "@/components/ModelViewer";
-import { swatchFor } from "@/lib/colours";
+import { useSwatch } from "@/lib/use-swatch";
 import { cn } from "@/lib/utils";
 import Swatch from "./Swatch";
 import { formatElapsed } from "./hooks";
@@ -22,6 +22,7 @@ export default function NowPrinting({
   fresh: Set<string>;
   compact?: boolean;
 }) {
+  const swatch = useSwatch();
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (items.length < 2) return;
@@ -74,13 +75,13 @@ export default function NowPrinting({
             <div
               aria-hidden
               className={cn("absolute inset-0 m-auto rounded-full opacity-25 blur-3xl", compact ? "size-[300px]" : "size-[520px]")}
-              style={{ backgroundColor: swatchFor(current.colour ?? undefined) }}
+              style={{ backgroundColor: swatch(current.colour ?? undefined) }}
             />
             {current.file ? (
               <ModelViewer
                 url={current.file.url}
                 kind={current.file.kind}
-                colour={swatchFor(current.colour ?? undefined)}
+                colour={swatch(current.colour ?? undefined)}
                 className="absolute inset-0 aspect-auto h-full"
               />
             ) : (
@@ -115,13 +116,16 @@ export default function NowPrinting({
               >
                 {current.title}
               </h2>
-              <p className={cn("mt-3 flex min-w-0 items-center gap-2 text-muted-foreground", compact ? "truncate text-xl" : "mt-4 gap-3 text-3xl")}>
-                by <span className="text-foreground">{current.displayName}</span>
+              <p className={cn("mt-3 flex min-w-0 items-center gap-2 text-muted-foreground", compact ? "text-xl" : "mt-4 gap-3 text-3xl")}>
+                <span className="shrink-0">by</span>
+                <span className="min-w-0 truncate text-foreground" title={current.displayName}>
+                  {current.displayName}
+                </span>
                 {current.colour ? (
                   <>
-                    <span className="text-border-strong">·</span>
-                    <Swatch colour={current.colour} className={compact ? "size-5" : "size-6"} />
-                    {current.colour}
+                    <span className="shrink-0 text-border-strong">·</span>
+                    <Swatch colour={current.colour} className={compact ? "size-5 shrink-0" : "size-6 shrink-0"} />
+                    <span className="shrink-0">{current.colour}</span>
                   </>
                 ) : null}
               </p>
