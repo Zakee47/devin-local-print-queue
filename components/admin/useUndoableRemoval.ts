@@ -74,6 +74,7 @@ export function useUndoableRemoval(): {
     scheduled.timeout = setTimeout(() => {
       if (timers.current.get(id) !== scheduled) return;
       scheduled.timeout = null;
+      toast.dismiss(toastId);
 
       void (async () => {
         try {
