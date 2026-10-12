@@ -11,10 +11,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import RenameDialog from "./RenameDialog";
 import DeleteDialog from "./DeleteDialog";
 import BlockedEmails from "./BlockedEmails";
 import { errorMessage } from "@/lib/errors";
+
+const STATUS_TONES: Record<keyof typeof STATUS_LABELS, string> = {
+  submitted: "border-border bg-muted text-muted-foreground",
+  queued: "border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200",
+  printing: "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+  done: "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200",
+  rejected: "border-red-300 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200",
+};
 
 export type ParticipantRow = {
   _id: Id<"participants">;
@@ -32,11 +41,15 @@ export type ParticipantRow = {
 function EntryCell({ entry }: { entry: ParticipantRow["entry"] }) {
   if (!entry) return <span className="text-muted-dim">No entry</span>;
   return (
-    <span className="flex flex-wrap items-center gap-1.5">
-      <span className="font-mono text-xs">{entry.printCode}</span>
-      <span className="truncate">{entry.title}</span>
-      <Badge variant="outline">{STATUS_LABELS[entry.status]}</Badge>
-    </span>
+    <div className="flex min-w-0 flex-col items-start gap-1.5">
+      <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+        <span className="font-mono text-xs">{entry.printCode}</span>
+        <span className="min-w-0 break-words">{entry.title}</span>
+      </span>
+      <Badge variant="outline" className={cn("rounded-full", STATUS_TONES[entry.status])}>
+        {STATUS_LABELS[entry.status]}
+      </Badge>
+    </div>
   );
 }
 
@@ -87,18 +100,15 @@ export default function ParticipantsManager() {
           <Skeleton className="h-40 rounded-xl" />
         ) : (
           <>
-            <div className="hidden overflow-x-auto rounded-xl ring-1 ring-border sm:block">
-              <table className="w-full text-sm">
+            <div className="hidden overflow-hidden rounded-xl ring-1 ring-border lg:block">
+              <table className="w-full table-fixed text-sm">
                 <thead className="bg-surface text-left text-xs text-muted-foreground">
                   <tr>
-                    <th className="px-4 py-2 font-medium">Participant</th>
-                    <th className="px-4 py-2 font-medium">Registered</th>
+                    <th className="w-[25%] px-4 py-2 font-medium">Participant</th>
+                    <th className="w-[18%] px-4 py-2 font-medium">Registered</th>
                     <th className="px-4 py-2 font-medium">Entry</th>
-                    <th className="px-4 py-2 text-right font-medium">Uploads</th>
-                    <th className="px-4 py-2 text-right font-medium">Votes cast</th>
-                    <th className="px-4 py-2 text-right font-medium">Votes in</th>
-                    <th className="px-4 py-2 text-right font-medium">Likes</th>
-                    <th className="px-4 py-2 font-medium">
+                    <th className="w-[18%] px-4 py-2 text-right font-medium">Activity</th>
+                    <th className="w-24 px-4 py-2 font-medium">
                       <span className="sr-only">Actions</span>
                     </th>
                   </tr>
@@ -106,10 +116,10 @@ export default function ParticipantsManager() {
                 <tbody className="divide-y divide-border">
                   {filtered.map((p) => (
                     <tr key={p._id} className="transition-colors hover:bg-surface">
-                      <td className="px-4 py-2">
+                      <td className="min-w-0 px-4 py-2">
                         <div className="font-medium">{p.username}</div>
                         <div className="text-xs text-muted-foreground">{p.name}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
+                        <div className="break-all font-mono text-xs text-muted-foreground">
                           {p.email}
                         </div>
                       </td>
@@ -124,10 +134,16 @@ export default function ParticipantsManager() {
                       <td className="px-4 py-2">
                         <EntryCell entry={p.entry} />
                       </td>
-                      <td className="px-4 py-2 text-right tabular-nums">{p.uploadCount}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{p.votesCast}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{p.votesReceived}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{p.likesReceived}</td>
+                      <td className="px-4 py-2 text-right">
+                        <div className="whitespace-nowrap text-xs tabular-nums">
+                          {p.uploadCount} <span className="text-muted-foreground">uploads</span> · {p.votesCast}{" "}
+                          <span className="text-muted-foreground">cast</span>
+                        </div>
+                        <div className="whitespace-nowrap text-xs tabular-nums">
+                          {p.votesReceived} <span className="text-muted-foreground">votes</span> · {p.likesReceived}{" "}
+                          <span className="text-muted-foreground">likes</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-2">
                         <div className="flex justify-end gap-1">
                           <Button
@@ -155,7 +171,7 @@ export default function ParticipantsManager() {
                   ))}
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                         {participants.length === 0
                           ? "No one has registered yet."
                           : "No participants match."}
@@ -166,7 +182,7 @@ export default function ParticipantsManager() {
               </table>
             </div>
 
-            <div className="flex flex-col gap-3 sm:hidden">
+            <div className="flex flex-col gap-3 lg:hidden">
               {filtered.map((p) => (
                 <div
                   key={p._id}
@@ -174,7 +190,7 @@ export default function ParticipantsManager() {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="font-medium">{p.username}</div>
+                      <div className="min-w-0 truncate font-medium">{p.username}</div>
                       <div className="text-xs text-muted-foreground">{p.name}</div>
                       <div className="truncate font-mono text-xs text-muted-foreground">
                         {p.email}

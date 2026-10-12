@@ -105,6 +105,34 @@ describe("removeGuest", () => {
     );
   });
 
+  test("removes an imported guest without deleting an existing participant account", async () => {
+    const { t, asOwner, importId } = await setup();
+    const guestId = await t.run((ctx) =>
+      ctx.db.insert("guests", {
+        email: "ada@example.com",
+        name: "Ada",
+        checkedIn: false,
+        importId,
+      })
+    );
+    const participantId = await t.run((ctx) =>
+      ctx.db.insert("participants", {
+        clerkUserId: "ada-user",
+        email: "ada@example.com",
+        name: "Ada",
+        displayName: "Ada",
+      })
+    );
+
+    await asOwner.mutation(api.guests.removeGuest, { id: guestId });
+
+    expect(await t.run((ctx) => ctx.db.get(guestId))).toBeNull();
+    expect(await t.run((ctx) => ctx.db.get(participantId))).toMatchObject({
+      email: "ada@example.com",
+      displayName: "Ada",
+    });
+  });
+
   test("is owner-only", async () => {
     const { t, asOwner, asStaff } = await setup();
     const id = await asOwner.mutation(api.guests.addGuest, { email: "ada@example.com" });
