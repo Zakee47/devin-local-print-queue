@@ -225,9 +225,13 @@ export default function SettingsManager() {
         ? [
             "Its loaded colours will be lost.",
             ...(queuedPrinterJobs
-              ? [`${queuedPrinterJobs} queued jobs will go back to Not assigned.`]
+              ? [
+                  `${queuedPrinterJobs} queued ${queuedPrinterJobs === 1 ? "job" : "jobs"} will go back to Not assigned.`,
+                ]
               : []),
-            "Prints on this printer must be marked done or failed before you remove it.",
+            ...(printingPrinterJobs.length
+              ? ["Prints on this printer must be marked done or failed before you remove it."]
+              : []),
           ].join(" ")
         : confirmation?.type === "remove-colour"
           ? "It will be unticked on every printer, and participants can no longer pick it."
