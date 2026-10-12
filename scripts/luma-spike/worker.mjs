@@ -29,7 +29,7 @@ const loginMode = process.argv.includes("--login");
 
 if (!convexUrl || !secret) throw new Error("Set CONVEX_URL and CHECKIN_WORKER_SECRET.");
 const hostname = new URL(baseUrl).hostname.toLowerCase();
-if (["luma.com", "www.luma.com", "lu.ma", "www.lu.ma"].includes(hostname)) {
+if (["luma.com", "lu.ma"].some((domain) => hostname === domain || hostname.endsWith(`.${domain}`))) {
   throw new Error("This spike worker is restricted to a mock Luma host.");
 }
 
