@@ -58,7 +58,7 @@ export default function GuestsManager() {
         hasCheckInColumn: parsed.hasCheckInColumn,
         guests: parsed.guests,
       });
-      toast.success(`Imported ${res.total} guests, ${res.eligibleCount} eligible`);
+      toast.success(`Imported ${res.total} guests`);
     } catch (err) {
       toast.error(errorMessage(err, "Import failed"));
     } finally {
@@ -79,7 +79,9 @@ export default function GuestsManager() {
         <AlertTitle>Uploading replaces the imported guest list</AlertTitle>
         <AlertDescription>
           Upload the Luma export with name and email columns. Each upload replaces the imported list,
-          but guests you added manually are kept. People who already registered keep their accounts.
+          but guests you added manually are kept. Removed imported guests return if they are included in
+          the next upload. Removing a guest stops new sign-ups only; it doesn&apos;t delete an account that&apos;s
+          already registered.
         </AlertDescription>
       </Alert>
 
@@ -155,7 +157,7 @@ export default function GuestsManager() {
       ) : latest ? (
         <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-border ring-1 ring-border sm:grid-cols-3">
           <Stat label="CSV rows" value={latest.rowCount} />
-          <Stat label="Eligible" value={guests?.length ?? 0} />
+          <Stat label="Guests" value={guests?.length ?? 0} />
           <Stat label="Registered" value={registeredCount} />
         </dl>
       ) : null}
@@ -181,7 +183,6 @@ export default function GuestsManager() {
                 <tr>
                   <th className="px-4 py-2 font-medium">Name</th>
                   <th className="px-4 py-2 font-medium">Email</th>
-                  <th className="px-4 py-2 font-medium">Checked in</th>
                   <th className="px-4 py-2 font-medium">Registered</th>
                   <th className="px-4 py-2 font-medium">
                     <span className="sr-only">Actions</span>
@@ -201,35 +202,30 @@ export default function GuestsManager() {
                       ) : null}
                     </td>
                     <td className="px-4 py-2">
-                      {g.checkedIn ? <Badge variant="outline">Checked in</Badge> : <span className="text-muted-dim">No</span>}
-                    </td>
-                    <td className="px-4 py-2">
                       {g.registered ? <Badge variant="outline">Registered</Badge> : <span className="text-muted-dim">No</span>}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      {g.manual ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            removeGuest({ id: g._id })
-                              .then(() => toast.success(`${g.email} removed`))
-                              .catch((err: unknown) =>
-                                toast.error(
-                                  errorMessage(err, "Couldn't remove guest")
-                                )
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          removeGuest({ id: g._id })
+                            .then(() => toast.success(`${g.email} removed`))
+                            .catch((err: unknown) =>
+                              toast.error(
+                                errorMessage(err, "Couldn't remove guest")
                               )
-                          }
-                        >
-                          Remove
-                        </Button>
-                      ) : null}
+                            )
+                        }
+                      >
+                        Remove
+                      </Button>
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">
                       {guests.length === 0 ? "No guest list uploaded yet." : "No guests match."}
                     </td>
                   </tr>
