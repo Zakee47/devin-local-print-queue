@@ -61,12 +61,12 @@ export const TOURS: Record<Tour, TutorialSlide[]> = {
     {
       art: "queue",
       title: "The print queue",
-      body: "Prints move through the tabs: Needs review → Queued → Printing → Done, with Rejected and Withdrawn on their own tabs. All shows them all, grouped by stage.",
+      body: "Prints move through the tabs: Needs review → Queued → Printing → Done (Printed, and Approved for voting only), with Rejected and Withdrawn on their own tabs. All shows them all, grouped by stage.",
     },
     {
       art: "review",
       title: "Approve or reject",
-      body: "Check the badge first: No print yet, or Already printed with their earlier print code. Approve sends a print to the back of the queue, and Approve for voting sends a vote-only design straight to Done. When you reject, write a clear comment: the participant sees it and can upload a fixed file.",
+      body: "Check the badge first: No print yet, or Already printed with their earlier print code. Approve sends a print to the back of the queue, and Approve for voting sends a vote-only design straight to Done, under Approved for voting only. When you reject, write a clear comment: the participant sees it and can upload a fixed file.",
     },
     {
       art: "filters",

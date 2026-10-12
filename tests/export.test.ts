@@ -52,7 +52,7 @@ describe("exportCsvRows", () => {
       "deleted",
       "likes",
       "votes",
-      "Approved for voting",
+      "Approved for voting only",
       "rejectionReason",
       "createdAt",
     ]);

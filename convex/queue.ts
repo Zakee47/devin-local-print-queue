@@ -10,6 +10,7 @@ import { readSettings, type Settings } from "./settings";
 import { previewUrlOf } from "./submissions";
 import {
   currentVersion,
+  designAuditDetail,
   isActive,
   isApprovedForVoting,
   isDeleted,
@@ -315,7 +316,7 @@ export const approveForVoting = mutation({
       reviewedBy: actor,
       participantNotice: undefined,
     });
-    await audit(ctx, actor, "queue.approveForVoting", id);
+    await audit(ctx, actor, "queue.approveForVoting", id, await designAuditDetail(ctx, submission));
   },
 });
 

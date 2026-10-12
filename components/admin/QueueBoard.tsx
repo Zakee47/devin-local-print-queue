@@ -13,6 +13,7 @@ import {
   ListOrdered,
   Pause,
   Printer,
+  Trophy,
   Undo2,
   type LucideIcon,
 } from "lucide-react";
@@ -38,7 +39,7 @@ import HistoryDialog from "@/components/admin/HistoryDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
 import { errorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { applyFilters, beforeIdAfterDrop, isWithdrawnRow, partitionPrinters, type FilterPill } from "@/components/admin/queue-view";
+import { DONE_GROUPS, applyFilters, beforeIdAfterDrop, isWithdrawnRow, partitionPrinters, splitDone, type FilterPill } from "@/components/admin/queue-view";
 
 type Column = "all" | "review" | "queued" | "printing" | "done" | "rejected" | "withdrawn";
 type PrinterOption = { name: string; label: string };
@@ -68,7 +69,7 @@ const TABS: { value: Column; label: string; empty: string }[] = [
   { value: "review", label: "Needs review", empty: "Nothing waiting for review." },
   { value: "queued", label: "Queued", empty: "Approve a submission to queue it." },
   { value: "printing", label: "Printing", empty: "Nothing on the printers." },
-  { value: "done", label: "Done", empty: "No finished prints yet." },
+  { value: "done", label: "Done", empty: "Nothing printed or approved for voting yet." },
   { value: "rejected", label: "Rejected", empty: "No rejected files." },
   { value: "withdrawn", label: "Withdrawn", empty: "No withdrawn print requests." },
 ];
@@ -344,6 +345,27 @@ export default function QueueBoard() {
     );
   }
 
+  function renderDoneGroups(cardRows: BoardRow[], panels: boolean) {
+    const groups = splitDone(cardRows);
+    return (
+      <div className="flex flex-col gap-4">
+        {DONE_GROUPS.filter(({ value }) => groups[value].length > 0).map(({ value, label }) => {
+          const GroupIcon = value === "printed" ? Printer : Trophy;
+          return (
+            <section key={value} aria-label={label} className={cn("flex flex-col gap-2", panels && "rounded-xl bg-muted px-3 pb-3 sm:px-4 sm:pb-4")}>
+              <h3 className={cn("flex items-center gap-2", panels ? "pt-3" : undefined)}>
+                <GroupIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="text-base font-semibold tracking-tight text-foreground">{label}</span>
+                <span className="rounded-full bg-background px-2.5 py-0.5 font-mono text-xs leading-4 text-muted-foreground">{groups[value].length}</span>
+              </h3>
+              {renderCards(groups[value])}
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
+
   const activePrintersForSpread = inService.map((printer) => printer.name).filter((name) => spreadPrinters.includes(name));
   const onePrinterChoice = inService.some((printer) => printer.name === onePrinter) ? onePrinter : "";
 
@@ -521,7 +543,7 @@ export default function QueueBoard() {
                       </button>
                       {stage.value === "withdrawn" ? <p className="text-sm text-muted-foreground">Participant removed the print request. Returns to Needs review if they ask again; Restore reverses a mistake.</p> : null}
                       <div id={panelId} hidden={!canToggle || !expanded} className={canToggle && expanded ? "pt-2" : undefined}>
-                        {canToggle && expanded ? renderCards(stageRows) : null}
+                        {canToggle && expanded ? stage.value === "done" ? renderDoneGroups(stageRows, false) : renderCards(stageRows) : null}
                       </div>
                     </section>
                   );
@@ -535,7 +557,7 @@ export default function QueueBoard() {
                       {renderCards(cardRows, { selectable: true, sortable: true })}
                     </SortableContext>
                   </DndContext>
-                ) : renderCards(cardRows)}
+                ) : tab.value === "done" ? renderDoneGroups(cardRows, true) : renderCards(cardRows)}
                 {tab.value === "queued" && selectedVisible > 0 ? (
                   <div className="sticky bottom-3 z-20 mt-4 flex flex-col gap-3 rounded-xl border border-brand/50 bg-background/95 p-3 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex flex-wrap items-center gap-2 text-sm">

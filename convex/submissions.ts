@@ -19,6 +19,7 @@ import { isPreviewImage, MAX_PREVIEW_BYTES } from "../lib/preview-image";
 import {
   currentVersion,
   gainPrintPatch,
+  logPrintAfterVotingApproval,
   isActive,
   isApprovedForVoting,
   isDeleted,
@@ -298,6 +299,9 @@ async function applyOtherRoles(
           ...(other.print && !current.printRequested ? gainPrintPatch(current) : {}),
         };
     await ctx.db.patch(id, patch);
+    if (other.print && !current.printRequested) {
+      await logPrintAfterVotingApproval(ctx, participant.email, current);
+    }
     if (other.withdrawsPrint) {
       await auditParticipant(ctx, participant, "queue.withdrawn", id, "print removed");
     }
@@ -534,6 +538,9 @@ export const setRoles = mutation({
         ...fields,
         ...(plan.print && !submission.printRequested ? gainPrintPatch(submission) : {}),
       });
+      if (plan.print && !submission.printRequested) {
+        await logPrintAfterVotingApproval(ctx, participant.email, submission);
+      }
     }
     const moved = plan.others.flatMap((other) => [
       ...(files.find((file) => file.id === other.id)?.vote && plan.vote
@@ -819,6 +826,7 @@ export const remove = mutation({
       printRequested: next.printRequested || takePrint,
       ...(takePrint ? gainPrintPatch(next) : {}),
     });
+    if (takePrint) await logPrintAfterVotingApproval(ctx, participant.email, next);
     await auditParticipant(
       ctx,
       participant,

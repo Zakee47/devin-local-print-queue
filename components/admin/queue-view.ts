@@ -37,6 +37,22 @@ export function bucketOf(row: QueueViewRow): QueueBucket {
   return row.status;
 }
 
+export type DoneGroup = "printed" | "votingOnly";
+
+export const DONE_GROUPS: { value: DoneGroup; label: string }[] = [
+  { value: "printed", label: "Printed" },
+  { value: "votingOnly", label: "Approved for voting only" },
+];
+
+// Splits Done rows: status "done" was physically printed; the rest are
+// vote-only designs approved for voting.
+export function splitDone<T extends QueueViewRow>(rows: T[]): Record<DoneGroup, T[]> {
+  return {
+    printed: rows.filter((row) => row.status === "done"),
+    votingOnly: rows.filter((row) => row.status !== "done"),
+  };
+}
+
 export function filterMatches(row: QueueViewRow, pill: FilterPill) {
   if (!pill.values.length) return true;
   if (pill.dimension === "colour") {

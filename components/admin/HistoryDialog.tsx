@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime } from "@/lib/datetime";
+import { auditActionLabel } from "@/lib/audit";
 
 type RestoreInfo = { ok: boolean; reason?: string };
 
@@ -232,7 +233,7 @@ export default function HistoryDialog({
                 <div key={row._id} className="flex flex-wrap gap-x-2 text-xs">
                   <time className="text-muted-foreground">{formatDateTime(row.at)}</time>
                   <span className="font-medium">{row.actor}</span>
-                  <span>{row.action}</span>
+                  <span>{auditActionLabel(row.action)}</span>
                   {row.detail ? <span className="text-muted-foreground">{row.detail}</span> : null}
                 </div>
               )) : <p className="text-sm text-muted-foreground">No audit events.</p>}
