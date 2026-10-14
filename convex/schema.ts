@@ -25,6 +25,37 @@ export default defineSchema({
     manual: v.optional(v.boolean()),
   }).index("by_email", ["email"]),
 
+  checkinScans: defineTable({
+    raw: v.string(),
+    eventId: v.optional(v.string()),
+    key: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("checked_in"),
+      v.literal("already_checked_in"),
+      v.literal("invalid"),
+      v.literal("wrong_event"),
+      v.literal("not_found"),
+      v.literal("error")
+    ),
+    scannedBy: v.string(),
+    attempts: v.number(),
+    claimedAt: v.optional(v.number()),
+    finishedAt: v.optional(v.number()),
+    guestName: v.optional(v.string()),
+    guestEmail: v.optional(v.string()),
+    inGuestList: v.optional(v.boolean()),
+    message: v.optional(v.string()),
+  })
+    .index("by_status", ["status"])
+    .index("by_key", ["key"]),
+
+  checkinWorker: defineTable({
+    lastSeen: v.number(),
+    lumaSession: v.union(v.literal("ok"), v.literal("expired")),
+  }),
+
   guestImports: defineTable({
     fileName: v.string(),
     uploadedBy: v.string(),

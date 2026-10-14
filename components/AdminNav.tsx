@@ -15,6 +15,7 @@ const STAFF_LINKS = [
 const OWNER_LINKS = [
   { href: "/admin", label: "Queue" },
   { href: "/admin/guests", label: "Guests" },
+  { href: "/admin/checkin", label: "Check-in" },
   { href: "/admin/participants", label: "Participants" },
   { href: "/admin/team", label: "Team" },
   { href: "/admin/votes", label: "Votes" },
