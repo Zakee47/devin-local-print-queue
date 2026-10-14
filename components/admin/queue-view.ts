@@ -23,6 +23,16 @@ export type QueueViewRow = {
   rejectedAt?: number;
 };
 
+export type SearchableRow = QueueViewRow & {
+  printCode: string;
+  title: string;
+  participantUsername: string;
+  participantName: string;
+  downloadName: string;
+  notes?: string;
+  rejectionReason?: string;
+};
+
 export function isWithdrawnRow(row: QueueViewRow) {
   return row.participantNotice?.kind === "withdrawn" && !row.printRequested;
 }
@@ -63,6 +73,108 @@ export function filterMatches(row: QueueViewRow, pill: FilterPill) {
 
 export function applyFilters<T extends QueueViewRow>(rows: T[], pills: FilterPill[]) {
   return rows.filter((row) => pills.every((pill) => filterMatches(row, pill)));
+}
+
+export function normalizeSearch(s: string) {
+  return s.toLowerCase().replace(/[\s_\-·.]+/g, "");
+}
+
+export function searchFields(row: SearchableRow) {
+  const printCodeDigits = row.printCode.match(/\d+$/)?.[0].replace(/^0+/, "");
+  return [
+    row.printCode,
+    printCodeDigits,
+    row.title,
+    row.participantUsername,
+    row.participantName,
+    row.downloadName,
+    row.colour ?? "Any colour",
+    row.printer ?? "Not assigned",
+    row.notes,
+    row.rejectionReason,
+  ].filter((field): field is string => typeof field === "string" && field.trim().length > 0);
+}
+
+export function matchesSearch(row: SearchableRow, query: string) {
+  const normalizedQuery = normalizeSearch(query);
+  return !normalizedQuery || searchFields(row).some((field) => normalizeSearch(field).includes(normalizedQuery));
+}
+
+export function highlightRanges(text: string, query: string): [number, number][] {
+  const normalizedQuery = normalizeSearch(query);
+  if (!normalizedQuery) return [];
+
+  let flat = "";
+  const starts: number[] = [];
+  const ends: number[] = [];
+  for (let index = 0; index < text.length;) {
+    const character = String.fromCodePoint(text.codePointAt(index)!);
+    const end = index + character.length;
+    if (!/[\s_\-·.]/u.test(character)) {
+      const normalizedCharacter = character.toLowerCase().replace(/[\s_\-·.]+/g, "");
+      for (let offset = 0; offset < normalizedCharacter.length; offset += 1) {
+        starts.push(index);
+        ends.push(end);
+      }
+      flat += normalizedCharacter;
+    }
+    index = end;
+  }
+
+  const ranges: [number, number][] = [];
+  let from = 0;
+  let match = flat.indexOf(normalizedQuery, from);
+  while (match !== -1) {
+    ranges.push([starts[match], ends[match + normalizedQuery.length - 1]]);
+    from = match + normalizedQuery.length;
+    match = flat.indexOf(normalizedQuery, from);
+  }
+  return ranges;
+}
+
+export type SearchSuggestion = {
+  dimension: FilterDimension;
+  value: string;
+  count: number;
+};
+
+export function searchSuggestions(
+  rows: QueueViewRow[],
+  query: string,
+  pills: FilterPill[],
+  colours: string[],
+  printers: string[]
+): SearchSuggestion[] {
+  const normalizedQuery = normalizeSearch(query);
+  if (!normalizedQuery) return [];
+
+  const candidates = [
+    ...[ANY_COLOUR, ...colours].map((value) => ({
+      dimension: "colour" as const,
+      value,
+      label: value === ANY_COLOUR ? "Any colour" : value,
+    })),
+    ...[NOT_ASSIGNED, ...printers].map((value) => ({
+      dimension: "printer" as const,
+      value,
+      label: value === NOT_ASSIGNED ? "Not assigned" : value,
+    })),
+  ];
+
+  return candidates
+    .filter(({ dimension, value, label }) =>
+      normalizeSearch(label).includes(normalizedQuery) &&
+      !pills.some((pill) =>
+        pill.dimension === dimension &&
+        pill.values.some((selected) => selected.toLowerCase() === value.toLowerCase())
+      )
+    )
+    .slice(0, 6)
+    .map(({ dimension, value }) => ({
+      dimension,
+      value,
+      count: rows.filter((row) => filterMatches(row, { id: 0, dimension, values: [value] })).length,
+    }));
 }
 
 export function optionCounts<T extends QueueViewRow>(

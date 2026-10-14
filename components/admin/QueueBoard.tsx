@@ -39,7 +39,7 @@ import HistoryDialog from "@/components/admin/HistoryDialog";
 import { useDownloadSubmission } from "@/components/admin/download";
 import { errorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { DONE_GROUPS, applyFilters, beforeIdAfterDrop, isWithdrawnRow, partitionPrinters, splitDone, type FilterPill } from "@/components/admin/queue-view";
+import { DONE_GROUPS, applyFilters, beforeIdAfterDrop, isWithdrawnRow, matchesSearch, normalizeSearch, partitionPrinters, splitDone, type FilterPill } from "@/components/admin/queue-view";
 
 type Column = "all" | "review" | "queued" | "printing" | "done" | "rejected" | "withdrawn";
 type PrinterOption = { name: string; label: string };
@@ -128,6 +128,7 @@ export default function QueueBoard() {
   });
   const [siteHeaderHeight, setSiteHeaderHeight] = useState(0);
   const [filterPills, setFilterPills] = useState<FilterPill[]>([]);
+  const [search, setSearch] = useState("");
   const [optimisticQueueIds, setOptimisticQueueIds] = useState<BoardRow["_id"][] | null>(null);
   const printerStripRef = useRef<HTMLDivElement>(null);
   const printerCardsRef = useRef<HTMLDivElement>(null);
@@ -227,8 +228,10 @@ export default function QueueBoard() {
   const printerOptions = [...configuredPrinters, ...otherPrinters].filter(
     (printer, index, all) => all.findIndex((candidate) => candidate.toLowerCase() === printer.toLowerCase()) === index
   );
-  const filteredRows = applyFilters(rows, filterPills);
+  const filteredRows = applyFilters(rows, filterPills).filter((row) => matchesSearch(row, search));
   const filtered = columns(filteredRows);
+  const suggestionRows = activeTab === "deleted" ? [] : columns(applyFilters(rows, filterPills))[activeTab];
+  const pillCountRows = activeTab === "deleted" ? [] : columns(rows.filter((row) => matchesSearch(row, search)))[activeTab];
   if (optimisticQueueIds) {
     const order = new Map(optimisticQueueIds.map((id, index) => [id, index]));
     filtered.queued.sort((a, b) => (order.get(a._id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b._id) ?? Number.MAX_SAFE_INTEGER));
@@ -246,6 +249,10 @@ export default function QueueBoard() {
   );
   const notAssignedQueued = rows.filter((row) => row.status === "queued" && !row.printer).length;
   const hasFilters = filterPills.some((pill) => pill.values.length > 0);
+  const hasActiveSearch = Boolean(normalizeSearch(search));
+  const hasActiveFilters = hasActiveSearch || hasFilters;
+  const shownCount = activeTab === "all" ? filteredRows.length : activeTab === "deleted" ? 0 : filtered[activeTab].length;
+  const otherTabCount = activeTab !== "all" && activeTab !== "deleted" ? filteredRows.length - shownCount : 0;
   const allShownQueued = filtered.queued;
 
   function choicesFor(row: BoardRow): PrinterChoices {
@@ -315,6 +322,7 @@ export default function QueueBoard() {
             <SubmissionCard
               key={row._id}
               row={row}
+              highlight={search}
               position={row.status === "queued" ? position : undefined}
               queueOrder={fullQueue.map((queued) => queued._id)}
               isOwner={isOwner}
@@ -426,8 +434,24 @@ export default function QueueBoard() {
         </Button>
       </div>
       <div className="mt-3">
-        <QueueFilters rows={rows} pills={filterPills} onChange={setFilterPills} colours={colourOptions} printers={printerOptions} pausedPrinters={printerSettings.filter((printer) => printer.outOfService).map((printer) => printer.name)} swatch={swatch} />
+        <QueueFilters
+          rows={pillCountRows}
+          pills={filterPills}
+          onChange={setFilterPills}
+          colours={colourOptions}
+          printers={printerOptions}
+          pausedPrinters={printerSettings.filter((printer) => printer.outOfService).map((printer) => printer.name)}
+          swatch={swatch}
+          query={search}
+          onQueryChange={setSearch}
+          suggestionRows={suggestionRows}
+        />
       </div>
+      {activeTab !== "deleted" && hasActiveFilters ? (
+        <p className="mt-2 font-mono text-xs tabular-nums text-muted-foreground">
+          {shownCount} shown{otherTabCount > 0 ? ` · ${otherTabCount} in other tabs` : ""}
+        </p>
+      ) : null}
 
       <div className="mt-4 rounded-xl border border-border bg-card p-3">
         <div className="mb-3 flex items-center justify-between gap-2">
@@ -509,7 +533,15 @@ export default function QueueBoard() {
                 <EmptyHeader>
                   <EmptyMedia variant="icon"><Inbox /></EmptyMedia>
                   <EmptyTitle>{tab.label}</EmptyTitle>
-                  <EmptyDescription>{tab.empty}</EmptyDescription>
+                  <EmptyDescription>{hasActiveFilters ? "Nothing in this tab matches your search and filters." : tab.empty}</EmptyDescription>
+                  {hasActiveFilters ? (
+                    <Button type="button" size="sm" variant="outline" onClick={() => {
+                      setSearch("");
+                      setFilterPills([]);
+                    }}>
+                      Clear all
+                    </Button>
+                  ) : null}
                 </EmptyHeader>
               </Empty>
             ) : tab.value === "all" ? (
