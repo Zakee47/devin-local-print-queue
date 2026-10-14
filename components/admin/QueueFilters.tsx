@@ -27,7 +27,7 @@ export default function QueueFilters({
   swatch: (colour: string) => string;
   query: string;
   onQueryChange: (q: string) => void;
-  suggestionRows: QueueViewRow[];
+  suggestionRows: SearchableRow[];
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [openPillId, setOpenPillId] = useState<number | null>(null);
@@ -40,7 +40,7 @@ export default function QueueFilters({
     (dimension) => !pills.some((pill) => pill.dimension === dimension)
   );
   const suggestions = searchSuggestions(suggestionRows, query, pills, colours, printers);
-  const matchesInTab = suggestionRows.filter((row) => matchesSearch(row as SearchableRow, query)).length;
+  const matchesInTab = suggestionRows.filter((row) => matchesSearch(row, query)).length;
   const isSuggestionsOpen = suggestionsOpen && Boolean(query.trim());
   const activeIndex = Math.min(activeOptionIndex, suggestions.length);
 
