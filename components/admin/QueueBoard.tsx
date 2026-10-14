@@ -231,6 +231,7 @@ export default function QueueBoard() {
   const filteredRows = applyFilters(rows, filterPills).filter((row) => matchesSearch(row, search));
   const filtered = columns(filteredRows);
   const suggestionRows = activeTab === "deleted" ? [] : columns(applyFilters(rows, filterPills))[activeTab];
+  const pillCountRows = activeTab === "deleted" ? [] : columns(rows.filter((row) => matchesSearch(row, search)))[activeTab];
   if (optimisticQueueIds) {
     const order = new Map(optimisticQueueIds.map((id, index) => [id, index]));
     filtered.queued.sort((a, b) => (order.get(a._id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b._id) ?? Number.MAX_SAFE_INTEGER));
@@ -434,7 +435,7 @@ export default function QueueBoard() {
       </div>
       <div className="mt-3">
         <QueueFilters
-          rows={rows}
+          rows={pillCountRows}
           pills={filterPills}
           onChange={setFilterPills}
           colours={colourOptions}
