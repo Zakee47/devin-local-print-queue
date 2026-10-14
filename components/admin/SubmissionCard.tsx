@@ -15,6 +15,7 @@ import { useSwatch } from "@/lib/use-swatch";
 import { formatDateTime } from "@/lib/datetime";
 import { formatDimensions } from "@/lib/dimensions";
 import { useNow } from "@/components/admin/use-now";
+import Highlight from "@/components/admin/Highlight";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -161,7 +162,7 @@ function projectAxis(axis: [number, number, number], rotation: { x: number; y: n
 export default function SubmissionCard({
   row, position, isOwner = false, showSelection = false,
   selected = false, onSelectionChange, printerOptions, settingsPrinters, queueOrder = [], onMoveTo,
-  dragHandle, dragStyle, isDragging = false,
+  dragHandle, dragStyle, isDragging = false, highlight = "",
 }: {
   row: BoardRow; position?: number; isOwner?: boolean;
   showSelection?: boolean; selected?: boolean; onSelectionChange?: (checked: boolean) => void;
@@ -169,6 +170,7 @@ export default function SubmissionCard({
   settingsPrinters: PrinterSetting[];
   onMoveTo?: (beforeId?: Id<"submissions">) => Promise<void>;
   dragHandle?: ReactNode; dragStyle?: DragStyle; isDragging?: boolean;
+  highlight?: string;
 }) {
   const swatch = useSwatch();
   const approve = useMutation(api.queue.approve);
@@ -276,21 +278,21 @@ export default function SubmissionCard({
           <p className="block truncate font-mono text-[11px] leading-4 text-muted-foreground" title={statusLine}>{statusLine}</p>
           <div className="flex items-center gap-1.5 whitespace-nowrap">
             {dragHandle}
-            <span className="whitespace-nowrap font-mono text-[26px] font-semibold leading-[1.1] tracking-tight tabular-nums">{row.printCode}</span>
+            <span className="whitespace-nowrap font-mono text-[26px] font-semibold leading-[1.1] tracking-tight tabular-nums"><Highlight text={row.printCode} query={highlight} /></span>
           </div>
         </div>
 
         <div className="col-span-2 min-w-0 sm:col-span-1">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-            <h3 className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-[15px] font-semibold">{row.title}</h3>
+            <h3 className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-[15px] font-semibold"><Highlight text={row.title} query={highlight} /></h3>
             {row.version > 1 ? <CardBadge>v{row.version}</CardBadge> : null}
             {printBadge ? <CardBadge tone={printBadge === "No print yet" ? "filled" : "outline"}>{printBadge}</CardBadge> : null}
             {voteOnly ? <CardBadge><Trophy className="size-3" />{approvedForVoting ? "Approved for voting only" : "Vote only"}</CardBadge> : null}
             {showVotingBadge ? <CardBadge tone={row.designRemoved ? "red" : "outline"}><Trophy className="size-3" />{row.designRemoved ? "Removed from voting" : "Not in voting"}</CardBadge> : null}
             {row.oversize ? <CardBadge tone="red">Over size limit</CardBadge> : null}
           </div>
-          <p className="mt-1 truncate text-sm font-medium text-foreground">{row.participantUsername}</p>
-          <p className="truncate text-sm text-muted-foreground">{row.participantName}</p>
+          <p className="mt-1 truncate text-sm font-medium text-foreground"><Highlight text={row.participantUsername} query={highlight} /></p>
+          <p className="truncate text-sm text-muted-foreground"><Highlight text={row.participantName} query={highlight} /></p>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <i
@@ -299,10 +301,10 @@ export default function SubmissionCard({
                   ? { backgroundColor: swatch(row.colour) }
                   : { backgroundImage: "conic-gradient(#e11d48 0deg 90deg, #eab308 90deg 180deg, #16a34a 180deg 270deg, #3b82f6 270deg 360deg)" }}
               />
-              {row.colour || "Any colour"}
+              <Highlight text={row.colour || "Any colour"} query={highlight} />
             </span>
             {row.dimensionsMm ? <span>{formatDimensions(row.dimensionsMm)}</span> : null}
-            {row.printer ? <span className={cn("inline-flex items-center gap-1", printerAttention ? "text-amber-700 dark:text-amber-300" : "")}>{row.status === "done" ? <Printer className="size-3.5" /> : null}{row.printer}{printerPaused ? " · paused" : printerMissing ? row.status === "printing" ? " · printer removed" : " · pick another" : ""}</span> : null}
+            {row.printer ? <span className={cn("inline-flex items-center gap-1", printerAttention ? "text-amber-700 dark:text-amber-300" : "")}>{row.status === "done" ? <Printer className="size-3.5" /> : null}<Highlight text={row.printer} query={highlight} />{printerPaused ? " · paused" : printerMissing ? row.status === "printing" ? " · printer removed" : " · pick another" : ""}</span> : null}
             <span>{row.kind.toUpperCase()} · {formatBytes(row.sizeBytes)}</span>
             {row.status === "queued" ? <span>queued {formatDuration(row.queuedAt ?? row._creationTime, now)} ago</span> : null}
           </div>
@@ -310,7 +312,7 @@ export default function SubmissionCard({
             <Button size="sm" variant="outline" onClick={() => download(row._id, row.downloadName).catch((e) => toast.error(errorMessage(e, "Download failed")))}>
               <Download data-icon="inline-start" />Download
             </Button>
-            <span className="min-w-0 break-all font-mono text-xs text-muted-foreground sm:truncate sm:whitespace-nowrap">{row.downloadName}</span>
+            <span className="min-w-0 break-all font-mono text-xs text-muted-foreground sm:truncate sm:whitespace-nowrap"><Highlight text={row.downloadName} query={highlight} /></span>
           </div>
         </div>
 
@@ -392,13 +394,13 @@ export default function SubmissionCard({
       {printerAttention && (row.status === "queued" || row.status === "printing") ? (
         <div className="mx-3 mb-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           <Pause className="size-4 shrink-0" />
-          <span>{printerPaused ? <><strong>{row.printer} is paused</strong>: not taking new jobs. Pick another printer.</> : printerMissing && row.status === "printing" ? "Printer removed: mark done or failed" : <><strong>{row.printer} is not in Settings</strong>: pick another printer.</>}</span>
+          <span>{printerPaused ? <><strong><Highlight text={row.printer ?? ""} query={highlight} /> is paused</strong>: not taking new jobs. Pick another printer.</> : printerMissing && row.status === "printing" ? "Printer removed: mark done or failed" : <><strong><Highlight text={row.printer ?? ""} query={highlight} /> is not in Settings</strong>: pick another printer.</>}</span>
         </div>
       ) : null}
       {row.colour && !row.printersWithColour.length && row.status !== "done" && !voteOnly && !withdrawn ? <div className="border-t border-amber-200 px-4 py-2 text-sm text-muted-foreground">No printer has this colour loaded</div> : null}
       {row.participantNotice && (row.participantNotice.kind !== "withdrawn" || withdrawn) ? <Alert className="m-3"><AlertDescription>{row.participantNotice.kind === "withdrawn" ? "Withdrawn by participant: print request removed" : row.participantNotice.kind === "replaced" ? `Replaced by participant (v${row.participantNotice.version}), needs re-approval` : `Restored by owner (v${row.participantNotice.version}), needs re-approval · ${formatDateTime(row.participantNotice.at)}`}</AlertDescription></Alert> : null}
-      {row.status === "rejected" && row.rejectionReason ? <p className="border-t px-4 py-2 text-sm text-destructive">{row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"} · {row.rejectionReason}</p> : null}
-      {row.notes ? <div className="mx-3 mb-3 break-words [overflow-wrap:anywhere] rounded-lg bg-muted px-3 py-2 text-sm text-foreground"><span className="mr-2 font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">NOTE FROM PARTICIPANT</span>{row.notes}</div> : null}
+      {row.status === "rejected" && row.rejectionReason ? <p className="border-t px-4 py-2 text-sm text-destructive">{row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"} · <Highlight text={row.rejectionReason} query={highlight} /></p> : null}
+      {row.notes ? <div className="mx-3 mb-3 break-words [overflow-wrap:anywhere] rounded-lg bg-muted px-3 py-2 text-sm text-foreground"><span className="mr-2 font-mono text-[10px] font-medium uppercase tracking-wide text-muted-foreground">NOTE FROM PARTICIPANT</span><Highlight text={row.notes} query={highlight} /></div> : null}
 
       {expanded ? (
         <div className="grid gap-5 border-t bg-muted/20 p-4 md:grid-cols-[200px_minmax(0,1fr)_minmax(0,1fr)]">
@@ -425,13 +427,13 @@ export default function SubmissionCard({
           <section>
             <h4 className="mb-2 font-mono text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">Details</h4>
             <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3.5 gap-y-1 text-xs [&_dd]:m-0">
-              <dt className="text-muted-foreground">Colour</dt><dd>{row.colour ?? "Any colour"}</dd>
+              <dt className="text-muted-foreground">Colour</dt><dd><Highlight text={row.colour ?? "Any colour"} query={highlight} /></dd>
               <dt className="text-muted-foreground">Size</dt><dd>{row.dimensionsMm ? formatDimensions(row.dimensionsMm) : "Unknown"}</dd>
               <dt className="text-muted-foreground">File</dt><dd>{row.kind.toUpperCase()} · {formatBytes(row.sizeBytes)}</dd>
               {!voteOnly ? <><dt className="text-muted-foreground">Printers with colour</dt><dd>{row.printersWithColour.join(", ") || "None loaded"}</dd></> : null}
               <dt className="text-muted-foreground">Voting</dt><dd>{row.designRemoved ? "Removed from voting" : row.designEntry ? "In voting" : "Not in voting"}</dd>
-              <dt className="text-muted-foreground">Username</dt><dd>{row.participantUsername}</dd>
-              <dt className="text-muted-foreground">Name</dt><dd>{row.participantName}</dd>
+              <dt className="text-muted-foreground">Username</dt><dd><Highlight text={row.participantUsername} query={highlight} /></dd>
+              <dt className="text-muted-foreground">Name</dt><dd><Highlight text={row.participantName} query={highlight} /></dd>
               {isOwner ? <><dt className="text-muted-foreground">Email</dt><dd>{row.participantEmail}</dd></> : null}
             </dl>
           </section>
@@ -450,7 +452,7 @@ export default function SubmissionCard({
                   <span>{label}{at !== undefined ? ` · ${formatDateTime(at)}` : ""}</span>
                 </li>
               ))}
-              {row.rejectionReason ? <li className="text-destructive">{row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"} · {row.rejectionReason}</li> : null}
+              {row.rejectionReason ? <li className="text-destructive">{row.rejectionKind === "print_failed" ? "Print failed" : "Rejected"} · <Highlight text={row.rejectionReason} query={highlight} /></li> : null}
             </ol>
             {isOwner ? <Button size="sm" variant="outline" className="mt-3" onClick={() => setHistoryOpen(true)}><History data-icon="inline-start" />Full history</Button> : null}
           </section>
@@ -474,10 +476,10 @@ export default function SubmissionCard({
         >
           <div className="flex items-start justify-between gap-3 border-b p-4 pr-12">
             <DialogHeader className="min-w-0 gap-0.5">
-              <DialogTitle className="font-mono text-2xl leading-none">{row.printCode}</DialogTitle>
+              <DialogTitle className="font-mono text-2xl leading-none"><Highlight text={row.printCode} query={highlight} /></DialogTitle>
               <DialogDescription className="truncate">
-                <span className="text-foreground">{row.title}</span>
-                <span className="text-muted-foreground"> · {row.participantUsername}</span>
+                <span className="text-foreground"><Highlight text={row.title} query={highlight} /></span>
+                <span className="text-muted-foreground"> · <Highlight text={row.participantUsername} query={highlight} /></span>
               </DialogDescription>
             </DialogHeader>
             <div role="group" aria-label="Preview mode" className="inline-flex shrink-0 items-center rounded-lg bg-muted p-1">
@@ -554,11 +556,11 @@ export default function SubmissionCard({
             </div>
           ) : null}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t p-3 text-xs">
-            <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full border border-black/10" style={row.colour ? { backgroundColor: swatch(row.colour) } : { backgroundImage: "conic-gradient(#e11d48, #eab308, #16a34a, #3b82f6, #e11d48)" }} />{row.colour || "Any colour"}</span>
+            <span className="inline-flex items-center gap-1.5"><i className="size-3 rounded-full border border-black/10" style={row.colour ? { backgroundColor: swatch(row.colour) } : { backgroundImage: "conic-gradient(#e11d48, #eab308, #16a34a, #3b82f6, #e11d48)" }} /><Highlight text={row.colour || "Any colour"} query={highlight} /></span>
             <span>{row.dimensionsMm ? formatDimensions(row.dimensionsMm) : "Unknown size"}</span>
             <span className="font-mono">{row.kind.toUpperCase()} · {formatBytes(row.sizeBytes)}</span>
             <Button size="sm" variant="outline" onClick={() => download(row._id, row.downloadName).catch((e) => toast.error(errorMessage(e, "Download failed")))}><Download data-icon="inline-start" />Download</Button>
-            <span className="min-w-0 flex-1 basis-full break-all font-mono text-[11px] text-muted-foreground sm:basis-auto">{row.downloadName}</span>
+            <span className="min-w-0 flex-1 basis-full break-all font-mono text-[11px] text-muted-foreground sm:basis-auto"><Highlight text={row.downloadName} query={highlight} /></span>
           </div>
         </DialogContent>
       </Dialog>
